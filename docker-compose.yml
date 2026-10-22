@@ -1,4 +1,76 @@
-# main app
-# database utama
-# 
-# <bunch of external db(?)>
+name: tubes-wbd
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tubes-wbd-backend
+    environment:
+      PORT: ${BACKEND_PORT}
+      PLATFORM_DATABASE_URL: ${PLATFORM_DATABASE_URL}
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    depends_on:
+      platform-db:
+        condition: service_healthy
+      target-db-1:
+        condition: service_healthy
+      target-db-2:
+        condition: service_healthy
+
+  platform-db:
+    image: postgres:17-alpine
+    container_name: tubes-wbd-platform-db
+    environment:
+      POSTGRES_DB: ${PLATFORM_DB_NAME}
+      POSTGRES_USER: ${PLATFORM_DB_USER}
+      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD}
+    ports:
+      - "${PLATFORM_DB_HOST_PORT}:5432"
+    volumes:
+      - platform-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  target-db-1:
+    image: postgres:17-alpine
+    container_name: tubes-wbd-target-db-1
+    environment:
+      POSTGRES_DB: ${TARGET_DB_1_NAME}
+      POSTGRES_USER: ${TARGET_DB_1_USER}
+      POSTGRES_PASSWORD: ${TARGET_DB_1_PASSWORD}
+    ports:
+      - "${TARGET_DB_1_HOST_PORT}:5432"
+    volumes:
+      - target-db-1-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U target -d target_one"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  target-db-2:
+    image: postgres:17-alpine
+    container_name: tubes-wbd-target-db-2
+    environment:
+      POSTGRES_DB: ${TARGET_DB_2_NAME}
+      POSTGRES_USER: ${TARGET_DB_2_USER}
+      POSTGRES_PASSWORD: ${TARGET_DB_2_PASSWORD}
+    ports:
+      - "${TARGET_DB_2_HOST_PORT}:5432"
+    volumes:
+      - target-db-2-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U target -d target_two"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  platform-db-data:
+  target-db-1-data:
+  target-db-2-data:
