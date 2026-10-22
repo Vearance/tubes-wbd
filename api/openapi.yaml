@@ -1,0 +1,34 @@
+openapi: 3.0.3
+info:
+  title: Database Management Platform API
+  version: 0.1.0
+  description: HTTP API contract for the Database Management Platform.
+servers:
+  - url: /
+tags:
+  - name: system
+    description: Application health and system endpoints.
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check application health
+      tags:
+        - system
+      responses:
+        '200':
+          description: The application is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
