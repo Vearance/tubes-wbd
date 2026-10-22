@@ -5,6 +5,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	httpapi "tubes-wbd/backend/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func main() {
@@ -13,8 +17,9 @@ func main() {
 		port = "8080"
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := chi.NewRouter()
+	// placeholder for '/'
+	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
@@ -25,6 +30,7 @@ func main() {
 			log.Printf("writing response: %v", err)
 		}
 	})
+	httpapi.HandlerFromMux(apiServer{}, mux)
 
 	server := &http.Server{
 		Addr:    ":" + port,
