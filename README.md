@@ -21,3 +21,11 @@ Regenerate the OpenAPI code after changing the contract:
 ```bash
 go generate ./backend/http
 ```
+
+## integration tests
+
+Integration tests use Testcontainers and require Docker:
+
+```bash
+go test -tags=integration ./...
+```

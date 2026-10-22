@@ -7,10 +7,16 @@ services:
       dockerfile: Dockerfile
     container_name: tubes-wbd-backend
     environment:
-      PORT: ${BACKEND_PORT}
-      PLATFORM_DATABASE_URL: ${PLATFORM_DATABASE_URL}
+      APP_PORT: ${APP_PORT:-8080}
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      APP_MAX_OPEN_CONNS: ${APP_MAX_OPEN_CONNS:-10}
+      APP_MAX_IDLE_CONNS: ${APP_MAX_IDLE_CONNS:-5}
+      APP_CONN_MAX_LIFETIME: ${APP_CONN_MAX_LIFETIME:-30m}
+      APP_CONN_MAX_IDLE_TIME: ${APP_CONN_MAX_IDLE_TIME:-5m}
+      APP_PING_TIMEOUT: ${APP_PING_TIMEOUT:-5s}
+      APP_SHUTDOWN_TIMEOUT: ${APP_SHUTDOWN_TIMEOUT:-10s}
     ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     depends_on:
       platform-db:
         condition: service_healthy
@@ -19,15 +25,15 @@ services:
     image: postgres:17-alpine
     container_name: tubes-wbd-platform-db
     environment:
-      POSTGRES_DB: ${PLATFORM_DB_NAME}
-      POSTGRES_USER: ${PLATFORM_DB_USER}
-      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD}
+      POSTGRES_DB: ${APP_NAME:-platform}
+      POSTGRES_USER: ${APP_USER:-platform}
+      POSTGRES_PASSWORD: ${APP_PASSWORD:-platform_password}
     ports:
-      - "5432:5432"
+      - "${APP_HOST_PORT:-5432}:5432"
     volumes:
       - platform-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U platform -d platform"]
+      test: ["CMD-SHELL", "pg_isready -U ${APP_USER:-platform} -d ${APP_NAME:-platform}"]
       interval: 5s
       timeout: 5s
       retries: 5
