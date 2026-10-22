@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -12,16 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type apiServer struct{}
-
-func (apiServer) GetHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := json.NewEncoder(w).Encode(httpapi.HealthResponse{Status: "ok"}); err != nil {
-		log.Printf("writing health response: %v", err)
-	}
-}
-
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -29,6 +18,7 @@ func main() {
 	}
 
 	mux := chi.NewRouter()
+	// placeholder for '/'
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
