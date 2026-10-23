@@ -14,6 +14,7 @@ type GormUserRepository struct {
 }
 
 var _ UserRepository = (*GormUserRepository)(nil)
+var _ UserManagementRepository = (*GormUserRepository)(nil)
 
 func NewGormUserRepository(db *gorm.DB) *GormUserRepository {
 	return &GormUserRepository{db: db}
@@ -75,6 +76,18 @@ func (r *GormUserRepository) FindAdmin(ctx context.Context) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+func (r *GormUserRepository) List(ctx context.Context) ([]User, error) {
+	var users []User
+	if err := r.db.WithContext(ctx).
+		Order("id ASC").
+		Find(&users).
+		Error; err != nil {
+		return nil, fmt.Errorf("listing users: %w", err)
+	}
+
+	return users, nil
 }
 
 func (r *GormUserRepository) Create(

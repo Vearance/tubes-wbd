@@ -13,6 +13,11 @@ type UserRepository interface {
 	Update(ctx context.Context, user *User) error
 }
 
+type UserManagementRepository interface {
+	UserRepository
+	List(ctx context.Context) ([]User, error)
+}
+
 type SessionRepository interface {
 	Create(ctx context.Context, session *Session) error
 	FindByID(ctx context.Context, sessionID uint) (*Session, error)

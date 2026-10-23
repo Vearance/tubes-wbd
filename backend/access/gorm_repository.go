@@ -3,8 +3,11 @@ package access
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
+
+	"tubes-wbd/backend/auth"
 )
 
 type GormRepository struct {
@@ -12,9 +15,136 @@ type GormRepository struct {
 }
 
 var _ Repository = (*GormRepository)(nil)
+var _ GroupRepository = (*GormRepository)(nil)
 
 func NewGormRepository(db *gorm.DB) *GormRepository {
 	return &GormRepository{db: db}
+}
+
+func (r *GormRepository) CreateGroup(ctx context.Context, group *Group) error {
+	group.Name = strings.TrimSpace(group.Name)
+	if err := r.db.WithContext(ctx).Create(group).Error; err != nil {
+		return fmt.Errorf("creating group: %w", err)
+	}
+
+	return nil
+}
+
+func (r *GormRepository) ListGroups(ctx context.Context) ([]Group, error) {
+	var groups []Group
+	if err := r.db.WithContext(ctx).
+		Order("id ASC").
+		Find(&groups).
+		Error; err != nil {
+		return nil, fmt.Errorf("listing groups: %w", err)
+	}
+
+	return groups, nil
+}
+
+func (r *GormRepository) FindGroupByID(
+	ctx context.Context,
+	groupID uint,
+) (*Group, error) {
+	var group Group
+	result := r.db.WithContext(ctx).
+		Where("id = ?", groupID).
+		Limit(1).
+		Find(&group)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying group by id: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, ErrGroupNotFound
+	}
+
+	return &group, nil
+}
+
+func (r *GormRepository) FindGroupByName(
+	ctx context.Context,
+	name string,
+) (*Group, error) {
+	var group Group
+	result := r.db.WithContext(ctx).
+		Where("name = ?", strings.TrimSpace(name)).
+		Limit(1).
+		Find(&group)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying group by name: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, ErrGroupNotFound
+	}
+
+	return &group, nil
+}
+
+func (r *GormRepository) CreateUserGroup(
+	ctx context.Context,
+	membership *UserGroup,
+) error {
+	if err := r.db.WithContext(ctx).Create(membership).Error; err != nil {
+		return fmt.Errorf("creating group membership: %w", err)
+	}
+
+	return nil
+}
+
+func (r *GormRepository) FindUserGroup(
+	ctx context.Context,
+	userID uint,
+	groupID uint,
+) (*UserGroup, error) {
+	var membership UserGroup
+	result := r.db.WithContext(ctx).
+		Where("user_id = ? AND group_id = ?", userID, groupID).
+		Limit(1).
+		Find(&membership)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying group membership: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return nil, ErrMembershipNotFound
+	}
+
+	return &membership, nil
+}
+
+func (r *GormRepository) ListMembers(
+	ctx context.Context,
+	groupID uint,
+) ([]auth.User, error) {
+	var users []auth.User
+	if err := r.db.WithContext(ctx).
+		Model(&auth.User{}).
+		Joins("JOIN user_groups ON user_groups.user_id = users.id").
+		Where("user_groups.group_id = ?", groupID).
+		Order("users.id ASC").
+		Find(&users).
+		Error; err != nil {
+		return nil, fmt.Errorf("listing group members: %w", err)
+	}
+
+	return users, nil
+}
+
+func (r *GormRepository) DeleteUserGroup(
+	ctx context.Context,
+	userID uint,
+	groupID uint,
+) error {
+	result := r.db.WithContext(ctx).
+		Where("user_id = ? AND group_id = ?", userID, groupID).
+		Delete(&UserGroup{})
+	if result.Error != nil {
+		return fmt.Errorf("deleting group membership: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrMembershipNotFound
+	}
+
+	return nil
 }
 
 func (r *GormRepository) FindGroupIDsByUserID(

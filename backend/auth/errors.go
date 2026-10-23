@@ -13,4 +13,7 @@ var (
 	ErrSessionRevoked       = errors.New("session revoked")
 	ErrStaleSessionToken    = errors.New("stale session token")
 	ErrInvalidServiceConfig = errors.New("invalid auth service config")
+	ErrInvalidUserInput     = errors.New("invalid user input")
+	ErrUserAlreadyExists    = errors.New("user already exists")
+	ErrCannotDisableAdmin   = errors.New("cannot disable platform admin")
 )
