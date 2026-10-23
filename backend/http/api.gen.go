@@ -19,6 +19,19 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// AddGroupMemberRequest defines model for AddGroupMemberRequest.
+type AddGroupMemberRequest struct {
+	UserId int64 `json:"user_id"`
+}
+
+// AdminUser defines model for AdminUser.
+type AdminUser struct {
+	Disabled bool   `json:"disabled"`
+	Id       int64  `json:"id"`
+	IsAdmin  bool   `json:"is_admin"`
+	Username string `json:"username"`
+}
+
 // AuthUser defines model for AuthUser.
 type AuthUser struct {
 	Id       int64  `json:"id"`
@@ -26,9 +39,26 @@ type AuthUser struct {
 	Username string `json:"username"`
 }
 
+// CreateGroupRequest defines model for CreateGroupRequest.
+type CreateGroupRequest struct {
+	Name string `json:"name"`
+}
+
+// CreateUserRequest defines model for CreateUserRequest.
+type CreateUserRequest struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Message string `json:"message"`
+}
+
+// Group defines model for Group.
+type Group struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // HealthResponse defines model for HealthResponse.
@@ -51,19 +81,88 @@ type LoginResponse struct {
 	User      AuthUser  `json:"user"`
 }
 
+// UpdateUserRequest defines model for UpdateUserRequest.
+type UpdateUserRequest struct {
+	Disabled bool `json:"disabled"`
+}
+
+// CSRFToken defines model for CSRFToken.
+type CSRFToken = string
+
+// CreateAdminGroupParams defines parameters for CreateAdminGroup.
+type CreateAdminGroupParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// AddAdminGroupMemberParams defines parameters for AddAdminGroupMember.
+type AddAdminGroupMemberParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// RemoveAdminGroupMemberParams defines parameters for RemoveAdminGroupMember.
+type RemoveAdminGroupMemberParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// CreateAdminUserParams defines parameters for CreateAdminUser.
+type CreateAdminUserParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// UpdateAdminUserParams defines parameters for UpdateAdminUser.
+type UpdateAdminUserParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
 // PostAuthLogoutParams defines parameters for PostAuthLogout.
 type PostAuthLogoutParams struct {
 	XCSRFToken string `json:"X-CSRF-Token"`
 }
+
+// CreateAdminGroupJSONRequestBody defines body for CreateAdminGroup for application/json ContentType.
+type CreateAdminGroupJSONRequestBody = CreateGroupRequest
+
+// AddAdminGroupMemberJSONRequestBody defines body for AddAdminGroupMember for application/json ContentType.
+type AddAdminGroupMemberJSONRequestBody = AddGroupMemberRequest
+
+// CreateAdminUserJSONRequestBody defines body for CreateAdminUser for application/json ContentType.
+type CreateAdminUserJSONRequestBody = CreateUserRequest
+
+// UpdateAdminUserJSONRequestBody defines body for UpdateAdminUser for application/json ContentType.
+type UpdateAdminUserJSONRequestBody = UpdateUserRequest
 
 // PostAuthLoginJSONRequestBody defines body for PostAuthLogin for application/json ContentType.
 type PostAuthLoginJSONRequestBody = LoginRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAdminGroups List groups
+	// (GET /admin/groups)
+	ListAdminGroups(w http.ResponseWriter, r *http.Request)
+	// CreateAdminGroup Create a group
+	// (POST /admin/groups)
+	CreateAdminGroup(w http.ResponseWriter, r *http.Request, params CreateAdminGroupParams)
+	// ListAdminGroupMembers List users in a group
+	// (GET /admin/groups/{groupId}/members)
+	ListAdminGroupMembers(w http.ResponseWriter, r *http.Request, groupId int64)
+	// AddAdminGroupMember Add a user to a group
+	// (POST /admin/groups/{groupId}/members)
+	AddAdminGroupMember(w http.ResponseWriter, r *http.Request, groupId int64, params AddAdminGroupMemberParams)
+	// RemoveAdminGroupMember Remove a user from a group
+	// (DELETE /admin/groups/{groupId}/members/{userId})
+	RemoveAdminGroupMember(w http.ResponseWriter, r *http.Request, groupId int64, userId int64, params RemoveAdminGroupMemberParams)
 	// GetAdminPing Check platform admin access
 	// (GET /admin/ping)
 	GetAdminPing(w http.ResponseWriter, r *http.Request)
+	// ListAdminUsers List platform users
+	// (GET /admin/users)
+	ListAdminUsers(w http.ResponseWriter, r *http.Request)
+	// CreateAdminUser Create a regular platform user
+	// (POST /admin/users)
+	CreateAdminUser(w http.ResponseWriter, r *http.Request, params CreateAdminUserParams)
+	// UpdateAdminUser Enable or disable a platform user
+	// (PATCH /admin/users/{userId})
+	UpdateAdminUser(w http.ResponseWriter, r *http.Request, userId int64, params UpdateAdminUserParams)
 	// PostAuthLogin Create an authenticated session
 	// (POST /auth/login)
 	PostAuthLogin(w http.ResponseWriter, r *http.Request)
@@ -79,9 +178,57 @@ type ServerInterface interface {
 
 type Unimplemented struct{}
 
+// ListAdminGroups List groups
+// (GET /admin/groups)
+func (_ Unimplemented) ListAdminGroups(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateAdminGroup Create a group
+// (POST /admin/groups)
+func (_ Unimplemented) CreateAdminGroup(w http.ResponseWriter, r *http.Request, params CreateAdminGroupParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAdminGroupMembers List users in a group
+// (GET /admin/groups/{groupId}/members)
+func (_ Unimplemented) ListAdminGroupMembers(w http.ResponseWriter, r *http.Request, groupId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AddAdminGroupMember Add a user to a group
+// (POST /admin/groups/{groupId}/members)
+func (_ Unimplemented) AddAdminGroupMember(w http.ResponseWriter, r *http.Request, groupId int64, params AddAdminGroupMemberParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RemoveAdminGroupMember Remove a user from a group
+// (DELETE /admin/groups/{groupId}/members/{userId})
+func (_ Unimplemented) RemoveAdminGroupMember(w http.ResponseWriter, r *http.Request, groupId int64, userId int64, params RemoveAdminGroupMemberParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetAdminPing Check platform admin access
 // (GET /admin/ping)
 func (_ Unimplemented) GetAdminPing(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAdminUsers List platform users
+// (GET /admin/users)
+func (_ Unimplemented) ListAdminUsers(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateAdminUser Create a regular platform user
+// (POST /admin/users)
+func (_ Unimplemented) CreateAdminUser(w http.ResponseWriter, r *http.Request, params CreateAdminUserParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAdminUser Enable or disable a platform user
+// (PATCH /admin/users/{userId})
+func (_ Unimplemented) UpdateAdminUser(w http.ResponseWriter, r *http.Request, userId int64, params UpdateAdminUserParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -112,11 +259,326 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// ListAdminGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminGroups(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAdminGroup operation middleware
+func (siw *ServerInterfaceWrapper) CreateAdminGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAdminGroupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAdminGroup(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAdminGroupMembers operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminGroupMembers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminGroupMembers(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddAdminGroupMember operation middleware
+func (siw *ServerInterfaceWrapper) AddAdminGroupMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddAdminGroupMemberParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddAdminGroupMember(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAdminGroupMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAdminGroupMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "userId" -------------
+	var userId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveAdminGroupMemberParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAdminGroupMember(w, r, groupId, userId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAdminPing operation middleware
 func (siw *ServerInterfaceWrapper) GetAdminPing(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAdminPing(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAdminUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminUsers(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminUsers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAdminUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateAdminUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAdminUserParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAdminUser(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAdminUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAdminUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", chi.URLParam(r, "userId"), &userId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAdminUserParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAdminUser(w, r, userId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -324,6 +786,30 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/ping", wrapper.GetAdminPing)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/users", wrapper.ListAdminUsers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/users", wrapper.CreateAdminUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/users/{userId}", wrapper.UpdateAdminUser)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups", wrapper.ListAdminGroups)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/groups", wrapper.CreateAdminGroup)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups/{groupId}/members", wrapper.ListAdminGroupMembers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/groups/{groupId}/members", wrapper.AddAdminGroupMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/groups/{groupId}/members/{userId}", wrapper.RemoveAdminGroupMember)
+	})
 
 	return r
 }
@@ -333,22 +819,32 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"5FbbbttGEP2VxbSPtKTUbh/4prqXGG0BwXGBAoZgrJYjcSNyl9kZqhEM/nsxS+pCUXYcIHUD9MWmyNm5",
-	"nDlnZh/B+LLyDh0TpI9AJsdSx8dpzfmfhEGeq+ArDGwxfrGZ/F36UGqGFKzjH64gAd5W2P7EFQZoErD0",
-	"oLPSOjHvvi68L1A7+VoTBqdLPPpKHKxbQdMkEPBDbQNmkN5LwCPzI7/zfVS/eI+Gxe3PIfhwi1R5RzhM",
-	"vkQivXpB0J3huRhvURecPx2EWHMdn/CjLqsinl5D8omQ3bFzEX/3K+tu8UONxMN4lSb624d+X/YvB2E/",
-	"B/sj2PcOn0nwKUQMheUD+zVGMmRIJtiKrXeQwp28VksflACAFybXbmXdSoW2XhqpG1aWlPOsOEdFSGS9",
-	"U8b7tUW10UWNo3Nl4sfKBqQHzT1kMonCtsRzZ+qO898GXEIK34wPChl38hjvtXGK1lGZveid2yFwTQKE",
-	"pg6Wt+/EeceftsDrWJ+8sA5SaMuFBNrOQaEXVfAPVJs1HSrRlf0Nt9CIa+uWfoj327u7mZrObpTxjoM2",
-	"HLEXYH/SrBeaUP2hnV5hiY7VrNAsyEWALUcuP2cnniGBDQZqw01Gb0YTQdZX6HRlIYXL0WR0GRnFeSx4",
-	"HPU8rqQH6SOsMDZMCKQl6ZsMUvgVeSpWMzES2FuuxfPfTSbyTwpCF8/qqiqsiafH78m7w3T7VHNPxB2B",
-	"PCFsjkrXnKNjCYGZku4KQ7WqdjDEikZS99XkzRdLrj/dnshtp49OMr1Uu4wuXzejHT4xnSFGRyqA9H7A",
-	"//t5M0+A6rLUYQspXOdo1idelDYGKepAr0i0eFS2JDKXKGN5OS5kVsUZ5ekM0WaeWBQeRxq0AkfiH322",
-	"/WKo9eZ50x8jHGps/kWC90f1mY5FA0W1MYjZnjKT16VMh7pa+Gwr1LFuowub/TeKMgEz4ZIuSOmAvWS+",
-	"f01kpk5Zx7KSC4VirLwxdQiYdTI6iCSgZlTanYyqTlsvFYqv+UVKETsZ6EGXyBgo6jiurRx1huGwtv66",
-	"uH53+8vFXbcl+7xPjoA6vZjMB5q4Gi63NpUBef/3E1gwV/Fmciqmr4u/n7EGbnHj1xgvLtGF45eSO48r",
-	"/rmbRnsJ+AquGQf/0rc28e1A63EhHtvmu/x3ONCWGEupP6IcNjuN1qGAFMbQzPfGp5qaDhwr7TLVulTo",
-	"sspbxzQ6aLyL1iSPZ1dLPN1J5Nzxk6Y18+afAQA=",
+	"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",
+	"LQ/qW/nS4lYXFGlbXnNaPs7/GQA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
