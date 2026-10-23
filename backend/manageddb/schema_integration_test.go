@@ -18,6 +18,12 @@ import (
 
 func openPlatformDB(t *testing.T) *gorm.DB {
 	t.Helper()
+	db, _ := startPlatformDB(t)
+	return db
+}
+
+func startPlatformDB(t *testing.T) (*gorm.DB, *tcpostgres.PostgresContainer) {
+	t.Helper()
 	ctx := context.Background()
 
 	ctr, err := tcpostgres.Run(ctx, "postgres:17-alpine",
@@ -38,7 +44,7 @@ func openPlatformDB(t *testing.T) *gorm.DB {
 
 	require.NoError(t, manageddb.AutoMigrate(db))
 	require.NoError(t, access.AutoMigrate(db))
-	return db
+	return db, ctr
 }
 
 func TestIntegrationPermissionsCascadeOnDelete(t *testing.T) {
