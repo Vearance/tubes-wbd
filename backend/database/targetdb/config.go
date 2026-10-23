@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type DatabaseID = int64
+type DatabaseID = uint
 // connection config yang diperluin buat connect ke database
 type ConnConfig struct {
 	Host     string

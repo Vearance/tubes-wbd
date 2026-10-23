@@ -45,7 +45,7 @@ func (m *Manager) Pool(ctx context.Context, id DatabaseID) (*pgxpool.Pool, error
 	}
 
 	flightCtx := context.WithoutCancel(ctx)
-	ch := m.sf.DoChan(strconv.FormatInt(id, 10), func() (any, error) {
+	ch := m.sf.DoChan(strconv.FormatUint(uint64(id), 10), func() (any, error) {
 		return m.open(flightCtx, id)
 	})
 	select {
