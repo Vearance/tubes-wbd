@@ -9,6 +9,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"tubes-wbd/backend/auth"
 	"tubes-wbd/backend/database/platformdb"
 )
 
@@ -17,6 +18,7 @@ const defaultShutdownTimeout = 10 * time.Second
 type serverConfig struct {
 	Port            string
 	PlatformDB      platformdb.Config
+	Auth            auth.ServiceConfig
 	ShutdownTimeout time.Duration
 }
 
@@ -60,6 +62,26 @@ func loadServerConfig() (serverConfig, error) {
 		return serverConfig{}, err
 	}
 
+	idleTimeout, err := durationEnv("APP_IDLE_TIMEOUT")
+	if err != nil {
+		return serverConfig{}, err
+	}
+
+	absoluteLifetime, err := durationEnv("APP_ABSOLUTE_LIFETIME")
+	if err != nil {
+		return serverConfig{}, err
+	}
+
+	rotationInterval, err := durationEnv("APP_ROTATION_INTERVAL")
+	if err != nil {
+		return serverConfig{}, err
+	}
+
+	rotationGracePeriod, err := durationEnv("APP_ROTATION_GRACE_PERIOD")
+	if err != nil {
+		return serverConfig{}, err
+	}
+
 	shutdownTimeout, err := durationEnv("APP_SHUTDOWN_TIMEOUT")
 	if err != nil {
 		return serverConfig{}, err
@@ -77,6 +99,12 @@ func loadServerConfig() (serverConfig, error) {
 			ConnMaxLifetime: connMaxLifetime,
 			ConnMaxIdleTime: connMaxIdleTime,
 			PingTimeout:     pingTimeout,
+		},
+		Auth: auth.ServiceConfig{
+			IdleTimeout:         idleTimeout,
+			AbsoluteLifetime:    absoluteLifetime,
+			RotationInterval:    rotationInterval,
+			RotationGracePeriod: rotationGracePeriod,
 		},
 		ShutdownTimeout: shutdownTimeout,
 	}, nil
