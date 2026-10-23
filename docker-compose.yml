@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tubes-wbd-backend
+    container_name: app
     environment:
       APP_PORT: ${APP_PORT:-8080}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
@@ -30,7 +30,7 @@ services:
 
   platform-db:
     image: postgres:17-alpine
-    container_name: tubes-wbd-platform-db
+    container_name: db
     environment:
       POSTGRES_DB: ${APP_NAME:-platform}
       POSTGRES_USER: ${APP_USER:-platform}

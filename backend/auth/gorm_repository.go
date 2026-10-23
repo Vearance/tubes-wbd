@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,15 +26,15 @@ func (r *GormUserRepository) FindByUsername(
 	var user User
 	username = strings.TrimSpace(username)
 
-	err := r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).
 		Where("username = ?", username).
-		First(&user).
-		Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		Limit(1).
+		Find(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying user by username: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("querying user by username: %w", err)
+	if result.RowsAffected == 0 {
+		return nil, ErrUserNotFound
 	}
 
 	return &user, nil
@@ -47,12 +46,15 @@ func (r *GormUserRepository) FindByID(
 ) (*User, error) {
 	var user User
 
-	err := r.db.WithContext(ctx).First(&user, userID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+	result := r.db.WithContext(ctx).
+		Where("id = ?", userID).
+		Limit(1).
+		Find(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying user by id: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("querying user by id: %w", err)
+	if result.RowsAffected == 0 {
+		return nil, ErrUserNotFound
 	}
 
 	return &user, nil
@@ -61,15 +63,15 @@ func (r *GormUserRepository) FindByID(
 func (r *GormUserRepository) FindAdmin(ctx context.Context) (*User, error) {
 	var user User
 
-	err := r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).
 		Where("is_admin = ?", true).
-		First(&user).
-		Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrUserNotFound
+		Limit(1).
+		Find(&user)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying platform admin: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("querying platform admin: %w", err)
+	if result.RowsAffected == 0 {
+		return nil, ErrUserNotFound
 	}
 
 	return &user, nil
@@ -126,12 +128,15 @@ func (r *GormSessionRepository) FindByID(
 ) (*Session, error) {
 	var session Session
 
-	err := r.db.WithContext(ctx).First(&session, sessionID).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrSessionNotFound
+	result := r.db.WithContext(ctx).
+		Where("id = ?", sessionID).
+		Limit(1).
+		Find(&session)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying session by id: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("querying session by id: %w", err)
+	if result.RowsAffected == 0 {
+		return nil, ErrSessionNotFound
 	}
 
 	return &session, nil
@@ -143,15 +148,15 @@ func (r *GormSessionRepository) FindByTokenHash(
 ) (*SessionLookup, error) {
 	var session Session
 
-	err := r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).
 		Where("token_hash = ? OR previous_token_hash = ?", tokenHash, tokenHash).
-		First(&session).
-		Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrSessionNotFound
+		Limit(1).
+		Find(&session)
+	if result.Error != nil {
+		return nil, fmt.Errorf("querying session by token hash: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("querying session by token hash: %w", err)
+	if result.RowsAffected == 0 {
+		return nil, ErrSessionNotFound
 	}
 
 	if session.TokenHash == tokenHash {
