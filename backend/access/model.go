@@ -1,6 +1,9 @@
 package access
 
-import "time"
+import (
+	"time"
+	"tubes-wbd/backend/manageddb"
+)
 
 type Group struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
@@ -35,4 +38,5 @@ type GroupDatabasePermission struct {
 	Permission        PermissionLevel `gorm:"not null" json:"permission"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
+	ManagedDatabase *manageddb.ManagedDatabase `gorm:"constraint:OnDelete:CASCADE" json:"-"`
 }

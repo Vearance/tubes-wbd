@@ -16,6 +16,7 @@ import (
 	"tubes-wbd/backend/database/platformdb"
 	httpapi "tubes-wbd/backend/http"
 	"tubes-wbd/backend/http/middleware"
+	"tubes-wbd/backend/manageddb"
 )
 
 func main() {
@@ -50,6 +51,9 @@ func run() error {
 	// migrate schema
 	if err := auth.AutoMigrate(db); err != nil {
 		return fmt.Errorf("migrating authentication schema: %w", err)
+	}
+	if err := manageddb.AutoMigrate(db); err != nil {
+		return fmt.Errorf("migrating managed database schema: %w", err)
 	}
 	if err := access.AutoMigrate(db); err != nil {
 		return fmt.Errorf("migrating access-control schema: %w", err)
