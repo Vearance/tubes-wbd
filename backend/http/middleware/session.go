@@ -9,7 +9,7 @@ import (
 	"tubes-wbd/backend/auth"
 )
 
-const SessionCookieName = "labpro_sucks_lol"
+const SessionCookieName = "labpro_sucks"
 
 type CookieOptions struct {
 	Secure   bool
