@@ -5,10 +5,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tubes-wbd-backend
+    container_name: app
     environment:
       APP_PORT: ${APP_PORT:-8080}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
+      APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD}
+      APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-false}
+      APP_IDLE_TIMEOUT: ${APP_IDLE_TIMEOUT:-30m}
+      APP_ABSOLUTE_LIFETIME: ${APP_ABSOLUTE_LIFETIME:-8h}
+      APP_ROTATION_INTERVAL: ${APP_ROTATION_INTERVAL:-15m}
+      APP_ROTATION_GRACE_PERIOD: ${APP_ROTATION_GRACE_PERIOD:-30s}
       APP_MAX_OPEN_CONNS: ${APP_MAX_OPEN_CONNS:-10}
       APP_MAX_IDLE_CONNS: ${APP_MAX_IDLE_CONNS:-5}
       APP_CONN_MAX_LIFETIME: ${APP_CONN_MAX_LIFETIME:-30m}
@@ -23,7 +30,7 @@ services:
 
   platform-db:
     image: postgres:17-alpine
-    container_name: tubes-wbd-platform-db
+    container_name: db
     environment:
       POSTGRES_DB: ${APP_NAME:-platform}
       POSTGRES_USER: ${APP_USER:-platform}

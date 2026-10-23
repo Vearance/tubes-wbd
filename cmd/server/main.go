@@ -11,11 +11,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-chi/chi/v5"
-
+	"tubes-wbd/backend/access"
 	"tubes-wbd/backend/auth"
 	"tubes-wbd/backend/database/platformdb"
 	httpapi "tubes-wbd/backend/http"
+	"tubes-wbd/backend/http/middleware"
 )
 
 func main() {
@@ -51,8 +51,54 @@ func run() error {
 	if err := auth.AutoMigrate(db); err != nil {
 		return fmt.Errorf("migrating authentication schema: %w", err)
 	}
+	if err := access.AutoMigrate(db); err != nil {
+		return fmt.Errorf("migrating access-control schema: %w", err)
+	}
 
-	mux := chi.NewRouter()
+	userRepository := auth.NewGormUserRepository(db)
+	sessionRepository := auth.NewGormSessionRepository(db)
+	passwordHasher := auth.NewBcryptHasher(0)
+	if err := auth.BootstrapAdmin(
+		ctx,
+		userRepository,
+		passwordHasher,
+		cfg.AdminUsername,
+		cfg.AdminPassword,
+	); err != nil {
+		return fmt.Errorf("bootstrapping platform admin: %w", err)
+	}
+
+	// authN service
+	authService, err := auth.NewAuthService(
+		userRepository,
+		sessionRepository,
+		passwordHasher,
+		cfg.Auth,
+	)
+	if err != nil {
+		return fmt.Errorf("creating authentication service: %w", err)
+	}
+
+	// authZ service
+	accessRepository := access.NewGormRepository(db)
+	authorizationService, err := access.NewAuthorizationService(
+		userRepository,
+		accessRepository,
+	)
+	if err != nil {
+		return fmt.Errorf("creating authorization service: %w", err)
+	}
+
+	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
+	api := apiServer{
+		authService:   authService,
+		cookieOptions: cookieOptions,
+	}
+	mux := httpapi.NewRouter(api, httpapi.RouterConfig{
+		Auth:            authService,
+		AdminAuthorizer: authorizationService,
+		CookieOptions:   cookieOptions,
+	})
 	// placeholder for '/'
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -60,13 +106,14 @@ func run() error {
 			log.Printf("writing response: %v", err)
 		}
 	})
-	httpapi.HandlerFromMux(apiServer{}, mux)
 
+	// Configure the HTTP server.
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: mux,
 	}
 
+	// Start serving in the background so signals can be handled.
 	serverErrors := make(chan error, 1)
 	go func() {
 		serverErrors <- server.ListenAndServe()
@@ -74,6 +121,7 @@ func run() error {
 
 	log.Printf("server listening on :%s", cfg.Port)
 
+	// Wait for a server error or a shutdown signal.
 	select {
 	case err := <-serverErrors:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -83,6 +131,7 @@ func run() error {
 		log.Printf("shutdown signal received")
 	}
 
+	// Stop accepting requests and wait for active requests to finish.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 
