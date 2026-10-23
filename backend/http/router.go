@@ -32,9 +32,18 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 		},
 		ErrorHandlerFunc: openAPIErrorHandler,
 	}
-	adminWrapper := &ServerInterfaceWrapper{
+	adminReadWrapper := &ServerInterfaceWrapper{
 		Handler: server,
 		HandlerMiddlewares: []MiddlewareFunc{
+			middleware.RequireAdmin(config.AdminAuthorizer),
+			middleware.Session(config.Auth, config.CookieOptions),
+		},
+		ErrorHandlerFunc: openAPIErrorHandler,
+	}
+	adminMutationWrapper := &ServerInterfaceWrapper{
+		Handler: server,
+		HandlerMiddlewares: []MiddlewareFunc{
+			middleware.CSRF(config.Auth),
 			middleware.RequireAdmin(config.AdminAuthorizer),
 			middleware.Session(config.Auth, config.CookieOptions),
 		},
@@ -44,7 +53,15 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Get("/health", plainWrapper.GetHealth)
 	router.Post("/auth/login", plainWrapper.PostAuthLogin)
 	router.Post("/auth/logout", protectedWrapper.PostAuthLogout)
-	router.Get("/admin/ping", adminWrapper.GetAdminPing)
+	router.Get("/admin/ping", adminReadWrapper.GetAdminPing)
+	router.Get("/admin/users", adminReadWrapper.ListAdminUsers)
+	router.Post("/admin/users", adminMutationWrapper.CreateAdminUser)
+	router.Patch("/admin/users/{userId}", adminMutationWrapper.UpdateAdminUser)
+	router.Get("/admin/groups", adminReadWrapper.ListAdminGroups)
+	router.Post("/admin/groups", adminMutationWrapper.CreateAdminGroup)
+	router.Get("/admin/groups/{groupId}/members", adminReadWrapper.ListAdminGroupMembers)
+	router.Post("/admin/groups/{groupId}/members", adminMutationWrapper.AddAdminGroupMember)
+	router.Delete("/admin/groups/{groupId}/members/{userId}", adminMutationWrapper.RemoveAdminGroupMember)
 
 	return router
 }

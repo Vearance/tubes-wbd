@@ -93,10 +93,22 @@ func run() error {
 		return fmt.Errorf("creating authorization service: %w", err)
 	}
 
+	userManagementService, err := auth.NewUserManagementService(userRepository, passwordHasher)
+	if err != nil {
+		return fmt.Errorf("creating user management service: %w", err)
+	}
+	groupService, err := access.NewGroupService(userRepository, accessRepository)
+	if err != nil {
+		return fmt.Errorf("creating group service: %w", err)
+	}
+
+	// Register HTTP routes and inject authentication dependencies.
 	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
 	api := apiServer{
-		authService:   authService,
-		cookieOptions: cookieOptions,
+		authService:    authService,
+		userManagement: userManagementService,
+		groupService:   groupService,
+		cookieOptions:  cookieOptions,
 	}
 	mux := httpapi.NewRouter(api, httpapi.RouterConfig{
 		Auth:            authService,
