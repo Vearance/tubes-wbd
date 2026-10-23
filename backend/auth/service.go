@@ -199,7 +199,7 @@ func (s *AuthService) ValidateSession(
 	if lastActivityAt.IsZero() {
 		lastActivityAt = session.CreatedAt
 	}
-	if lastActivityAt.IsZero() || now.Sub(lastActivityAt) > s.config.IdleTimeout {
+	if lastActivityAt.IsZero() || now.Sub(lastActivityAt) >= s.config.IdleTimeout {
 		return SessionValidation{}, fmt.Errorf("%w: idle timeout", ErrSessionExpired)
 	}
 

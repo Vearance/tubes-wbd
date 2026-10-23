@@ -12,10 +12,24 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 )
+
+// AuthUser defines model for AuthUser.
+type AuthUser struct {
+	Id       int64  `json:"id"`
+	IsAdmin  bool   `json:"is_admin"`
+	Username string `json:"username"`
+}
+
+// ErrorResponse defines model for ErrorResponse.
+type ErrorResponse struct {
+	Message string `json:"message"`
+}
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
@@ -23,8 +37,39 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
+// LoginResponse defines model for LoginResponse.
+type LoginResponse struct {
+	// CsrfToken Token for state-changing requests. It is not the session cookie value.
+	CsrfToken string    `json:"csrf_token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	User      AuthUser  `json:"user"`
+}
+
+// PostAuthLogoutParams defines parameters for PostAuthLogout.
+type PostAuthLogoutParams struct {
+	XCSRFToken string `json:"X-CSRF-Token"`
+}
+
+// PostAuthLoginJSONRequestBody defines body for PostAuthLogin for application/json ContentType.
+type PostAuthLoginJSONRequestBody = LoginRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetAdminPing Check platform admin access
+	// (GET /admin/ping)
+	GetAdminPing(w http.ResponseWriter, r *http.Request)
+	// PostAuthLogin Create an authenticated session
+	// (POST /auth/login)
+	PostAuthLogin(w http.ResponseWriter, r *http.Request)
+	// PostAuthLogout Revoke the current session
+	// (POST /auth/logout)
+	PostAuthLogout(w http.ResponseWriter, r *http.Request, params PostAuthLogoutParams)
 	// GetHealth Check application health
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -33,6 +78,24 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// GetAdminPing Check platform admin access
+// (GET /admin/ping)
+func (_ Unimplemented) GetAdminPing(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PostAuthLogin Create an authenticated session
+// (POST /auth/login)
+func (_ Unimplemented) PostAuthLogin(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PostAuthLogout Revoke the current session
+// (POST /auth/logout)
+func (_ Unimplemented) PostAuthLogout(w http.ResponseWriter, r *http.Request, params PostAuthLogoutParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // GetHealth Check application health
 // (GET /health)
@@ -48,6 +111,79 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetAdminPing operation middleware
+func (siw *ServerInterfaceWrapper) GetAdminPing(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAdminPing(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostAuthLogin operation middleware
+func (siw *ServerInterfaceWrapper) PostAuthLogin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostAuthLogin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostAuthLogout operation middleware
+func (siw *ServerInterfaceWrapper) PostAuthLogout(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostAuthLogoutParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostAuthLogout(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +315,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)
 	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/login", wrapper.PostAuthLogin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/logout", wrapper.PostAuthLogout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/ping", wrapper.GetAdminPing)
+	})
 
 	return r
 }
@@ -188,13 +333,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"fFJNa9tAEP0ry2uPQlKb295CC00OBVN8Cz5MpLG1ifaju+NSYfTfy6xI0rjQ0z7sN2/evKcLhuhTDByk",
-	"wF5Qhok9VXjHNMv0g0uKobD+knJMnMXxRhWSc0X8m3yaGRbxGQ1kSYqLZBdOWNcGmX+eXeYR9uFl7PDK",
-	"i49PPAhWJbpwjKo4chmyS+JigMXdfr8zt7t7M8QgmQYxx5iNTGy+ktAjFTbfKdCJPQcxu5nkGLNv1YqT",
-	"6ut/PFVGg1+cy7aubz+1PdYGMXGg5GBx0/btDRokkqme3E01HYUnFn00GlLD9yMsvrFs+UGv3yKsg5/7",
-	"Xh+9hEMdpJRmN9TR7qnE8FaDoo+Zj7D40L311G3/lu6qoZrg++T2E5u/9I0rZjO+tLWYcvae8gKLLxMP",
-	"z++404t/oVOpzS1F2ONQ9xTOmhjswwXnPMOiw3p4JV9XePuPsKEwmk3ScBhTdEGKdhbI189n27Ye1j8D",
-	"AA==",
+	"5FbbbttGEP2VxbSPtKTUbh/4prqXGG0BwXGBAoZgrJYjcSNyl9kZqhEM/nsxS+pCUXYcIHUD9MWmyNm5",
+	"nDlnZh/B+LLyDh0TpI9AJsdSx8dpzfmfhEGeq+ArDGwxfrGZ/F36UGqGFKzjH64gAd5W2P7EFQZoErD0",
+	"oLPSOjHvvi68L1A7+VoTBqdLPPpKHKxbQdMkEPBDbQNmkN5LwCPzI7/zfVS/eI+Gxe3PIfhwi1R5RzhM",
+	"vkQivXpB0J3huRhvURecPx2EWHMdn/CjLqsinl5D8omQ3bFzEX/3K+tu8UONxMN4lSb624d+X/YvB2E/",
+	"B/sj2PcOn0nwKUQMheUD+zVGMmRIJtiKrXeQwp28VksflACAFybXbmXdSoW2XhqpG1aWlPOsOEdFSGS9",
+	"U8b7tUW10UWNo3Nl4sfKBqQHzT1kMonCtsRzZ+qO898GXEIK34wPChl38hjvtXGK1lGZveid2yFwTQKE",
+	"pg6Wt+/EeceftsDrWJ+8sA5SaMuFBNrOQaEXVfAPVJs1HSrRlf0Nt9CIa+uWfoj327u7mZrObpTxjoM2",
+	"HLEXYH/SrBeaUP2hnV5hiY7VrNAsyEWALUcuP2cnniGBDQZqw01Gb0YTQdZX6HRlIYXL0WR0GRnFeSx4",
+	"HPU8rqQH6SOsMDZMCKQl6ZsMUvgVeSpWMzES2FuuxfPfTSbyTwpCF8/qqiqsiafH78m7w3T7VHNPxB2B",
+	"PCFsjkrXnKNjCYGZku4KQ7WqdjDEikZS99XkzRdLrj/dnshtp49OMr1Uu4wuXzejHT4xnSFGRyqA9H7A",
+	"//t5M0+A6rLUYQspXOdo1idelDYGKepAr0i0eFS2JDKXKGN5OS5kVsUZ5ekM0WaeWBQeRxq0AkfiH322",
+	"/WKo9eZ50x8jHGps/kWC90f1mY5FA0W1MYjZnjKT16VMh7pa+Gwr1LFuowub/TeKMgEz4ZIuSOmAvWS+",
+	"f01kpk5Zx7KSC4VirLwxdQiYdTI6iCSgZlTanYyqTlsvFYqv+UVKETsZ6EGXyBgo6jiurRx1huGwtv66",
+	"uH53+8vFXbcl+7xPjoA6vZjMB5q4Gi63NpUBef/3E1gwV/Fmciqmr4u/n7EGbnHj1xgvLtGF45eSO48r",
+	"/rmbRnsJ+AquGQf/0rc28e1A63EhHtvmu/x3ONCWGEupP6IcNjuN1qGAFMbQzPfGp5qaDhwr7TLVulTo",
+	"sspbxzQ6aLyL1iSPZ1dLPN1J5Nzxk6Y18+afAQA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
