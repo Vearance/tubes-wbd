@@ -8,9 +8,24 @@ import (
 	"os"
 	"syscall"
 	"testing"
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMapErrorMessageOmitsDriverDetails(t *testing.T) {
+	cause := errors.New("failed to connect to `user=svc_account database=orders_db`: 10.0.0.5:5432 (db-internal): refused")
+
+	got := mapError(cause)
+
+	require.Equal(t, ErrConnectionFailed.Error(), got.Error())
+	for _, detail := range []string{"svc_account", "orders_db", "10.0.0.5", "db-internal"} {
+		require.NotContains(t, got.Error(), detail)
+		require.NotContains(t, fmt.Sprintf("%v %+v %s", got, got, got), detail)
+	}
+	require.ErrorIs(t, got, cause, "the cause must stay available for debugging")
+	require.ErrorIs(t, got, ErrConnectionFailed)
+}
 
 func TestMapError(t *testing.T) {
 	require.NoError(t, mapError(nil))

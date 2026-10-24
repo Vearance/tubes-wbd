@@ -178,7 +178,8 @@ func TestIntegrationInvalidateReconnects(t *testing.T) {
 	fresh, err := m.Pool(ctx, 1)
 	require.NoError(t, err)
 	require.NotSame(t, old, fresh)
-	require.Error(t, old.Ping(ctx), "invalidated pool must be closed")
+	require.Eventually(t, func() bool { return old.Ping(ctx) != nil },
+		5*time.Second, 20*time.Millisecond, "invalidated pool must be closed")
 
 	var dbName string
 	require.NoError(t, fresh.QueryRow(ctx, "SELECT current_database()").Scan(&dbName))

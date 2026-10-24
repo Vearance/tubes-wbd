@@ -11,13 +11,20 @@ import (
 	"tubes-wbd/backend/auth"
 	httpapi "tubes-wbd/backend/http"
 	"tubes-wbd/backend/http/middleware"
+	"tubes-wbd/backend/manageddb"
+	"tubes-wbd/backend/migration"
+	"tubes-wbd/backend/viewer"
 )
 
 type apiServer struct {
-	authService    *auth.AuthService
-	userManagement *auth.UserManagementService
-	groupService   *access.GroupService
-	cookieOptions  middleware.CookieOptions
+	authService      *auth.AuthService
+	userManagement   *auth.UserManagementService
+	groupService     *access.GroupService
+	authorization    *access.AuthorizationService
+	managedDatabases *manageddb.Service
+	viewer           *viewer.Service
+	migrations       *migration.Service
+	cookieOptions    middleware.CookieOptions
 }
 
 func (apiServer) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +368,11 @@ func groupResponse(group *access.Group) httpapi.Group {
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	return decodeJSONBodyWithLimit(w, r, target, 1<<20)
+}
+
+func decodeJSONBodyWithLimit(w http.ResponseWriter, r *http.Request, target any, limit int64) bool {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid request body")

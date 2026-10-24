@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,6 +19,73 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for MigrationDraftStatus.
+const (
+	MigrationDraftStatusApplied MigrationDraftStatus = "applied"
+	MigrationDraftStatusDraft   MigrationDraftStatus = "draft"
+	MigrationDraftStatusFailed  MigrationDraftStatus = "failed"
+	MigrationDraftStatusRunning MigrationDraftStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the MigrationDraftStatus enum.
+func (e MigrationDraftStatus) Valid() bool {
+	switch e {
+	case MigrationDraftStatusApplied:
+		return true
+	case MigrationDraftStatusDraft:
+		return true
+	case MigrationDraftStatusFailed:
+		return true
+	case MigrationDraftStatusRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationRunStatus.
+const (
+	MigrationRunStatusFailed  MigrationRunStatus = "failed"
+	MigrationRunStatusSuccess MigrationRunStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the MigrationRunStatus enum.
+func (e MigrationRunStatus) Valid() bool {
+	switch e {
+	case MigrationRunStatusFailed:
+		return true
+	case MigrationRunStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PermissionLevel.
+const (
+	ViewEdit PermissionLevel = "view_edit"
+	ViewOnly PermissionLevel = "view_only"
+)
+
+// Valid indicates whether the value is a known member of the PermissionLevel enum.
+func (e PermissionLevel) Valid() bool {
+	switch e {
+	case ViewEdit:
+		return true
+	case ViewOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// AccessibleDatabase defines model for AccessibleDatabase.
+type AccessibleDatabase struct {
+	Id         int64           `json:"id"`
+	Name       string          `json:"name"`
+	Permission PermissionLevel `json:"permission"`
+}
 
 // AddGroupMemberRequest defines model for AddGroupMemberRequest.
 type AddGroupMemberRequest struct {
@@ -39,6 +107,23 @@ type AuthUser struct {
 	Username string `json:"username"`
 }
 
+// Column defines model for Column.
+type Column struct {
+	Default  *string `json:"default,omitempty"`
+	Name     string  `json:"name"`
+	Nullable bool    `json:"nullable"`
+	Type     string  `json:"type"`
+}
+
+// Constraint defines model for Constraint.
+type Constraint struct {
+	Definition string `json:"definition"`
+	Name       string `json:"name"`
+
+	// Type PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK or EXCLUDE.
+	Type string `json:"type"`
+}
+
 // CreateGroupRequest defines model for CreateGroupRequest.
 type CreateGroupRequest struct {
 	Name string `json:"name"`
@@ -48,6 +133,13 @@ type CreateGroupRequest struct {
 type CreateUserRequest struct {
 	Password string `json:"password"`
 	Username string `json:"username"`
+}
+
+// DatabasePermission defines model for DatabasePermission.
+type DatabasePermission struct {
+	DatabaseId int64           `json:"database_id"`
+	GroupId    int64           `json:"group_id"`
+	Permission PermissionLevel `json:"permission"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -67,6 +159,14 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+// Index defines model for Index.
+type Index struct {
+	Definition string `json:"definition"`
+	Name       string `json:"name"`
+	Primary    bool   `json:"primary"`
+	Unique     bool   `json:"unique"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password string `json:"password"`
@@ -81,6 +181,135 @@ type LoginResponse struct {
 	User      AuthUser  `json:"user"`
 }
 
+// ManagedDatabase A registered target database. The password is never returned.
+type ManagedDatabase struct {
+	CreatedAt time.Time `json:"created_at"`
+	DbName    string    `json:"db_name"`
+	Host      string    `json:"host"`
+	Id        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Port      int       `json:"port"`
+	SslMode   string    `json:"ssl_mode"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Username  string    `json:"username"`
+}
+
+// ManagedDatabaseRequest defines model for ManagedDatabaseRequest.
+type ManagedDatabaseRequest struct {
+	DbName string `json:"db_name"`
+	Host   string `json:"host"`
+	Name   string `json:"name"`
+
+	// Password Required on create; on update an empty value keeps the stored password.
+	Password *string `json:"password,omitempty"`
+	Port     int     `json:"port"`
+
+	// SslMode Defaults to prefer.
+	SslMode  *string `json:"ssl_mode,omitempty"`
+	Username string  `json:"username"`
+}
+
+// MigrationDraft defines model for MigrationDraft.
+type MigrationDraft struct {
+	AppliedVersion *int64               `json:"applied_version,omitempty"`
+	CreatedAt      time.Time            `json:"created_at"`
+	CreatedBy      int64                `json:"created_by"`
+	DatabaseId     int64                `json:"database_id"`
+	Id             int64                `json:"id"`
+	Name           string               `json:"name"`
+	Sql            string               `json:"sql"`
+	Status         MigrationDraftStatus `json:"status"`
+	UpdatedAt      time.Time            `json:"updated_at"`
+	UpdatedBy      int64                `json:"updated_by"`
+}
+
+// MigrationDraftStatus defines model for MigrationDraft.Status.
+type MigrationDraftStatus string
+
+// MigrationDraftRequest defines model for MigrationDraftRequest.
+type MigrationDraftRequest struct {
+	Name string `json:"name"`
+	Sql  string `json:"sql"`
+}
+
+// MigrationHistoryDetail defines model for MigrationHistoryDetail.
+type MigrationHistoryDetail struct {
+	DurationMs int64     `json:"duration_ms"`
+	ExecutedAt time.Time `json:"executed_at"`
+	ExecutedBy int64     `json:"executed_by"`
+	Name       string    `json:"name"`
+	Sql        string    `json:"sql"`
+	Version    int64     `json:"version"`
+}
+
+// MigrationHistoryEntry defines model for MigrationHistoryEntry.
+type MigrationHistoryEntry struct {
+	DurationMs int64     `json:"duration_ms"`
+	ExecutedAt time.Time `json:"executed_at"`
+	ExecutedBy int64     `json:"executed_by"`
+	Name       string    `json:"name"`
+	Version    int64     `json:"version"`
+}
+
+// MigrationHistoryPage defines model for MigrationHistoryPage.
+type MigrationHistoryPage struct {
+	Entries  []MigrationHistoryEntry `json:"entries"`
+	HasNext  bool                    `json:"has_next"`
+	Page     int                     `json:"page"`
+	PageSize int                     `json:"page_size"`
+}
+
+// MigrationRun defines model for MigrationRun.
+type MigrationRun struct {
+	DatabaseId   int64              `json:"database_id"`
+	DraftId      int64              `json:"draft_id"`
+	ErrorCode    *string            `json:"error_code,omitempty"`
+	ErrorMessage *string            `json:"error_message,omitempty"`
+	ExecutedBy   int64              `json:"executed_by"`
+	FinishedAt   time.Time          `json:"finished_at"`
+	Id           int64              `json:"id"`
+	Sql          string             `json:"sql"`
+	StartedAt    time.Time          `json:"started_at"`
+	Status       MigrationRunStatus `json:"status"`
+	Version      *int64             `json:"version,omitempty"`
+}
+
+// MigrationRunStatus defines model for MigrationRun.Status.
+type MigrationRunStatus string
+
+// PermissionLevel defines model for PermissionLevel.
+type PermissionLevel string
+
+// SetDatabasePermissionRequest defines model for SetDatabasePermissionRequest.
+type SetDatabasePermissionRequest struct {
+	Permission PermissionLevel `json:"permission"`
+}
+
+// Table defines model for Table.
+type Table struct {
+	// Kind table, partitioned table, view, materialized view or foreign table.
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	Schema string `json:"schema"`
+}
+
+// TableRows defines model for TableRows.
+type TableRows struct {
+	Columns  []string    `json:"columns"`
+	HasNext  bool        `json:"has_next"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"page_size"`
+	Rows     [][]*string `json:"rows"`
+}
+
+// TableStructure defines model for TableStructure.
+type TableStructure struct {
+	Columns     []Column     `json:"columns"`
+	Constraints []Constraint `json:"constraints"`
+	Indexes     []Index      `json:"indexes"`
+	Table       Table        `json:"table"`
+}
+
 // UpdateUserRequest defines model for UpdateUserRequest.
 type UpdateUserRequest struct {
 	Disabled bool `json:"disabled"`
@@ -89,8 +318,85 @@ type UpdateUserRequest struct {
 // CSRFToken defines model for CSRFToken.
 type CSRFToken = string
 
+// DatabaseId defines model for DatabaseId.
+type DatabaseId = int64
+
+// DraftId defines model for DraftId.
+type DraftId = int64
+
+// GroupId defines model for GroupId.
+type GroupId = int64
+
+// Page defines model for Page.
+type Page = int
+
+// PageSize defines model for PageSize.
+type PageSize = int
+
+// SchemaName defines model for SchemaName.
+type SchemaName = string
+
+// TableName defines model for TableName.
+type TableName = string
+
+// BadRequest defines model for BadRequest.
+type BadRequest = ErrorResponse
+
+// Conflict defines model for Conflict.
+type Conflict = ErrorResponse
+
+// ConnectionFailed defines model for ConnectionFailed.
+type ConnectionFailed = ErrorResponse
+
+// Forbidden defines model for Forbidden.
+type Forbidden = ErrorResponse
+
+// NotFound defines model for NotFound.
+type NotFound = ErrorResponse
+
+// TargetUnavailable defines model for TargetUnavailable.
+type TargetUnavailable = ErrorResponse
+
+// Unauthorized defines model for Unauthorized.
+type Unauthorized = ErrorResponse
+
+// CreateAdminDatabaseParams defines parameters for CreateAdminDatabase.
+type CreateAdminDatabaseParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// TestAdminDatabaseConnectionParams defines parameters for TestAdminDatabaseConnection.
+type TestAdminDatabaseConnectionParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// DeleteAdminDatabaseParams defines parameters for DeleteAdminDatabase.
+type DeleteAdminDatabaseParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// UpdateAdminDatabaseParams defines parameters for UpdateAdminDatabase.
+type UpdateAdminDatabaseParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// TestAdminStoredDatabaseParams defines parameters for TestAdminStoredDatabase.
+type TestAdminStoredDatabaseParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
 // CreateAdminGroupParams defines parameters for CreateAdminGroup.
 type CreateAdminGroupParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// RemoveAdminGroupDatabaseParams defines parameters for RemoveAdminGroupDatabase.
+type RemoveAdminGroupDatabaseParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// SetAdminGroupDatabaseParams defines parameters for SetAdminGroupDatabase.
+type SetAdminGroupDatabaseParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
 }
 
@@ -119,8 +425,67 @@ type PostAuthLogoutParams struct {
 	XCSRFToken string `json:"X-CSRF-Token"`
 }
 
+// CreateMigrationDraftParams defines parameters for CreateMigrationDraft.
+type CreateMigrationDraftParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// ListMigrationHistoryParams defines parameters for ListMigrationHistory.
+type ListMigrationHistoryParams struct {
+	// Page 1-based page number; defaults to 1.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PageSize Rows per page; defaults to 50 and is capped at 100.
+	PageSize *PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
+}
+
+// GetDatabaseTableRowsParams defines parameters for GetDatabaseTableRows.
+type GetDatabaseTableRowsParams struct {
+	Schema SchemaName `form:"schema" json:"schema"`
+	Table  TableName  `form:"table" json:"table"`
+
+	// Page 1-based page number; defaults to 1.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PageSize Rows per page; defaults to 50 and is capped at 100.
+	PageSize *PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
+}
+
+// GetDatabaseTableStructureParams defines parameters for GetDatabaseTableStructure.
+type GetDatabaseTableStructureParams struct {
+	Schema SchemaName `form:"schema" json:"schema"`
+	Table  TableName  `form:"table" json:"table"`
+}
+
+// ListDatabaseTablesParams defines parameters for ListDatabaseTables.
+type ListDatabaseTablesParams struct {
+	Schema SchemaName `form:"schema" json:"schema"`
+}
+
+// UpdateMigrationDraftParams defines parameters for UpdateMigrationDraft.
+type UpdateMigrationDraftParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// ExecuteMigrationDraftParams defines parameters for ExecuteMigrationDraft.
+type ExecuteMigrationDraftParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// CreateAdminDatabaseJSONRequestBody defines body for CreateAdminDatabase for application/json ContentType.
+type CreateAdminDatabaseJSONRequestBody = ManagedDatabaseRequest
+
+// TestAdminDatabaseConnectionJSONRequestBody defines body for TestAdminDatabaseConnection for application/json ContentType.
+type TestAdminDatabaseConnectionJSONRequestBody = ManagedDatabaseRequest
+
+// UpdateAdminDatabaseJSONRequestBody defines body for UpdateAdminDatabase for application/json ContentType.
+type UpdateAdminDatabaseJSONRequestBody = ManagedDatabaseRequest
+
 // CreateAdminGroupJSONRequestBody defines body for CreateAdminGroup for application/json ContentType.
 type CreateAdminGroupJSONRequestBody = CreateGroupRequest
+
+// SetAdminGroupDatabaseJSONRequestBody defines body for SetAdminGroupDatabase for application/json ContentType.
+type SetAdminGroupDatabaseJSONRequestBody = SetDatabasePermissionRequest
 
 // AddAdminGroupMemberJSONRequestBody defines body for AddAdminGroupMember for application/json ContentType.
 type AddAdminGroupMemberJSONRequestBody = AddGroupMemberRequest
@@ -134,14 +499,50 @@ type UpdateAdminUserJSONRequestBody = UpdateUserRequest
 // PostAuthLoginJSONRequestBody defines body for PostAuthLogin for application/json ContentType.
 type PostAuthLoginJSONRequestBody = LoginRequest
 
+// CreateMigrationDraftJSONRequestBody defines body for CreateMigrationDraft for application/json ContentType.
+type CreateMigrationDraftJSONRequestBody = MigrationDraftRequest
+
+// UpdateMigrationDraftJSONRequestBody defines body for UpdateMigrationDraft for application/json ContentType.
+type UpdateMigrationDraftJSONRequestBody = MigrationDraftRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAdminDatabases List managed databases
+	// (GET /admin/databases)
+	ListAdminDatabases(w http.ResponseWriter, r *http.Request)
+	// CreateAdminDatabase Register a target database
+	// (POST /admin/databases)
+	CreateAdminDatabase(w http.ResponseWriter, r *http.Request, params CreateAdminDatabaseParams)
+	// TestAdminDatabaseConnection Test an unsaved connection config
+	// (POST /admin/databases/test)
+	TestAdminDatabaseConnection(w http.ResponseWriter, r *http.Request, params TestAdminDatabaseConnectionParams)
+	// DeleteAdminDatabase Remove a managed database
+	// (DELETE /admin/databases/{databaseId})
+	DeleteAdminDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params DeleteAdminDatabaseParams)
+	// GetAdminDatabase Get a managed database
+	// (GET /admin/databases/{databaseId})
+	GetAdminDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId)
+	// UpdateAdminDatabase Update a managed database
+	// (PATCH /admin/databases/{databaseId})
+	UpdateAdminDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params UpdateAdminDatabaseParams)
+	// TestAdminStoredDatabase Test the stored connection config
+	// (POST /admin/databases/{databaseId}/test)
+	TestAdminStoredDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params TestAdminStoredDatabaseParams)
 	// ListAdminGroups List groups
 	// (GET /admin/groups)
 	ListAdminGroups(w http.ResponseWriter, r *http.Request)
 	// CreateAdminGroup Create a group
 	// (POST /admin/groups)
 	CreateAdminGroup(w http.ResponseWriter, r *http.Request, params CreateAdminGroupParams)
+	// ListAdminGroupDatabases List the database permissions of a group
+	// (GET /admin/groups/{groupId}/databases)
+	ListAdminGroupDatabases(w http.ResponseWriter, r *http.Request, groupId GroupId)
+	// RemoveAdminGroupDatabase Revoke a group's access to a database
+	// (DELETE /admin/groups/{groupId}/databases/{databaseId})
+	RemoveAdminGroupDatabase(w http.ResponseWriter, r *http.Request, groupId GroupId, databaseId DatabaseId, params RemoveAdminGroupDatabaseParams)
+	// SetAdminGroupDatabase Grant a group access to a database
+	// (PUT /admin/groups/{groupId}/databases/{databaseId})
+	SetAdminGroupDatabase(w http.ResponseWriter, r *http.Request, groupId GroupId, databaseId DatabaseId, params SetAdminGroupDatabaseParams)
 	// ListAdminGroupMembers List users in a group
 	// (GET /admin/groups/{groupId}/members)
 	ListAdminGroupMembers(w http.ResponseWriter, r *http.Request, groupId int64)
@@ -169,14 +570,95 @@ type ServerInterface interface {
 	// PostAuthLogout Revoke the current session
 	// (POST /auth/logout)
 	PostAuthLogout(w http.ResponseWriter, r *http.Request, params PostAuthLogoutParams)
+	// ListDatabases List the databases the current user can access
+	// (GET /databases)
+	ListDatabases(w http.ResponseWriter, r *http.Request)
+	// ListMigrationDrafts List migration drafts, newest first
+	// (GET /databases/{databaseId}/migrations/drafts)
+	ListMigrationDrafts(w http.ResponseWriter, r *http.Request, databaseId DatabaseId)
+	// CreateMigrationDraft Save a new migration draft
+	// (POST /databases/{databaseId}/migrations/drafts)
+	CreateMigrationDraft(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params CreateMigrationDraftParams)
+	// ListMigrationHistory List applied migrations, newest first
+	// (GET /databases/{databaseId}/migrations/history)
+	ListMigrationHistory(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ListMigrationHistoryParams)
+	// GetMigrationHistoryEntry Get one applied migration with its SQL
+	// (GET /databases/{databaseId}/migrations/history/{version})
+	GetMigrationHistoryEntry(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, version int64)
+	// ListDatabaseSchemas List schemas
+	// (GET /databases/{databaseId}/schemas)
+	ListDatabaseSchemas(w http.ResponseWriter, r *http.Request, databaseId DatabaseId)
+	// GetDatabaseTableRows Read one page of table data
+	// (GET /databases/{databaseId}/table-rows)
+	GetDatabaseTableRows(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params GetDatabaseTableRowsParams)
+	// GetDatabaseTableStructure Describe a table's columns, constraints and indexes
+	// (GET /databases/{databaseId}/table-structure)
+	GetDatabaseTableStructure(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params GetDatabaseTableStructureParams)
+	// ListDatabaseTables List tables and views in a schema
+	// (GET /databases/{databaseId}/tables)
+	ListDatabaseTables(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ListDatabaseTablesParams)
 	// GetHealth Check application health
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetMigrationDraft Get a migration draft
+	// (GET /migrations/drafts/{draftId})
+	GetMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId)
+	// UpdateMigrationDraft Edit a draft that is not running or applied
+	// (PATCH /migrations/drafts/{draftId})
+	UpdateMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params UpdateMigrationDraftParams)
+	// ExecuteMigrationDraft Run a draft on its database in one transaction
+	// (POST /migrations/drafts/{draftId}/execute)
+	ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params ExecuteMigrationDraftParams)
+	// ListMigrationRuns List the runs of a draft, oldest first
+	// (GET /migrations/drafts/{draftId}/runs)
+	ListMigrationRuns(w http.ResponseWriter, r *http.Request, draftId DraftId)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// ListAdminDatabases List managed databases
+// (GET /admin/databases)
+func (_ Unimplemented) ListAdminDatabases(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateAdminDatabase Register a target database
+// (POST /admin/databases)
+func (_ Unimplemented) CreateAdminDatabase(w http.ResponseWriter, r *http.Request, params CreateAdminDatabaseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestAdminDatabaseConnection Test an unsaved connection config
+// (POST /admin/databases/test)
+func (_ Unimplemented) TestAdminDatabaseConnection(w http.ResponseWriter, r *http.Request, params TestAdminDatabaseConnectionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteAdminDatabase Remove a managed database
+// (DELETE /admin/databases/{databaseId})
+func (_ Unimplemented) DeleteAdminDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params DeleteAdminDatabaseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetAdminDatabase Get a managed database
+// (GET /admin/databases/{databaseId})
+func (_ Unimplemented) GetAdminDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateAdminDatabase Update a managed database
+// (PATCH /admin/databases/{databaseId})
+func (_ Unimplemented) UpdateAdminDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params UpdateAdminDatabaseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// TestAdminStoredDatabase Test the stored connection config
+// (POST /admin/databases/{databaseId}/test)
+func (_ Unimplemented) TestAdminStoredDatabase(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params TestAdminStoredDatabaseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ListAdminGroups List groups
 // (GET /admin/groups)
@@ -187,6 +669,24 @@ func (_ Unimplemented) ListAdminGroups(w http.ResponseWriter, r *http.Request) {
 // CreateAdminGroup Create a group
 // (POST /admin/groups)
 func (_ Unimplemented) CreateAdminGroup(w http.ResponseWriter, r *http.Request, params CreateAdminGroupParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListAdminGroupDatabases List the database permissions of a group
+// (GET /admin/groups/{groupId}/databases)
+func (_ Unimplemented) ListAdminGroupDatabases(w http.ResponseWriter, r *http.Request, groupId GroupId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RemoveAdminGroupDatabase Revoke a group's access to a database
+// (DELETE /admin/groups/{groupId}/databases/{databaseId})
+func (_ Unimplemented) RemoveAdminGroupDatabase(w http.ResponseWriter, r *http.Request, groupId GroupId, databaseId DatabaseId, params RemoveAdminGroupDatabaseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetAdminGroupDatabase Grant a group access to a database
+// (PUT /admin/groups/{groupId}/databases/{databaseId})
+func (_ Unimplemented) SetAdminGroupDatabase(w http.ResponseWriter, r *http.Request, groupId GroupId, databaseId DatabaseId, params SetAdminGroupDatabaseParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -244,9 +744,87 @@ func (_ Unimplemented) PostAuthLogout(w http.ResponseWriter, r *http.Request, pa
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListDatabases List the databases the current user can access
+// (GET /databases)
+func (_ Unimplemented) ListDatabases(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMigrationDrafts List migration drafts, newest first
+// (GET /databases/{databaseId}/migrations/drafts)
+func (_ Unimplemented) ListMigrationDrafts(w http.ResponseWriter, r *http.Request, databaseId DatabaseId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateMigrationDraft Save a new migration draft
+// (POST /databases/{databaseId}/migrations/drafts)
+func (_ Unimplemented) CreateMigrationDraft(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params CreateMigrationDraftParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMigrationHistory List applied migrations, newest first
+// (GET /databases/{databaseId}/migrations/history)
+func (_ Unimplemented) ListMigrationHistory(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ListMigrationHistoryParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMigrationHistoryEntry Get one applied migration with its SQL
+// (GET /databases/{databaseId}/migrations/history/{version})
+func (_ Unimplemented) GetMigrationHistoryEntry(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, version int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListDatabaseSchemas List schemas
+// (GET /databases/{databaseId}/schemas)
+func (_ Unimplemented) ListDatabaseSchemas(w http.ResponseWriter, r *http.Request, databaseId DatabaseId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetDatabaseTableRows Read one page of table data
+// (GET /databases/{databaseId}/table-rows)
+func (_ Unimplemented) GetDatabaseTableRows(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params GetDatabaseTableRowsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetDatabaseTableStructure Describe a table's columns, constraints and indexes
+// (GET /databases/{databaseId}/table-structure)
+func (_ Unimplemented) GetDatabaseTableStructure(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params GetDatabaseTableStructureParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListDatabaseTables List tables and views in a schema
+// (GET /databases/{databaseId}/tables)
+func (_ Unimplemented) ListDatabaseTables(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ListDatabaseTablesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetHealth Check application health
 // (GET /health)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMigrationDraft Get a migration draft
+// (GET /migrations/drafts/{draftId})
+func (_ Unimplemented) GetMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateMigrationDraft Edit a draft that is not running or applied
+// (PATCH /migrations/drafts/{draftId})
+func (_ Unimplemented) UpdateMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params UpdateMigrationDraftParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExecuteMigrationDraft Run a draft on its database in one transaction
+// (POST /migrations/drafts/{draftId}/execute)
+func (_ Unimplemented) ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params ExecuteMigrationDraftParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMigrationRuns List the runs of a draft, oldest first
+// (GET /migrations/drafts/{draftId}/runs)
+func (_ Unimplemented) ListMigrationRuns(w http.ResponseWriter, r *http.Request, draftId DraftId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -258,6 +836,298 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAdminDatabases operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminDatabases(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminDatabases(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAdminDatabase operation middleware
+func (siw *ServerInterfaceWrapper) CreateAdminDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateAdminDatabaseParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAdminDatabase(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestAdminDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) TestAdminDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestAdminDatabaseConnectionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestAdminDatabaseConnection(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAdminDatabase operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAdminDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteAdminDatabaseParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAdminDatabase(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAdminDatabase operation middleware
+func (siw *ServerInterfaceWrapper) GetAdminDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAdminDatabase(w, r, databaseId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAdminDatabase operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAdminDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAdminDatabaseParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAdminDatabase(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestAdminStoredDatabase operation middleware
+func (siw *ServerInterfaceWrapper) TestAdminStoredDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestAdminStoredDatabaseParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestAdminStoredDatabase(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListAdminGroups operation middleware
 func (siw *ServerInterfaceWrapper) ListAdminGroups(w http.ResponseWriter, r *http.Request) {
@@ -309,6 +1179,158 @@ func (siw *ServerInterfaceWrapper) CreateAdminGroup(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAdminGroup(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAdminGroupDatabases operation middleware
+func (siw *ServerInterfaceWrapper) ListAdminGroupDatabases(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAdminGroupDatabases(w, r, groupId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAdminGroupDatabase operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAdminGroupDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveAdminGroupDatabaseParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAdminGroupDatabase(w, r, groupId, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAdminGroupDatabase operation middleware
+func (siw *ServerInterfaceWrapper) SetAdminGroupDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAdminGroupDatabaseParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAdminGroupDatabase(w, r, groupId, databaseId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -647,11 +1669,559 @@ func (siw *ServerInterfaceWrapper) PostAuthLogout(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListDatabases operation middleware
+func (siw *ServerInterfaceWrapper) ListDatabases(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDatabases(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMigrationDrafts operation middleware
+func (siw *ServerInterfaceWrapper) ListMigrationDrafts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMigrationDrafts(w, r, databaseId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMigrationDraft operation middleware
+func (siw *ServerInterfaceWrapper) CreateMigrationDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMigrationDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMigrationDraft(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMigrationHistory operation middleware
+func (siw *ServerInterfaceWrapper) ListMigrationHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMigrationHistoryParams
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_size", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMigrationHistory(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMigrationHistoryEntry operation middleware
+func (siw *ServerInterfaceWrapper) GetMigrationHistoryEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "version" -------------
+	var version int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "version", chi.URLParam(r, "version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMigrationHistoryEntry(w, r, databaseId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDatabaseSchemas operation middleware
+func (siw *ServerInterfaceWrapper) ListDatabaseSchemas(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDatabaseSchemas(w, r, databaseId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDatabaseTableRows operation middleware
+func (siw *ServerInterfaceWrapper) GetDatabaseTableRows(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDatabaseTableRowsParams
+
+	// ------------- Required query parameter "schema" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "schema", r.URL.Query(), &params.Schema, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "schema"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "schema", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "table", r.URL.Query(), &params.Table, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_size", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_size"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDatabaseTableRows(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDatabaseTableStructure operation middleware
+func (siw *ServerInterfaceWrapper) GetDatabaseTableStructure(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDatabaseTableStructureParams
+
+	// ------------- Required query parameter "schema" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "schema", r.URL.Query(), &params.Schema, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "schema"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "schema", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "table" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "table", r.URL.Query(), &params.Table, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "table"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "table", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDatabaseTableStructure(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDatabaseTables operation middleware
+func (siw *ServerInterfaceWrapper) ListDatabaseTables(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDatabaseTablesParams
+
+	// ------------- Required query parameter "schema" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "schema", r.URL.Query(), &params.Schema, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "schema"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "schema", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDatabaseTables(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMigrationDraft operation middleware
+func (siw *ServerInterfaceWrapper) GetMigrationDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftId" -------------
+	var draftId DraftId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftId", chi.URLParam(r, "draftId"), &draftId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMigrationDraft(w, r, draftId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMigrationDraft operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMigrationDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftId" -------------
+	var draftId DraftId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftId", chi.URLParam(r, "draftId"), &draftId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateMigrationDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMigrationDraft(w, r, draftId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExecuteMigrationDraft operation middleware
+func (siw *ServerInterfaceWrapper) ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftId" -------------
+	var draftId DraftId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftId", chi.URLParam(r, "draftId"), &draftId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExecuteMigrationDraftParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExecuteMigrationDraft(w, r, draftId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMigrationRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListMigrationRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "draftId" -------------
+	var draftId DraftId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "draftId", chi.URLParam(r, "draftId"), &draftId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "draftId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMigrationRuns(w, r, draftId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -810,6 +2380,75 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/admin/groups/{groupId}/members/{userId}", wrapper.RemoveAdminGroupMember)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/databases", wrapper.ListAdminDatabases)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/databases", wrapper.CreateAdminDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/databases/test", wrapper.TestAdminDatabaseConnection)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/databases/{databaseId}", wrapper.DeleteAdminDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/databases/{databaseId}", wrapper.GetAdminDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/admin/databases/{databaseId}", wrapper.UpdateAdminDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/admin/databases/{databaseId}/test", wrapper.TestAdminStoredDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/admin/groups/{groupId}/databases", wrapper.ListAdminGroupDatabases)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/groups/{groupId}/databases/{databaseId}", wrapper.RemoveAdminGroupDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/groups/{groupId}/databases/{databaseId}", wrapper.SetAdminGroupDatabase)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases", wrapper.ListDatabases)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/schemas", wrapper.ListDatabaseSchemas)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/tables", wrapper.ListDatabaseTables)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/table-structure", wrapper.GetDatabaseTableStructure)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/table-rows", wrapper.GetDatabaseTableRows)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/migrations/history", wrapper.ListMigrationHistory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/migrations/history/{version}", wrapper.GetMigrationHistoryEntry)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/migrations/drafts", wrapper.ListMigrationDrafts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/databases/{databaseId}/migrations/drafts", wrapper.CreateMigrationDraft)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/migrations/drafts/{draftId}", wrapper.GetMigrationDraft)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/migrations/drafts/{draftId}", wrapper.UpdateMigrationDraft)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/migrations/drafts/{draftId}/execute", wrapper.ExecuteMigrationDraft)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/migrations/drafts/{draftId}/runs", wrapper.ListMigrationRuns)
+	})
 
 	return r
 }
@@ -819,32 +2458,77 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"LQ/qW/nS4lYXFGlbXnNaPs7/GQA=",
+	"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",
+	"YlE3NFarUqnCEIvLxf8OAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
