@@ -2,13 +2,20 @@ package access
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"tubes-wbd/backend/auth"
+	"tubes-wbd/backend/manageddb"
 )
+
+const sqlstateForeignKeyViolation = "23503"
 
 type GormRepository struct {
 	db *gorm.DB
@@ -182,4 +189,64 @@ func (r *GormRepository) FindPermissionsByGroupIDs(
 	}
 
 	return permissions, nil
+}
+
+func (r *GormRepository) UpsertDatabasePermission(
+	ctx context.Context,
+	permission *GroupDatabasePermission,
+) error {
+	permission.UpdatedAt = time.Now()
+	if err := r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "group_id"}, {Name: "managed_database_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"permission", "updated_at"}),
+		}).
+		Create(permission).
+		Error; err != nil {
+		if isForeignKeyViolation(err) {
+			return manageddb.ErrNotFound
+		}
+		return fmt.Errorf("saving group database permission: %w", err)
+	}
+
+	return nil
+}
+
+func (r *GormRepository) DeleteDatabasePermission(
+	ctx context.Context,
+	groupID uint,
+	managedDatabaseID uint,
+) error {
+	result := r.db.WithContext(ctx).
+		Where("group_id = ? AND managed_database_id = ?", groupID, managedDatabaseID).
+		Delete(&GroupDatabasePermission{})
+	if result.Error != nil {
+		return fmt.Errorf("deleting group database permission: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrPermissionNotFound
+	}
+
+	return nil
+}
+
+func (r *GormRepository) ListDatabasePermissions(
+	ctx context.Context,
+	groupID uint,
+) ([]GroupDatabasePermission, error) {
+	permissions := []GroupDatabasePermission{}
+	if err := r.db.WithContext(ctx).
+		Where("group_id = ?", groupID).
+		Order("managed_database_id ASC").
+		Find(&permissions).
+		Error; err != nil {
+		return nil, fmt.Errorf("listing group database permissions: %w", err)
+	}
+
+	return permissions, nil
+}
+
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == sqlstateForeignKeyViolation
 }
