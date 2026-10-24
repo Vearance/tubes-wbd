@@ -10,6 +10,12 @@ tags:
     description: Application health and system endpoints.
   - name: authentication
     description: Login and session endpoints.
+  - name: managed-databases
+    description: Target database connections managed by the platform admin.
+  - name: viewer
+    description: Read-only access to target database schema and data.
+  - name: migrations
+    description: Migration drafts, execution and history on target databases.
 paths:
   /health:
     get:
@@ -471,7 +477,677 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /admin/databases:
+    get:
+      operationId: listAdminDatabases
+      summary: List managed databases
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Managed databases were listed.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ManagedDatabase'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createAdminDatabase
+      summary: Register a target database
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagedDatabaseRequest'
+      responses:
+        '201':
+          description: The database was registered. The password is never returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedDatabase'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /admin/databases/test:
+    post:
+      operationId: testAdminDatabaseConnection
+      summary: Test an unsaved connection config
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagedDatabaseRequest'
+      responses:
+        '204':
+          description: The connection succeeded.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ConnectionFailed'
+  /admin/databases/{databaseId}:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: getAdminDatabase
+      summary: Get a managed database
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The managed database.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedDatabase'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateAdminDatabase
+      summary: Update a managed database
+      description: An empty password keeps the stored one.
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagedDatabaseRequest'
+      responses:
+        '200':
+          description: The database was updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedDatabase'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteAdminDatabase
+      summary: Remove a managed database
+      description: Permissions, drafts and runs of the database are removed with it. The target database itself is not touched.
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The database was removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/databases/{databaseId}/test:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    post:
+      operationId: testAdminStoredDatabase
+      summary: Test the stored connection config
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The connection succeeded.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ConnectionFailed'
+  /admin/groups/{groupId}/databases:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      operationId: listAdminGroupDatabases
+      summary: List the database permissions of a group
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Permissions were listed.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DatabasePermission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/groups/{groupId}/databases/{databaseId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+      - $ref: '#/components/parameters/DatabaseId'
+    put:
+      operationId: setAdminGroupDatabase
+      summary: Grant a group access to a database
+      description: Replaces the level the group already has on the database.
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetDatabasePermissionRequest'
+      responses:
+        '200':
+          description: The permission was saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabasePermission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: removeAdminGroupDatabase
+      summary: Revoke a group's access to a database
+      tags:
+        - managed-databases
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The permission was removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /databases:
+    get:
+      operationId: listDatabases
+      summary: List the databases the current user can access
+      tags:
+        - viewer
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Accessible databases with the user's effective permission.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccessibleDatabase'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /databases/{databaseId}/schemas:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: listDatabaseSchemas
+      summary: List schemas
+      tags:
+        - viewer
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Schema names, without PostgreSQL system schemas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/tables:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: listDatabaseTables
+      summary: List tables and views in a schema
+      tags:
+        - viewer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SchemaName'
+      responses:
+        '200':
+          description: Tables and views.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Table'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/table-structure:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: getDatabaseTableStructure
+      summary: Describe a table's columns, constraints and indexes
+      tags:
+        - viewer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SchemaName'
+        - $ref: '#/components/parameters/TableName'
+      responses:
+        '200':
+          description: The table structure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableStructure'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/table-rows:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: getDatabaseTableRows
+      summary: Read one page of table data
+      tags:
+        - viewer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SchemaName'
+        - $ref: '#/components/parameters/TableName'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One page of rows; every cell is text, null is SQL NULL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableRows'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/migrations/history:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: listMigrationHistory
+      summary: List applied migrations, newest first
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One page of migration history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationHistoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/migrations/history/{version}:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      operationId: getMigrationHistoryEntry
+      summary: Get one applied migration with its SQL
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The applied migration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationHistoryDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/migrations/drafts:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: listMigrationDrafts
+      summary: List migration drafts, newest first
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Drafts of the database.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationDraft'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      operationId: createMigrationDraft
+      summary: Save a new migration draft
+      description: Requires View + Edit. Saving does not run the SQL.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationDraftRequest'
+      responses:
+        '201':
+          description: The draft was saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /migrations/drafts/{draftId}:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    get:
+      operationId: getMigrationDraft
+      summary: Get a migration draft
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationDraft'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateMigrationDraft
+      summary: Edit a draft that is not running or applied
+      description: Requires View + Edit. Editing a failed draft reopens it.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationDraftRequest'
+      responses:
+        '200':
+          description: The draft was updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /migrations/drafts/{draftId}/execute:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    post:
+      operationId: executeMigrationDraft
+      summary: Run a draft on its database in one transaction
+      description: Requires View + Edit. On success the migration is committed and added to the history; if the database rejects the SQL everything is rolled back and the failed run is returned with status 422.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: The migration was committed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: The database rejected the SQL; nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationRun'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /migrations/drafts/{draftId}/runs:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    get:
+      operationId: listMigrationRuns
+      summary: List the runs of a draft, oldest first
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Runs of the draft.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationRun'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
+  responses:
+    BadRequest:
+      description: The request is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: The session is not authenticated.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The user lacks the required permission, or the CSRF token is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: The request conflicts with the current state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConnectionFailed:
+      description: The target database could not be reached or rejected the credentials.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TargetUnavailable:
+      description: The target database could not be reached.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   parameters:
     CSRFToken:
       name: X-CSRF-Token
@@ -479,6 +1155,53 @@ components:
       required: true
       schema:
         type: string
+    DatabaseId:
+      name: databaseId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    DraftId:
+      name: draftId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    SchemaName:
+      name: schema
+      in: query
+      required: true
+      schema:
+        type: string
+    TableName:
+      name: table
+      in: query
+      required: true
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      required: false
+      description: 1-based page number; defaults to 1.
+      schema:
+        type: integer
+    PageSize:
+      name: page_size
+      in: query
+      required: false
+      description: Rows per page; defaults to 50 and is capped at 100.
+      schema:
+        type: integer
   securitySchemes:
     sessionCookie:
       type: apiKey
@@ -600,4 +1323,367 @@ components:
         - message
       properties:
         message:
+          type: string
+    ManagedDatabase:
+      type: object
+      description: A registered target database. The password is never returned.
+      required:
+        - id
+        - name
+        - host
+        - port
+        - username
+        - db_name
+        - ssl_mode
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        username:
+          type: string
+        db_name:
+          type: string
+        ssl_mode:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ManagedDatabaseRequest:
+      type: object
+      required:
+        - name
+        - host
+        - port
+        - username
+        - db_name
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+          description: Required on create; on update an empty value keeps the stored password.
+        db_name:
+          type: string
+        ssl_mode:
+          type: string
+          description: Defaults to prefer.
+    PermissionLevel:
+      type: string
+      enum:
+        - view_only
+        - view_edit
+    DatabasePermission:
+      type: object
+      required:
+        - group_id
+        - database_id
+        - permission
+      properties:
+        group_id:
+          type: integer
+          format: int64
+        database_id:
+          type: integer
+          format: int64
+        permission:
+          $ref: '#/components/schemas/PermissionLevel'
+    SetDatabasePermissionRequest:
+      type: object
+      required:
+        - permission
+      properties:
+        permission:
+          $ref: '#/components/schemas/PermissionLevel'
+    AccessibleDatabase:
+      type: object
+      required:
+        - id
+        - name
+        - permission
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        permission:
+          $ref: '#/components/schemas/PermissionLevel'
+    Table:
+      type: object
+      required:
+        - schema
+        - name
+        - kind
+      properties:
+        schema:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          description: table, partitioned table, view, materialized view or foreign table.
+    Column:
+      type: object
+      required:
+        - name
+        - type
+        - nullable
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        nullable:
+          type: boolean
+        default:
+          type: string
+          nullable: true
+    Constraint:
+      type: object
+      required:
+        - name
+        - type
+        - definition
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          description: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK or EXCLUDE.
+        definition:
+          type: string
+    Index:
+      type: object
+      required:
+        - name
+        - definition
+        - unique
+        - primary
+      properties:
+        name:
+          type: string
+        definition:
+          type: string
+        unique:
+          type: boolean
+        primary:
+          type: boolean
+    TableStructure:
+      type: object
+      required:
+        - table
+        - columns
+        - constraints
+        - indexes
+      properties:
+        table:
+          $ref: '#/components/schemas/Table'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Column'
+        constraints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Constraint'
+        indexes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Index'
+    TableRows:
+      type: object
+      required:
+        - columns
+        - rows
+        - page
+        - page_size
+        - has_next
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+              nullable: true
+        page:
+          type: integer
+        page_size:
+          type: integer
+        has_next:
+          type: boolean
+    MigrationHistoryEntry:
+      type: object
+      required:
+        - version
+        - name
+        - executed_by
+        - executed_at
+        - duration_ms
+      properties:
+        version:
+          type: integer
+          format: int64
+        name:
+          type: string
+        executed_by:
+          type: integer
+          format: int64
+        executed_at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+          format: int64
+    MigrationHistoryDetail:
+      allOf:
+        - $ref: '#/components/schemas/MigrationHistoryEntry'
+        - type: object
+          required:
+            - sql
+          properties:
+            sql:
+              type: string
+    MigrationHistoryPage:
+      type: object
+      required:
+        - entries
+        - page
+        - page_size
+        - has_next
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationHistoryEntry'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        has_next:
+          type: boolean
+    MigrationDraftRequest:
+      type: object
+      required:
+        - name
+        - sql
+      properties:
+        name:
+          type: string
+        sql:
+          type: string
+    MigrationDraft:
+      type: object
+      required:
+        - id
+        - database_id
+        - name
+        - sql
+        - status
+        - created_by
+        - updated_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        database_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        sql:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - running
+            - applied
+            - failed
+        applied_version:
+          type: integer
+          format: int64
+          nullable: true
+        created_by:
+          type: integer
+          format: int64
+        updated_by:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    MigrationRun:
+      type: object
+      required:
+        - id
+        - draft_id
+        - database_id
+        - status
+        - sql
+        - executed_by
+        - started_at
+        - finished_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        draft_id:
+          type: integer
+          format: int64
+        database_id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+            - success
+            - failed
+        version:
+          type: integer
+          format: int64
+          nullable: true
+        sql:
+          type: string
+        executed_by:
+          type: integer
+          format: int64
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        error_code:
+          type: string
+        error_message:
           type: string
