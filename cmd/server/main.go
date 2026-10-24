@@ -14,9 +14,12 @@ import (
 	"tubes-wbd/backend/access"
 	"tubes-wbd/backend/auth"
 	"tubes-wbd/backend/database/platformdb"
+	"tubes-wbd/backend/database/targetdb"
 	httpapi "tubes-wbd/backend/http"
 	"tubes-wbd/backend/http/middleware"
 	"tubes-wbd/backend/manageddb"
+	"tubes-wbd/backend/migration"
+	"tubes-wbd/backend/viewer"
 )
 
 func main() {
@@ -57,6 +60,9 @@ func run() error {
 	}
 	if err := access.AutoMigrate(db); err != nil {
 		return fmt.Errorf("migrating access-control schema: %w", err)
+	}
+	if err := migration.AutoMigrate(db); err != nil {
+		return fmt.Errorf("migrating migration schema: %w", err)
 	}
 
 	userRepository := auth.NewGormUserRepository(db)
@@ -102,13 +108,51 @@ func run() error {
 		return fmt.Errorf("creating group service: %w", err)
 	}
 
+	// Target databases: connection configs live in the Platform DB with
+	// encrypted passwords; the manager opens one pool per database on demand.
+	cipher, err := manageddb.NewCipher(cfg.TargetDBKey)
+	if err != nil {
+		return fmt.Errorf("creating target database cipher: %w", err)
+	}
+	managedRepository := manageddb.NewGormRepository(db)
+	configSource, err := manageddb.NewSource(managedRepository, cipher)
+	if err != nil {
+		return fmt.Errorf("creating target database config source: %w", err)
+	}
+	targetManager := targetdb.NewManager(configSource, targetdb.Options{})
+	// Deferred after the platform DB close, so it runs first; and run returns
+	// only after server.Shutdown, so no request still holds a connection.
+	defer targetManager.Close()
+
+	managedDatabaseService, err := manageddb.NewService(managedRepository, cipher, targetManager)
+	if err != nil {
+		return fmt.Errorf("creating managed database service: %w", err)
+	}
+	viewerService, err := viewer.NewService(authorizationService, targetManager)
+	if err != nil {
+		return fmt.Errorf("creating viewer service: %w", err)
+	}
+	migrationService, err := migration.NewService(
+		authorizationService,
+		targetManager,
+		migration.NewGormRepository(db),
+		migration.Options{},
+	)
+	if err != nil {
+		return fmt.Errorf("creating migration service: %w", err)
+	}
+
 	// Register HTTP routes and inject authentication dependencies.
 	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
 	api := apiServer{
-		authService:    authService,
-		userManagement: userManagementService,
-		groupService:   groupService,
-		cookieOptions:  cookieOptions,
+		authService:      authService,
+		userManagement:   userManagementService,
+		groupService:     groupService,
+		authorization:    authorizationService,
+		managedDatabases: managedDatabaseService,
+		viewer:           viewerService,
+		migrations:       migrationService,
+		cookieOptions:    cookieOptions,
 	}
 	mux := httpapi.NewRouter(api, httpapi.RouterConfig{
 		Auth:            authService,
