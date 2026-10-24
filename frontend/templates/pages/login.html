@@ -1,0 +1,77 @@
+{{define "page-styles"}}
+<link rel="stylesheet" href="/static/css/login.css">
+{{end}}
+
+{{define "content"}}
+<main class="auth-page">
+    <div class="auth-shell">
+        <header class="auth-branding">
+            <img
+                class="auth-logo"
+                src="/static/assets/bscheme-logo.svg"
+                alt=""
+                width="128"
+                height="128"
+            >
+            <h1 class="auth-product-name">BScheme</h1>
+            <p class="auth-product-description">Database Management Platform</p>
+        </header>
+
+        <section class="app-panel auth-panel" aria-labelledby="sign-in-heading">
+            <h2 class="auth-panel-title" id="sign-in-heading">Sign in</h2>
+
+            <form method="post" action="/login">
+                {{if .CSRFToken}}
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                {{end}}
+
+                <div class="mb-3">
+                    <label class="form-label" for="username">Username</label>
+                    <input
+                        class="form-control{{with index .FieldErrors "username"}} is-invalid{{end}}"
+                        id="username"
+                        name="username"
+                        type="text"
+                        value="{{.Username}}"
+                        autocomplete="username"
+                        maxlength="255"
+                        required
+                        autofocus
+                        {{with index .FieldErrors "username"}}aria-invalid="true" aria-describedby="username-error"{{end}}
+                    >
+                    {{with index .FieldErrors "username"}}
+                    <div class="invalid-feedback" id="username-error">{{.}}</div>
+                    {{end}}
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label" for="password">Password</label>
+                    <input
+                        class="form-control{{with index .FieldErrors "password"}} is-invalid{{end}}"
+                        id="password"
+                        name="password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                        {{with index .FieldErrors "password"}}aria-invalid="true" aria-describedby="password-error"{{end}}
+                    >
+                    {{with index .FieldErrors "password"}}
+                    <div class="invalid-feedback" id="password-error">{{.}}</div>
+                    {{end}}
+                </div>
+
+                {{template "feedback" .}}
+
+                <button class="btn btn-primary w-100" id="login-submit" type="submit">
+                    <span data-submit-label>Sign in</span>
+                    <span class="spinner-border spinner-border-sm ms-2 d-none" data-submit-spinner aria-hidden="true"></span>
+                </button>
+            </form>
+        </section>
+    </div>
+</main>
+{{end}}
+
+{{define "page-scripts"}}
+<script src="/static/js/login.js" defer></script>
+{{end}}

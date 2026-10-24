@@ -1,0 +1,57 @@
+/* For login pages */
+.auth-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+
+.auth-shell {
+  width: min(100%, 28rem);
+}
+
+.auth-branding {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.auth-logo {
+  display: block;
+  width: 7rem;
+  height: 7rem;
+  margin: 0 auto 1rem;
+}
+
+.auth-product-name {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 2.75rem);
+  letter-spacing: -0.03em;
+}
+
+.auth-product-description {
+  margin: 0.5rem 0 0;
+  color: var(--app-muted);
+}
+
+.auth-panel {
+  padding: clamp(1.5rem, 5vw, 2rem);
+}
+
+.auth-panel-title {
+  margin-bottom: 1.5rem;
+}
+
+.auth-panel .form-control,
+.auth-panel .btn {
+  min-height: 2.75rem;
+}
+
+@media (max-width: 30rem) {
+  .auth-page {
+    place-items: start center;
+  }
+
+  .auth-branding {
+    margin-top: 1rem;
+  }
+}
