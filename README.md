@@ -5,6 +5,12 @@
 docker compose up --build
 ```
 
+The server-rendered frontend is served by the same backend at:
+
+```text
+http://localhost:8080/app/login
+```
+
 ## start server only
 ```bash
 go run ./cmd/server
@@ -71,6 +77,12 @@ These endpoints require a valid session and database permission. Viewer reads re
 - `POST /migrations/drafts/{draftId}/execute` executes a draft.
 - `GET /migrations/drafts/{draftId}/runs` lists execution runs.
 
+
+## server-rendered frontend
+
+The frontend uses the backend's real authentication, authorization, managed-database, viewer, and migration services. It is mounted at `/app` so the existing JSON API routes remain unchanged. The session cookie is shared with the backend and HTML mutation forms include the backend CSRF token.
+
+The old `frontend/preview` command remains a mock-only visual preview and is not connected to Platform PostgreSQL.
 
 ## integration tests
 

@@ -1,16 +1,31 @@
 # BScheme Frontend
 
-Go `html/template` + Bootstrap 5.3.3 CDN + custom CSS + vanilla JavaScript.
+The main frontend is server-rendered with Go `html/template`, Bootstrap 5.3.3 CDN,
+custom CSS, and vanilla JavaScript. It runs inside the backend process and uses the
+real backend services and session cookie.
 
-## Preview
+## Integrated application
 
-From the repository root:
+Start the backend and Platform PostgreSQL, then open:
+
+```text
+http://localhost:8080/app/login
+```
+
+The integrated UI is mounted at `/app`; the JSON API keeps its existing routes.
+HTML forms use the backend session cookie `labpro_sucks` and submit the CSRF token
+as a hidden form field.
+
+## Mock preview
+
+For visual-only work, the old mock preview can still be started from the repository root:
 
 ```sh
 go run ./frontend/preview
 ```
 
-Open `http://localhost:4173/login`.
+Open `http://localhost:4173/login`. This preview uses hard-coded accounts and
+in-memory data; it is not connected to Platform PostgreSQL.
 
 Preview credentials:
 
@@ -20,7 +35,7 @@ Preview credentials:
 | View + Edit | `editor` | `preview-edit` |
 | Platform Admin | `admin` | `preview-admin` |
 
-## Preview Routes
+## Mock Preview Routes
 
 ### Login and assets
 

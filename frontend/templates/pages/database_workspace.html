@@ -3,12 +3,12 @@
 <div class="app-layout">
     {{template "database-sidebar" .}}
     <main class="app-main">
-        <nav class="app-breadcrumb"><a href="/databases?mode={{.Mode}}">Databases</a> / {{.ActiveSchema}} / {{.ActiveTable}}</nav>
+        <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / {{.ActiveDatabase.Name}} / {{.ActiveSchema}}.{{.ActiveTable}}</nav>
         <header class="page-header">
             <div>
                 <p class="app-caption mb-2">Table</p>
                 <h1 class="workspace-heading">{{.ActiveSchema}}.{{.ActiveTable}}</h1>
-                <div class="workspace-meta"><span>2 rows</span><span>4 columns</span></div>
+                {{if .TableDetail}}<div class="workspace-meta"><span>{{len .TableRows}} rows shown</span><span>{{len .TableDetail.Columns}} columns</span></div>{{end}}
             </div>
         </header>
 
@@ -20,16 +20,22 @@
         </nav>
 
         {{if eq .ActiveTab "data"}}
-        <div class="table-scroll"><table class="table table-hover"><thead><tr><th>id</th><th>name</th><th>email</th><th>status</th></tr></thead><tbody><tr><td class="cell-code">1</td><td>Alice</td><td>alice@example.com</td><td>active</td></tr><tr><td class="cell-code">2</td><td>Bob</td><td><span class="sql-null">NULL</span></td><td>inactive</td></tr></tbody></table></div>
-        <footer class="table-footer"><span>50 rows per page</span><nav aria-label="Data pages"><a class="btn btn-outline-secondary disabled" href="#">Previous</a> <span class="mx-2">Page 1</span> <a class="btn btn-outline-secondary disabled" href="#">Next</a></nav></footer>
+        <div class="table-scroll">
+            <table class="table table-hover">
+                <thead><tr>{{range .TableDetail.Columns}}<th>{{.Name}}</th>{{else}}<th>No columns</th>{{end}}</tr></thead>
+                <tbody>{{range .TableRows}}<tr>{{range .Cells}}<td>{{if .Null}}<span class="sql-null">NULL</span>{{else}}{{.Value}}{{end}}</td>{{end}}</tr>{{else}}<tr><td>No rows.</td></tr>{{end}}</tbody>
+            </table>
+        </div>
+        <footer class="table-footer"><span>{{.TablePageSize}} rows per page</span><span>Page {{.TablePage}}</span>{{if .TableHasNext}}<span>More rows available</span>{{end}}</footer>
         {{else if eq .ActiveTab "columns"}}
-        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th></tr></thead><tbody><tr><td>id</td><td class="cell-code">bigint</td><td>No</td><td>—</td><td>PK</td></tr><tr><td>email</td><td class="cell-code">text</td><td>Yes</td><td><span class="sql-null">NULL</span></td><td>—</td></tr></tbody></table></div>
+        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Nullable</th><th>Default</th></tr></thead><tbody>{{range .TableDetail.Columns}}<tr><td>{{.Name}}</td><td class="cell-code">{{.Type}}</td><td>{{if .Nullable}}Yes{{else}}No{{end}}</td><td>{{if .Default}}{{.Default}}{{else}}—{{end}}</td></tr>{{else}}<tr><td colspan="4">No columns.</td></tr>{{end}}</tbody></table></div>
         {{else if eq .ActiveTab "constraints"}}
-        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Definition</th></tr></thead><tbody><tr><td>customers_pkey</td><td>PRIMARY KEY</td><td class="cell-code">PRIMARY KEY (id)</td></tr></tbody></table></div>
+        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Definition</th></tr></thead><tbody>{{range .TableDetail.Constraints}}<tr><td>{{.Name}}</td><td>{{.Type}}</td><td class="cell-code">{{.Definition}}</td></tr>{{else}}<tr><td colspan="3">No constraints.</td></tr>{{end}}</tbody></table></div>
         {{else}}
-        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Unique</th><th>Columns</th></tr></thead><tbody><tr><td>customers_pkey</td><td>Yes</td><td class="cell-code">id</td></tr><tr><td>customers_email_idx</td><td>No</td><td class="cell-code">email</td></tr></tbody></table></div>
+        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Unique</th><th>Definition</th></tr></thead><tbody>{{range .TableDetail.Indexes}}<tr><td>{{.Name}}</td><td>{{if .Unique}}Yes{{else}}No{{end}}</td><td class="cell-code">{{.Definition}}</td></tr>{{else}}<tr><td colspan="3">No indexes.</td></tr>{{end}}</tbody></table></div>
         {{end}}
     </main>
 </div>
 {{end}}
 {{define "page-scripts"}}{{end}}
+</div></span>

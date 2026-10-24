@@ -20,6 +20,7 @@ import (
 	"tubes-wbd/backend/manageddb"
 	"tubes-wbd/backend/migration"
 	"tubes-wbd/backend/viewer"
+	"tubes-wbd/frontend"
 )
 
 func main() {
@@ -141,6 +142,24 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating migration service: %w", err)
 	}
+	frontendHandler, err := frontend.NewHandler(frontend.Dependencies{
+		Auth:            authService,
+		Users:           userRepository,
+		UserManagement:  userManagementService,
+		Groups:          groupService,
+		Authorization:   authorizationService,
+		ManagedDatabase: managedDatabaseService,
+		Viewer:          viewerService,
+		Migrations:      migrationService,
+		CookieOptions:   middleware.CookieOptions{Secure: cfg.CookieSecure},
+	})
+	if err != nil {
+		return fmt.Errorf("creating frontend handler: %w", err)
+	}
+	staticHandler, err := frontendHandler.StaticHandler()
+	if err != nil {
+		return fmt.Errorf("creating frontend static handler: %w", err)
+	}
 
 	// Register HTTP routes and inject authentication dependencies.
 	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
@@ -159,7 +178,11 @@ func run() error {
 		AdminAuthorizer: authorizationService,
 		CookieOptions:   cookieOptions,
 	})
-	// placeholder for '/'
+	// Serve the server-rendered frontend from the same process and origin.
+	mux.Handle("/static/*", staticHandler)
+	mux.Mount(frontend.BasePath, frontendHandler)
+
+	// Placeholder for '/'.
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if _, err := io.WriteString(w, "Hello, world!\n"); err != nil {

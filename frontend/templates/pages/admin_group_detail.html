@@ -1,10 +1,10 @@
 {{define "content"}}
 <main class="app-main">
-    <nav class="app-breadcrumb"><a href="/admin/groups">Groups</a> / {{if .GroupID}}{{.Group.Name}}{{else}}New group{{end}}</nav>
+    <nav class="app-breadcrumb"><a href="/app/admin/groups">Groups</a> / {{if .GroupID}}{{.Group.Name}}{{else}}New group{{end}}</nav>
     <header class="page-header"><div><p class="app-caption mb-2">Group</p><h1>{{if .GroupID}}{{.Group.Name}}{{else}}New group{{end}}</h1></div></header>
     {{if .Notice}}<div class="app-alert mb-4" role="status">{{.Notice}}</div>{{end}}
     {{if .FormError}}<div class="app-alert app-alert-danger mb-4" role="alert">{{.FormError}}</div>{{end}}
-    <form method="post" action="/admin/groups/save" id="group-form" class="app-stack">
+    <form method="post" action="/app/admin/groups/save" id="group-form" class="app-stack">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="group_id" value="{{.GroupID}}">
         <section class="app-panel"><label class="form-label" for="group-name">Group name</label><input class="form-control" id="group-name" name="name" value="{{.Group.Name}}" required></section>
         <section class="app-panel admin-section">
@@ -17,7 +17,7 @@
             <div class="table-scroll"><table class="table"><thead><tr><th>Database</th><th>Permission</th><th></th></tr></thead><tbody id="access-rows">{{range .Group.Access}}<tr data-access="{{.Database}}"><td><input type="hidden" name="access_database" value="{{.Database}}">{{.Database}}</td><td><select class="form-select" name="access_permission" aria-label="Permission for {{.Database}}"><option {{if eq .Permission "View Only"}}selected{{end}}>View Only</option><option {{if eq .Permission "View + Edit"}}selected{{end}}>View + Edit</option></select></td><td><button class="btn btn-outline-secondary btn-sm" type="button" data-remove="access">Remove</button></td></tr>{{end}}</tbody></table></div>
             <p class="app-muted mt-3 mb-0" id="access-empty" {{if .Group.Access}}hidden{{end}}>No database access assigned.</p>
         </section>
-        <div class="form-actions"><a class="btn btn-outline-secondary" href="/admin/groups">Cancel</a><button class="btn btn-primary" type="submit">Save changes</button></div>
+        <div class="form-actions"><a class="btn btn-outline-secondary" href="/app/admin/groups">Cancel</a><button class="btn btn-primary" type="submit">Save changes</button></div>
     </form>
 </main>
 {{end}}

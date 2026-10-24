@@ -1,13 +1,43 @@
 {{define "content"}}
 <main class="app-main">
-    <nav class="app-breadcrumb"><a href="/admin/users">Users</a> / {{if .Editing}}Edit user{{else}}New user{{end}}</nav>
+    <nav class="app-breadcrumb"><a href="/app/admin/users">Users</a> / {{if .Editing}}Edit user{{else}}New user{{end}}</nav>
     <header class="page-header"><div><p class="app-caption mb-2">Platform administration</p><h1>{{if .Editing}}Edit user{{else}}New user{{end}}</h1></div></header>
     {{if .FormError}}<div class="app-alert app-alert-danger mb-4" role="alert">{{.FormError}}</div>{{end}}
-    <form class="app-panel" method="post" action="/admin/users/save">
+    <form class="app-panel" method="post" action="/app/admin/users/save">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         {{if .Editing}}<input type="hidden" name="editing" value="1">{{end}}
-        <div class="form-grid"><div><label class="form-label" for="username">Username</label><input class="form-control" id="username" name="username" value="{{.FormUsername}}" {{if .Editing}}readonly{{end}} required></div><div><label class="form-label" for="password">{{if .Editing}}New password{{else}}Password{{end}}</label><input class="form-control" id="password" name="password" type="password" autocomplete="new-password" {{if not .Editing}}required{{end}}><div class="form-text">{{if .Editing}}Leave blank to keep the existing password.{{else}}The password is never displayed again.{{end}}</div></div><div><label class="form-label" for="role">Platform role</label><select class="form-select" id="role" name="role"><option {{if eq .FormRole "User"}}selected{{end}}>User</option><option {{if eq .FormRole "Platform Admin"}}selected{{end}}>Platform Admin</option></select></div><div><label class="form-label" for="status">Status</label><select class="form-select" id="status" name="status"><option {{if eq .FormStatus "Active"}}selected{{end}}>Active</option><option {{if eq .FormStatus "Disabled"}}selected{{end}}>Disabled</option></select></div></div>
-        <div class="form-actions"><a class="btn btn-outline-secondary" href="/admin/users">Cancel</a><button class="btn btn-primary" type="submit">{{if .Editing}}Save changes{{else}}Create user{{end}}</button></div>
+        <div class="form-grid">
+            <div>
+                <label class="form-label" for="username">Username</label>
+                <input class="form-control" id="username" name="username" value="{{.FormUsername}}" {{if .Editing}}readonly{{end}} required>
+            </div>
+            {{if not .Editing}}
+            <div>
+                <label class="form-label" for="password">Password</label>
+                <input class="form-control" id="password" name="password" type="password" autocomplete="new-password" required>
+                <div class="form-text">The password is never displayed again.</div>
+            </div>
+            <div>
+                <label class="form-label">Platform role</label>
+                <p class="form-control-plaintext">Regular user</p>
+                <input type="hidden" name="role" value="User">
+            </div>
+            {{else}}
+            <div>
+                <label class="form-label">Platform role</label>
+                <p class="form-control-plaintext">{{.FormRole}}</p>
+            </div>
+            {{end}}
+            <div>
+                <label class="form-label" for="status">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option {{if eq .FormStatus "Active"}}selected{{end}}>Active</option>
+                    <option {{if eq .FormStatus "Disabled"}}selected{{end}}>Disabled</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-actions"><a class="btn btn-outline-secondary" href="/app/admin/users">Cancel</a><button class="btn btn-primary" type="submit">{{if .Editing}}Save changes{{else}}Create user{{end}}</button></div>
     </form>
 </main>
 {{end}}
+</div>

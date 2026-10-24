@@ -20,7 +20,7 @@
         <section class="app-panel auth-panel" aria-labelledby="sign-in-heading">
             <h2 class="auth-panel-title" id="sign-in-heading">Sign in</h2>
 
-            <form method="post" action="/login">
+            <form method="post" action="/app/login">
                 {{if .CSRFToken}}
                 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                 {{end}}

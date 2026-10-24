@@ -47,10 +47,22 @@
   const connectionForm = document.getElementById('connection-form');
   if (connectionForm) {
     const result = document.getElementById('connection-result');
-    document.getElementById('test-connection').addEventListener('click', () => {
+    document.getElementById('test-connection').addEventListener('click', async () => {
       if (!connectionForm.reportValidity()) return;
       result.hidden = false;
-      result.textContent = 'Preview only: fields are valid. A live PostgreSQL connection test requires the backend.';
+      result.textContent = 'Testing connection…';
+      try {
+        const response = await fetch('/app/admin/databases/test', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: new URLSearchParams(new FormData(connectionForm))
+        });
+        if (!response.ok) throw new Error('connection test failed');
+        result.textContent = 'Connection successful.';
+      } catch (_error) {
+        result.textContent = 'Connection test failed. Check the database details and try again.';
+      }
     });
     connectionForm.addEventListener('input', () => { result.hidden = true; });
   }

@@ -1,6 +1,6 @@
 {{define "database-sidebar"}}
 <aside class="app-sidebar" aria-label="Database navigation">
-    <a class="sidebar-back" href="/databases?mode={{.Mode}}">← Back to databases</a>
+    <a class="sidebar-back" href="/app/databases?mode={{.Mode}}">← Back to databases</a>
 
     <section class="sidebar-section">
         <h2 class="sidebar-heading">Entities</h2>
@@ -9,12 +9,12 @@
         <details class="entity-schema" {{if eq $schema $.ActiveSchema}}open{{end}}>
             <summary>{{$schema}}</summary>
             <nav class="entity-list" aria-label="{{$schema}} entities">
-                <a class="entity-link entity-overview" href="/databases/1/schemas/{{$schema}}?mode={{$.Mode}}" {{if and (eq $schema $.ActiveSchema) (eq $.ActiveSection "schema")}}aria-current="page"{{end}}>
+                <a class="entity-link entity-overview" href="/app/databases/{{$.ActiveDatabase.ID}}/schemas/{{$schema}}?mode={{$.Mode}}" {{if and (eq $schema $.ActiveSchema) (eq $.ActiveSection "schema")}}aria-current="page"{{end}}>
                     <span class="entity-icon entity-icon-schema" aria-hidden="true">◇</span>
                     Schema overview
                 </a>
                 {{range .Tables}}
-                <a class="entity-link" href="/databases/1?mode={{$.Mode}}&schema={{$schema}}&table={{.}}" {{if and (eq $schema $.ActiveSchema) (eq . $.ActiveTable) (eq $.ActiveSection "table")}}aria-current="page"{{end}}>
+                <a class="entity-link" href="/app/databases/{{$.ActiveDatabase.ID}}?mode={{$.Mode}}&schema={{$schema}}&table={{.}}" {{if and (eq $schema $.ActiveSchema) (eq . $.ActiveTable) (eq $.ActiveSection "table")}}aria-current="page"{{end}}>
                     <span class="entity-icon" aria-hidden="true">▦</span>
                     {{.}}
                 </a>
@@ -27,18 +27,18 @@
     <section class="sidebar-section">
         <h2 class="sidebar-heading">Workspace</h2>
         <nav aria-label="Workspace pages">
-            <a class="sidebar-link" href="/databases/1/query?mode={{.Mode}}" {{if eq .ActiveSection "query"}}aria-current="page"{{end}}>Query</a>
+            <a class="sidebar-link" href="/app/databases/{{.ActiveDatabase.ID}}/query?mode={{.Mode}}" {{if eq .ActiveSection "query"}}aria-current="page"{{end}}>Query</a>
             {{if .CanEdit}}
-            <a class="sidebar-link" href="/databases/1/migrations/new?mode={{.Mode}}">New migration</a>
+            <a class="sidebar-link" href="/app/databases/{{.ActiveDatabase.ID}}/migrations/new?mode={{.Mode}}">New migration</a>
             {{end}}
-            <a class="sidebar-link" href="/databases/1/migrations?mode={{.Mode}}" {{if eq .ActiveSection "migrations"}}aria-current="page"{{end}}>History</a>
+            <a class="sidebar-link" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}" {{if eq .ActiveSection "migrations"}}aria-current="page"{{end}}>History</a>
         </nav>
     </section>
 
     <footer class="sidebar-user">
         <span class="app-caption">Signed in as</span>
         <strong>{{.CurrentUser.Username}}</strong>
-        <form class="mt-4" method="post" action="/logout">
+        <form class="mt-4" method="post" action="/app/logout">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <button class="btn btn-outline-secondary w-100" type="submit">Log out</button>
         </form>
