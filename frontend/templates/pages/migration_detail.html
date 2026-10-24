@@ -1,0 +1,19 @@
+{{define "page-styles"}}<link rel="stylesheet" href="/static/css/user.css">{{end}}
+{{define "content"}}
+<div class="app-layout">
+    {{template "database-sidebar" .}}
+    <main class="app-main">
+        <nav class="app-breadcrumb"><a href="/databases/1/migrations?mode={{.Mode}}">Migrations</a> / {{.Migration.Name}}</nav>
+        <header class="page-header">
+            <div><p class="app-caption mb-2">Migration {{.Migration.Version}}</p><h1>{{.Migration.Name}}</h1></div>
+            <div class="page-actions"><span class="badge badge-permission">{{.Migration.Status}}</span>{{if .CanEdit}}<a class="btn btn-outline-secondary" href="/databases/1/migrations/new?mode={{.Mode}}">Edit draft</a><button class="btn btn-primary" type="button">Execute migration</button>{{end}}</div>
+        </header>
+        <section class="app-stack">
+            <div class="app-panel migration-detail-grid"><div><p class="detail-label">Target</p><strong>Customer Database</strong></div><div><p class="detail-label">Created by</p><strong>{{.Migration.Executor}}</strong></div><div><p class="detail-label">Status</p><strong>{{.Migration.Status}}</strong></div></div>
+            <div><h2>SQL</h2><pre class="sql-preview"><code>{{.Migration.SQL}}</code></pre></div>
+            {{if not .CanEdit}}<div class="app-alert">You have View Only access. You can review migration details but cannot edit or execute migrations.</div>{{end}}
+        </section>
+    </main>
+</div>
+{{end}}
+{{define "page-scripts"}}{{end}}
