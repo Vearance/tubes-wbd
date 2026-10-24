@@ -84,6 +84,40 @@ The frontend uses the backend's real authentication, authorization, managed-data
 
 The old `frontend/preview` command remains a mock-only visual preview and is not connected to Platform PostgreSQL.
 
+## local test databases and development seed
+
+`docker compose up --build` starts two PostgreSQL services:
+
+- `platform-db`: the Platform DB used by the backend. Its schema is created by GORM `AutoMigrate` when the backend starts.
+- `test-db`: a separate target database named `targetdb`, seeded automatically from [`scripts/seed-target.sql`](scripts/seed-target.sql) when its volume is initialized.
+
+The backend connects to the target database through the Compose network, so register it in the UI with:
+
+```text
+Host: test-db
+Port: 5432
+Database: targetdb
+Username: target
+Password: target_password
+SSL mode: Disable
+```
+
+To add a regular development user and an empty-access group to the Platform DB, run this after the backend has started and completed `AutoMigrate`:
+
+```bash
+docker compose exec -T platform-db psql -U platform -d platform < scripts/seed-platform.sql
+```
+
+The seed creates:
+
+```text
+Username: user
+Password: password
+Group:    group 1
+```
+
+The user is a member of `group 1`, but the group receives no database permission. The script is safe to run repeatedly and does not overwrite an existing user password. If `APP_USER` or `APP_NAME` is customized in `.env`, replace `platform` in the command with the configured values.
+
 ## integration tests
 
 Integration tests use Testcontainers and require Docker:
