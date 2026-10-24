@@ -15,3 +15,18 @@ type HistoryEntry struct {
 	ExecutedAt time.Time
 	Duration   time.Duration
 }
+
+type HistorySummary struct {
+	Version    int64
+	Name       string
+	ExecutedBy uint
+	ExecutedAt time.Time
+	Duration   time.Duration
+}
+
+type HistoryPage struct {
+	Entries  []HistorySummary
+	Page     int
+	PageSize int
+	HasNext  bool
+}

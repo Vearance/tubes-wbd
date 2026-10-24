@@ -4,19 +4,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	"tubes-wbd/backend/database/targetdb"
 )
 
 const (
-	MaxSQLBytes = 1 << 20
-	maxNameLen  = 200
+	MaxSQLBytes     = 1 << 20
+	DefaultPageSize = 50
+	MaxPageSize     = 100
+	maxNameLen      = 200
+	maxPage         = math.MaxInt32
+	rollbackTimeout = 5 * time.Second
 )
 
 type Authorizer interface {
+	RequireView(ctx context.Context, userID, managedDatabaseID uint) error
 	RequireEdit(ctx context.Context, userID, managedDatabaseID uint) error
 }
 
@@ -80,6 +89,78 @@ func (s *Service) Execute(ctx context.Context, userID, dbID uint, m Migration) (
 		return nil, err
 	}
 	return apply(ctx, pool, m, userID, s.opts)
+}
+
+func (s *Service) History(ctx context.Context, userID, dbID uint, page, pageSize int) (*HistoryPage, error) {
+	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+		return nil, err
+	}
+	page, pageSize, err := normalizePage(page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	var result *HistoryPage
+	err = s.readOnly(ctx, dbID, func(tx pgx.Tx) (err error) {
+		result, err = listHistory(ctx, tx, page, pageSize)
+		return err
+	})
+	return result, err
+}
+
+func (s *Service) HistoryEntry(ctx context.Context, userID, dbID uint, version int64) (*HistoryEntry, error) {
+	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+		return nil, err
+	}
+	if version <= 0 {
+		return nil, fmt.Errorf("%w: version must be positive", ErrInvalidInput)
+	}
+
+	var entry *HistoryEntry
+	err := s.readOnly(ctx, dbID, func(tx pgx.Tx) (err error) {
+		entry, err = getHistoryEntry(ctx, tx, version)
+		return err
+	})
+	return entry, err
+}
+
+func (s *Service) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
+	pool, err := s.pools.Pool(ctx, dbID)
+	if err != nil {
+		return err
+	}
+
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("migration: begin read-only transaction: %w", err)
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
+		defer cancel()
+		_ = tx.Rollback(rollbackCtx)
+	}()
+
+	return fn(tx)
+}
+
+func normalizePage(page, pageSize int) (int, int, error) {
+	switch {
+	case page < 0 || pageSize < 0:
+		return 0, 0, fmt.Errorf("%w: page and page size must not be negative", ErrInvalidInput)
+	case page > maxPage:
+		return 0, 0, fmt.Errorf("%w: page is too large", ErrInvalidInput)
+	}
+
+	if page == 0 {
+		page = 1
+	}
+	if pageSize == 0 {
+		pageSize = DefaultPageSize
+	}
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
+	return page, pageSize, nil
 }
 
 func validate(m Migration) (Migration, error) {

@@ -10,6 +10,7 @@ var (
 	ErrTransactionControl  = errors.New("migration: transaction control statements are not allowed")
 	ErrMigrationInProgress = errors.New("migration: another migration is running on this database")
 	ErrExecutionFailed     = errors.New("migration: execution failed")
+	ErrVersionNotFound     = errors.New("migration: version not found")
 )
 
 type ExecutionError struct {
