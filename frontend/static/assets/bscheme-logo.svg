@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"
+     viewBox="0 0 1024 1024" fill="none" role="img"
+     aria-labelledby="logo-title logo-description">
+  <title id="logo-title">BScheme beaver logo</title>
+  <desc id="logo-description">An orange, right-facing seated beaver forming the letter B, with an upright paddle tail on its left.</desc>
+  <!-- Editable vector paths. Orange: #D38C4B. Background and eye are transparent. -->
+  <path fill="#D38C4B" fill-rule="evenodd" clip-rule="evenodd"
+        transform="translate(-108 -124)"
+        d="M 564 365
+           C 550 339 546 314 550 288
+           C 554 259 574 242 599 241
+           C 638 238 659 258 668 305
+           C 735 291 803 296 858 317
+           C 910 337 945 386 954 451
+           L 982 451
+           C 1004 451 1017 466 1011 488
+           C 999 546 936 607 855 657
+           C 923 695 974 749 998 806
+           C 1022 860 1014 909 978 951
+           L 1027 951
+           C 1052 951 1065 970 1065 990
+           C 1065 1013 1049 1029 1027 1029
+           L 347 1029
+           C 269 1031 210 994 185 932
+           C 163 878 171 812 192 752
+           C 214 687 257 628 311 600
+           C 346 582 381 579 412 589
+           C 457 603 485 636 496 681
+           C 507 725 505 783 518 826
+           C 527 855 546 870 560 868
+           C 565 867 564 852 564 836
+           Z
+           M 782 423
+           C 762 424 752 443 756 466
+           C 759 492 773 511 792 509
+           C 813 508 826 487 823 463
+           C 820 440 803 422 782 423
+           Z"/>
+</svg>
