@@ -18,16 +18,36 @@ Preview credentials:
 | --- | --- | --- |
 | View Only | `viewer` | `preview-view` |
 | View + Edit | `editor` | `preview-edit` |
+| Platform Admin | `admin` | `preview-admin` |
 
-## Login Contract
+## Preview Routes
 
-### Routes
+### Login and assets
 
 | Method | Route | Behavior |
 | --- | --- | --- |
+| `GET` | `/` | Redirect to login, databases, or admin Users based on the session |
 | `GET` | `/login` | Render the login page |
-| `POST` | `/login` | Authenticate, set the session cookie, redirect to `/databases` |
+| `POST` | `/login` | Authenticate, set the session cookie, redirect to `/databases` or `/admin/users` |
+| `POST` | `/logout` | Revoke the preview session (CSRF required) |
 | `GET` | `/static/*` | Serve CSS, JavaScript, and assets |
+
+### Platform Admin Preview Routes
+
+These are frontend preview routes backed by mock data, not endpoints in the main API. The main API contract in [`api/openapi.yaml`](../api/openapi.yaml) currently defines `/health`, `/auth/login`, `/auth/logout`, and `/admin/ping`.
+
+| Method | Route | Behavior |
+| --- | --- | --- |
+| `GET` | `/admin` | Redirect to Users |
+| `GET` | `/admin/users`, `/admin/users/new`, `/admin/users/{username}/edit` | List and render user forms |
+| `POST` | `/admin/users/save` | Save a preview user (CSRF required) |
+| `GET` | `/admin/groups`, `/admin/groups/new`, `/admin/groups/{groupID}` | List and render group forms |
+| `POST` | `/admin/groups/save` | Save preview membership and access (CSRF required) |
+| `GET` | `/admin/databases`, `/admin/databases/new`, `/admin/databases/{databaseID}/edit` | List and render connection forms |
+| `POST` | `/admin/databases/save` | Save a preview connection (CSRF required) |
+| `GET` | `/admin/audit-logs` | Filter preview logs by `actor` and `outcome` |
+
+The admin preview supports user forms, group membership and database access, connection forms, and audit filters. Users may belong to multiple groups. Saved changes last only until the preview restarts; newly created users are not added to the hardcoded login accounts. Test connection checks form fields only and does not contact PostgreSQL.
 
 ## Testable States
 
@@ -39,19 +59,21 @@ Preview credentials:
 | Server error | `/login?state=server-error` |
 | Empty/invalid fields | `/login?state=fields` |
 
-## Regular-User Flow
+### Regular-user preview routes
 
 Access is determined by the logged-in preview account, not a query parameter.
 
-| Page | URL |
-| --- | --- |
-| Database list | `/databases` |
-| Table workspace | `/databases/1` |
-| Schema viewer | `/databases/1/schemas/public` |
-| Query | `/databases/1/query` |
-| Migration history | `/databases/1/migrations` |
-| Migration detail | `/databases/1/migrations/4` |
-| New migration | `/databases/1/migrations/new` |
+| Method | Route | Behavior |
+| --- | --- | --- |
+| `GET` | `/databases` | List accessible preview databases |
+| `GET` | `/databases/{databaseID}` | Table workspace; `schema`, `table`, and `tab` query parameters select the view |
+| `GET` | `/databases/{databaseID}/schemas/{schema}` | Schema overview |
+| `GET` | `/databases/{databaseID}/query` | Query editor and optional simulated result (`?executed=true`) |
+| `POST` | `/databases/{databaseID}/query` | Simulate a query result (CSRF required) |
+| `GET` | `/databases/{databaseID}/migrations` | Migration history |
+| `GET` | `/databases/{databaseID}/migrations/new` | New migration form; View Only receives `403` |
+| `POST` | `/databases/{databaseID}/migrations` | Simulate saving a migration (View + Edit and CSRF required) |
+| `GET` | `/databases/{databaseID}/migrations/{migrationID}` | Migration detail |
 
 View Only can browse tables, run the read-only query preview, and view migration history/detail. Opening New Migration returns `403`. View + Edit additionally sees and can submit migration actions.
 
