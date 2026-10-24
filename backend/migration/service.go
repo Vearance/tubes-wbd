@@ -59,20 +59,26 @@ func (o Options) withDefaults() Options {
 type Service struct {
 	authz Authorizer
 	pools PoolProvider
+	repo  Repository
 	opts  Options
 }
 
-func NewService(authz Authorizer, pools PoolProvider, opts Options) (*Service, error) {
+func NewService(authz Authorizer, pools PoolProvider, repo Repository, opts Options) (*Service, error) {
 	if authz == nil {
 		return nil, errors.New("migration authorizer is nil")
 	}
 	if pools == nil {
 		return nil, errors.New("target database pool provider is nil")
 	}
+	if repo == nil {
+		return nil, errors.New("migration repository is nil")
+	}
 
-	return &Service{authz: authz, pools: pools, opts: opts.withDefaults()}, nil
+	return &Service{authz: authz, pools: pools, repo: repo, opts: opts.withDefaults()}, nil
 }
 
+// Execute runs SQL directly without a draft, so no run is recorded in the
+// Platform DB. User-facing flows should use ExecuteDraft.
 func (s *Service) Execute(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
 	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
 		return nil, err
@@ -81,9 +87,12 @@ func (s *Service) Execute(ctx context.Context, userID, dbID uint, m Migration) (
 	if err != nil {
 		return nil, err
 	}
+	return s.run(context.WithoutCancel(ctx), userID, dbID, m)
+}
 
-	ctx = context.WithoutCancel(ctx)
-
+// run expects ctx to be detached from the request: a client that disconnects
+// must not cut a migration short; the statement timeout bounds it instead.
+func (s *Service) run(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
 	pool, err := s.pools.Pool(ctx, dbID)
 	if err != nil {
 		return nil, err
