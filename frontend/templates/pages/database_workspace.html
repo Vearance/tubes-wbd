@@ -1,0 +1,35 @@
+{{define "page-styles"}}<link rel="stylesheet" href="/static/css/user.css">{{end}}
+{{define "content"}}
+<div class="app-layout">
+    {{template "database-sidebar" .}}
+    <main class="app-main">
+        <nav class="app-breadcrumb"><a href="/databases?mode={{.Mode}}">Databases</a> / {{.ActiveSchema}} / {{.ActiveTable}}</nav>
+        <header class="page-header">
+            <div>
+                <p class="app-caption mb-2">Table</p>
+                <h1 class="workspace-heading">{{.ActiveSchema}}.{{.ActiveTable}}</h1>
+                <div class="workspace-meta"><span>2 rows</span><span>4 columns</span></div>
+            </div>
+        </header>
+
+        <nav class="app-tabs" aria-label="Table viewer">
+            <a class="app-tab" href="?mode={{.Mode}}&schema={{.ActiveSchema}}&table={{.ActiveTable}}&tab=data" {{if eq .ActiveTab "data"}}aria-current="page"{{end}}>Data</a>
+            <a class="app-tab" href="?mode={{.Mode}}&schema={{.ActiveSchema}}&table={{.ActiveTable}}&tab=columns" {{if eq .ActiveTab "columns"}}aria-current="page"{{end}}>Columns</a>
+            <a class="app-tab" href="?mode={{.Mode}}&schema={{.ActiveSchema}}&table={{.ActiveTable}}&tab=constraints" {{if eq .ActiveTab "constraints"}}aria-current="page"{{end}}>Constraints</a>
+            <a class="app-tab" href="?mode={{.Mode}}&schema={{.ActiveSchema}}&table={{.ActiveTable}}&tab=indexes" {{if eq .ActiveTab "indexes"}}aria-current="page"{{end}}>Indexes</a>
+        </nav>
+
+        {{if eq .ActiveTab "data"}}
+        <div class="table-scroll"><table class="table table-hover"><thead><tr><th>id</th><th>name</th><th>email</th><th>status</th></tr></thead><tbody><tr><td class="cell-code">1</td><td>Alice</td><td>alice@example.com</td><td>active</td></tr><tr><td class="cell-code">2</td><td>Bob</td><td><span class="sql-null">NULL</span></td><td>inactive</td></tr></tbody></table></div>
+        <footer class="table-footer"><span>50 rows per page</span><nav aria-label="Data pages"><a class="btn btn-outline-secondary disabled" href="#">Previous</a> <span class="mx-2">Page 1</span> <a class="btn btn-outline-secondary disabled" href="#">Next</a></nav></footer>
+        {{else if eq .ActiveTab "columns"}}
+        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Nullable</th><th>Default</th><th>Key</th></tr></thead><tbody><tr><td>id</td><td class="cell-code">bigint</td><td>No</td><td>—</td><td>PK</td></tr><tr><td>email</td><td class="cell-code">text</td><td>Yes</td><td><span class="sql-null">NULL</span></td><td>—</td></tr></tbody></table></div>
+        {{else if eq .ActiveTab "constraints"}}
+        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Definition</th></tr></thead><tbody><tr><td>customers_pkey</td><td>PRIMARY KEY</td><td class="cell-code">PRIMARY KEY (id)</td></tr></tbody></table></div>
+        {{else}}
+        <div class="table-scroll"><table class="table"><thead><tr><th>Name</th><th>Unique</th><th>Columns</th></tr></thead><tbody><tr><td>customers_pkey</td><td>Yes</td><td class="cell-code">id</td></tr><tr><td>customers_email_idx</td><td>No</td><td class="cell-code">email</td></tr></tbody></table></div>
+        {{end}}
+    </main>
+</div>
+{{end}}
+{{define "page-scripts"}}{{end}}

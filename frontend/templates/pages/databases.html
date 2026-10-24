@@ -1,0 +1,34 @@
+{{define "page-styles"}}<link rel="stylesheet" href="/static/css/user.css">{{end}}
+{{define "content"}}
+<main class="app-main">
+
+    <header class="page-header">
+        <div>
+            <p class="app-caption mb-2">Workspace</p>
+            <h1>Your databases</h1>
+            <p class="app-muted mb-0">Select a database to explore its schema, data, and migration history.</p>
+        </div>
+    </header>
+
+    <div class="database-grid">
+        {{range .Databases}}
+        <article class="app-panel database-card">
+            <div class="database-card-header">
+                <div>
+                    <h2>{{.Name}}</h2>
+                    <p class="app-muted mb-0">PostgreSQL · <span class="status-success">{{.Status}}</span></p>
+                </div>
+                <span class="badge badge-permission">{{$.PermissionLabel}}</span>
+            </div>
+            <a class="btn btn-primary" href="/databases/{{.ID}}?mode={{$.Mode}}">Open workspace</a>
+        </article>
+        {{else}}
+        <section class="app-panel empty-state">
+            <h2>No databases available</h2>
+            <p class="mb-0">You do not currently have access to a database.</p>
+        </section>
+        {{end}}
+    </div>
+</main>
+{{end}}
+{{define "page-scripts"}}{{end}}
