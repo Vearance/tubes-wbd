@@ -322,13 +322,13 @@ func TestIntegrationTableDataPagination(t *testing.T) {
 	defaults, err := svc.TableData(ctx, 1, 1, "shop", "numbers", 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, 1, defaults.Page)
-	require.Equal(t, DefaultPageSize, defaults.PageSize)
-	require.Len(t, defaults.Rows, DefaultPageSize)
+	require.Equal(t, testViewerConfig().DefaultPageSize, defaults.PageSize)
+	require.Len(t, defaults.Rows, testViewerConfig().DefaultPageSize)
 
 	capped, err := svc.TableData(ctx, 1, 1, "shop", "numbers", 1, 1000)
 	require.NoError(t, err)
-	require.Equal(t, MaxPageSize, capped.PageSize)
-	require.Len(t, capped.Rows, MaxPageSize)
+	require.Equal(t, testViewerConfig().MaxPageSize, capped.PageSize)
+	require.Len(t, capped.Rows, testViewerConfig().MaxPageSize)
 }
 
 func TestIntegrationTableDataWithoutPrimaryKeyIsStable(t *testing.T) {
