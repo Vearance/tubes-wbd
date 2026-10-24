@@ -80,6 +80,7 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Get("/databases/{databaseId}/table-structure", protectedWrapper.GetDatabaseTableStructure)
 	router.Get("/databases/{databaseId}/table-rows", protectedWrapper.GetDatabaseTableRows)
 	router.Get("/databases/{databaseId}/migrations/history", protectedWrapper.ListMigrationHistory)
+	router.Post("/databases/{databaseId}/migrations/explain", protectedWrapper.ExplainMigration)
 	router.Get("/databases/{databaseId}/migrations/history/{version}", protectedWrapper.GetMigrationHistoryEntry)
 	router.Get("/databases/{databaseId}/migrations/drafts", protectedWrapper.ListMigrationDrafts)
 	router.Post("/databases/{databaseId}/migrations/drafts", protectedWrapper.CreateMigrationDraft)

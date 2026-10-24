@@ -68,6 +68,9 @@ func writeServiceError(w http.ResponseWriter, err error, operation string) {
 		errors.Is(err, migration.ErrMigrationInProgress):
 		writeAPIError(w, http.StatusConflict, err.Error())
 
+	case errors.Is(err, migration.ErrExecutionFailed):
+		writeAPIError(w, http.StatusUnprocessableEntity, err.Error())
+
 	default:
 		log.Printf("%s failed: %v", operation, err)
 		writeAPIError(w, http.StatusInternalServerError, "internal server error")
