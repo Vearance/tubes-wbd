@@ -3,9 +3,9 @@
 <div class="app-layout">
     {{template "database-sidebar" .}}
     <main class="app-main">
-        <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / {{.ActiveSchema}}</nav>
+        <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / <a href="/app/databases/{{.ActiveDatabase.ID}}?mode={{.Mode}}">{{.ActiveDatabase.Name}}</a> / {{.ActiveSchema}}</nav>
         <header class="page-header">
-            <div><p class="app-caption mb-2">Schema</p><h1>{{.ActiveSchema}}</h1><p class="app-muted mb-0">Tables and structural objects in this schema.</p></div>
+            <div><p class="app-caption mb-2">{{.ActiveDatabase.Name}} · Schema</p><h1>{{.ActiveSchema}}</h1><p class="app-muted mb-0">Tables and structural objects in this schema.</p></div>
         </header>
         <section class="app-panel p-0">
             <div class="table-scroll border-0"><table class="table table-hover"><thead><tr><th>Table</th><th>Columns</th><th>Constraints</th><th>Indexes</th><th></th></tr></thead><tbody>

@@ -128,7 +128,10 @@ type pageData struct {
 	ActiveTab       string
 	ActiveSection   string
 	Migrations      []migrationView
+	Drafts          []migrationDraftSummaryView
 	Migration       migrationView
+	MigrationDraft  *migrationDraftView
+	MigrationRuns   []migrationRunView
 	QuerySQL        string
 	QueryExecuted   bool
 	QueryPlan       string
@@ -145,6 +148,39 @@ type migrationView struct {
 	Status      string
 	StatusClass string
 	SQL         string
+}
+
+type migrationDraftSummaryView struct {
+	ID          uint
+	Name        string
+	Status      string
+	StatusClass string
+	UpdatedAt   string
+}
+
+type migrationDraftView struct {
+	ID             uint
+	Name           string
+	SQL            string
+	Status         string
+	StatusClass    string
+	AppliedVersion string
+	CreatedBy      string
+	UpdatedBy      string
+	CreatedAt      string
+	UpdatedAt      string
+	CanEdit        bool
+	CanExecute     bool
+}
+
+type migrationRunView struct {
+	Status       string
+	StatusClass  string
+	Version      string
+	ExecutedBy   string
+	StartedAt    string
+	FinishedAt   string
+	ErrorMessage string
 }
 
 type adminUserView struct {
@@ -303,6 +339,11 @@ func parseTemplates() (map[string]*template.Template, error) {
 			page:   "templates/pages/migration_detail.html",
 			files:  []string{"templates/partials/app_header.html", "templates/partials/database_sidebar.html"},
 		},
+		"migration-draft": {
+			layout: "templates/layouts/app.html",
+			page:   "templates/pages/migration_draft.html",
+			files:  []string{"templates/partials/app_header.html", "templates/partials/database_sidebar.html"},
+		},
 		"admin-users": {
 			layout: "templates/layouts/admin.html",
 			page:   "templates/pages/admin_users.html",
@@ -380,6 +421,9 @@ func (h *Handler) routes() {
 	r.Get("/databases/{databaseID}/migrations", h.withSession(h.migrationHistory))
 	r.Get("/databases/{databaseID}/migrations/new", h.withSession(h.migrationForm))
 	r.Post("/databases/{databaseID}/migrations", h.withSession(h.createMigration))
+	r.Get("/databases/{databaseID}/migrations/drafts/{draftID}", h.withSession(h.migrationDraftDetail))
+	r.Post("/databases/{databaseID}/migrations/drafts/{draftID}", h.withSession(h.updateMigrationDraft))
+	r.Post("/databases/{databaseID}/migrations/drafts/{draftID}/execute", h.withSession(h.executeMigrationDraft))
 	r.Get("/databases/{databaseID}/migrations/{version}", h.withSession(h.migrationDetail))
 
 	r.Get("/admin", h.withAdmin(h.adminRoot))

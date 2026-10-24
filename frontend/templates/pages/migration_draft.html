@@ -1,0 +1,88 @@
+{{define "page-styles"}}<link rel="stylesheet" href="/static/css/user.css">{{end}}
+{{define "content"}}
+<div class="app-layout">
+    {{template "database-sidebar" .}}
+    <main class="app-main">
+        <nav class="app-breadcrumb"><a href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">Migrations</a> / Draft #{{.MigrationDraft.ID}}</nav>
+        <header class="page-header">
+            <div>
+                <p class="app-caption mb-2">{{.ActiveDatabase.Name}}</p>
+                <h1>{{.MigrationDraft.Name}}</h1></div>
+                <p class="app-muted mb-0">Review and manage this migration draft before applying it.</p>
+            </div>
+            <div class="page-actions"><span class="badge badge-permission {{.MigrationDraft.StatusClass}}">{{.MigrationDraft.Status}}</span></div>
+        </header>
+
+        {{if .Notice}}<div class="app-alert mb-4" role="status">{{.Notice}}</div>{{end}}
+        {{if .FormError}}<div class="app-alert app-alert-danger mb-4" role="alert">{{.FormError}}</div>{{end}}
+
+        <section class="app-stack">
+            <div class="app-panel migration-detail-grid">
+                <div><p class="detail-label">Status</p><strong class="{{.MigrationDraft.StatusClass}}">{{.MigrationDraft.Status}}</strong></div>
+                <div><p class="detail-label">Created by</p><strong>{{.MigrationDraft.CreatedBy}}</strong></div>
+                <div><p class="detail-label">Updated by</p><strong>{{.MigrationDraft.UpdatedBy}}</strong></div>
+                <div><p class="detail-label">Created</p><strong>{{.MigrationDraft.CreatedAt}}</strong></div>
+                <div><p class="detail-label">Updated</p><strong>{{.MigrationDraft.UpdatedAt}}</strong></div>
+                <div><p class="detail-label">Applied version</p><strong>{{.MigrationDraft.AppliedVersion}}</strong></div>
+            </div>
+
+            {{if .MigrationDraft.CanEdit}}
+            <form class="app-panel" method="post" action="/app/databases/{{.ActiveDatabase.ID}}/migrations/drafts/{{.MigrationDraft.ID}}">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div class="mb-4"><label class="form-label" for="draft-name">Migration name</label><input class="form-control" id="draft-name" name="name" type="text" value="{{.MigrationDraft.Name}}" required></div>
+                <div><label class="form-label" for="draft-sql">SQL</label><textarea class="form-control sql-editor" id="draft-sql" name="sql" spellcheck="false" required>{{.MigrationDraft.SQL}}</textarea></div>
+                <div class="form-actions">
+                    <a class="btn btn-outline-secondary" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">Back to history</a>
+                    <button class="btn btn-primary" type="submit">Save changes</button>
+                </div>
+            </form>
+            {{else}}
+            <div>
+                <h2>SQL</h2>
+                <pre class="sql-preview"><code>{{.MigrationDraft.SQL}}</code></pre>
+            </div>
+            {{end}}
+
+            {{if .MigrationDraft.CanExecute}}
+            <section class="app-panel">
+                <div</div></h2> class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div><h2>Execute migration</h2><p class="app-muted mb-0">The migration runs in a transaction on the selected database.</p></div>
+                    <form method="post" action="/app/databases/{{.ActiveDatabase.ID}}/</h2>migrations/drafts/{{.MigrationDraft.ID}}/execute">
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        <button class="btn btn-primary" type="submit">Execute draft</button>
+                    </form>
+                </div>
+            </section>
+            {{else if eq .MigrationDraft.Status "applied"}}
+            <div class="app-alert">This draft has already been applied and can no longer be edited or executed.</div>
+            {{else if eq .MigrationDraft.Status "running"}}
+            <div class="app-alert">This draft is currently running and cannot be edited or executed.</div>
+            {{else if not .CanEdit}}
+            <div class="app-alert">You have View Only access. You can review this draft but cannot edit or execute it.</div>
+            {{end}}
+
+            <section class="app-stack" aria-labelledby="runs-heading">
+                <div><h2 id="runs-heading">Execution attempts</h2></div>
+                {{if .MigrationRuns}}
+                <div class="app-panel p-0 migration-list">
+                    <div class="migration-row migration-run-row" aria-hidden="true"><span>Status</span><span>Version</span><span>Executed by</span><span>Started</span><span>Finished</span></div>
+                    {{range .MigrationRuns}}
+                    <div class="migration-row migration-run-row">
+                        <span class="{{.StatusClass}}">{{.Status}}</</span>span>
+                        <span class="cell-code">{{.Version}}</</span></span></span>span>
+                        <span>{{.ExecutedBy}}</span>
+                        <time>{{.StartedAt}}</time>
+                        <time>{{.FinishedAt}}</time>
+                        {{if .ErrorMessage}}<span class="migration-run-error">{{.ErrorMessage}}</span>{{end}}
+                    </div>
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="app-panel empty-state"><p class="mb-0">This draft has not been executed yet.</p></div>
+                {{end}}
+            </section>
+        </section>
+    </main>
+</div>
+{{end}}
+{{define "page-scripts"}}{{end}}

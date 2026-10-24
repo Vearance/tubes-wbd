@@ -8,11 +8,25 @@
             <div><p class="app-caption mb-2">{{.ActiveDatabase.Name}}</p><h1>Migration history</h1><p class="app-muted mb-0">Linear schema and data changes for this database.</p></div>
             {{if .CanEdit}}<a class="btn btn-primary" href="/app/databases/{{.ActiveDatabase.ID}}/migrations/new?mode={{.Mode}}">New migration</a>{{end}}
         </header>
-        <section class="app-panel p-0 migration-list" aria-label="Migration history">
-            <div class="migration-row" aria-hidden="true"><span>Version</span><span>Migration</span><span>User</span><span>Executed</span><span>Status</span></div>
-            {{range .Migrations}}
-            <a class="migration-row" href="/app/databases/{{$.ActiveDatabase.ID}}/migrations/{{.ID}}?mode={{$.Mode}}"><span class="cell-code">{{.Version}}</span><strong>{{.Name}}</strong><span>{{.Executor}}</span><time>{{.ExecutedAt}}</time><span class="{{.StatusClass}}">{{.Status}}</span></a>
-            {{end}}
+        {{if .Drafts}}
+        <section class="app-stack mb-5" aria-labelledby="drafts-heading">
+            <div><h2 id="drafts-heading">Migration drafts</h2><p class="app-muted mb-0">Review, edit, and execute pending migrations.</p></div>
+            <div class="app-panel p-0 migration-list">
+                <div class="migration-row migration-draft-row" aria-hidden="true"><span>ID</span><span>Migration</span><span>Updated</span><span>Status</span></div>
+                {{range .Drafts}}
+                <a class="migration-row migration-draft-row" href="/app/databases/{{$.ActiveDatabase.ID}}/migrations/drafts/{{.ID}}?mode={{$.Mode}}"><span class="cell-code">#{{.ID}}</span><strong>{{.Name}}</strong><time>{{.UpdatedAt}}</time><span class="{{.StatusClass}}">{{.Status}}</span></a>
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+        <section class="app-stack" aria-labelledby="history-heading">
+            <div><h2 id="history-heading">Applied migrations</h2></div>
+            <div class="app-panel p-0 migration-list" aria-label="Migration history">
+                <div class="migration-row" aria-hidden="true"><span>Version</span><span>Migration</span><span>User</span><span>Executed</span><span>Status</span></div>
+                {{range .Migrations}}
+                <a class="migration-row" href="/app/databases/{{$.ActiveDatabase.ID}}/migrations/{{.ID}}?mode={{$.Mode}}"><span class="cell-code">{{.Version}}</span><strong>{{.Name}}</strong><span>{{.Executor}}</span><time>{{.ExecutedAt}}</time><span class="{{.StatusClass}}">{{.Status}}</span></a>
+                {{end}}
+            </div>
         </section>
     </main>
 </div>

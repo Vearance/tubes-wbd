@@ -39,6 +39,9 @@
 .migration-row:hover { background: var(--app-raised); color: var(--app-text); }
 .migration-row:first-child { background: var(--app-raised); font-family: var(--app-serif); }
 .migration-row:last-child { border-bottom: 0; }
+.migration-draft-row { grid-template-columns: 5rem minmax(12rem, 1fr) 12rem 7rem; }
+.migration-run-row { grid-template-columns: 7rem 6rem minmax(8rem, 1fr) 10rem 10rem; }
+.migration-run-error { grid-column: 1 / -1; color: var(--app-danger); white-space: normal; }
 .migration-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
 .detail-label { margin-bottom: 0.25rem; color: var(--app-muted); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .permission-switcher { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem; }
@@ -49,6 +52,10 @@
 @media (max-width: 60rem) {
   .migration-row { grid-template-columns: 4rem minmax(10rem, 1fr) 7rem; }
   .migration-row > :nth-child(4), .migration-row > :nth-child(5) { display: none; }
+  .migration-draft-row { grid-template-columns: 4rem minmax(10rem, 1fr) 7rem; }
+  .migration-draft-row > :nth-child(4) { display: inline; }
+  .migration-run-row { grid-template-columns: 6rem minmax(8rem, 1fr) 7rem; }
+  .migration-run-row > :nth-child(4), .migration-run-row > :nth-child(5) { display: none; }
 }
 @media (max-width: 48rem) {
   .active-database, .connection-status { display: none; }
