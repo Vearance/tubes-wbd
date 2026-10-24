@@ -10,7 +10,7 @@ import (
 	"tubes-wbd/backend/database/targetdb"
 )
 
-func createTestDraft(t *testing.T, svc *Service, dbID uint) *Draft {
+func createTestDraft(t *testing.T, svc *MigrationService, dbID uint) *Draft {
 	t.Helper()
 	d, err := svc.CreateDraft(context.Background(), 1, dbID, validMigration())
 	require.NoError(t, err)
@@ -126,16 +126,16 @@ func TestUpdateDraftRejected(t *testing.T) {
 
 func TestReadingDraftsRequiresView(t *testing.T) {
 	ctx := context.Background()
-	reads := map[string]func(*Service, uint) error{
-		"GetDraft": func(s *Service, id uint) error {
+	reads := map[string]func(*MigrationService, uint) error{
+		"GetDraft": func(s *MigrationService, id uint) error {
 			_, err := s.GetDraft(ctx, 7, id)
 			return err
 		},
-		"ListDrafts": func(s *Service, _ uint) error {
+		"ListDrafts": func(s *MigrationService, _ uint) error {
 			_, err := s.ListDrafts(ctx, 7, 3)
 			return err
 		},
-		"ListRuns": func(s *Service, id uint) error {
+		"ListRuns": func(s *MigrationService, id uint) error {
 			_, err := s.ListRuns(ctx, 7, id)
 			return err
 		},

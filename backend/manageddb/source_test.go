@@ -3,8 +3,9 @@ package manageddb
 import (
 	"context"
 	"testing"
-	"github.com/stretchr/testify/require"
 	"tubes-wbd/backend/database/targetdb"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewSourceRejectsNilDependencies(t *testing.T) {
@@ -15,7 +16,7 @@ func TestNewSourceRejectsNilDependencies(t *testing.T) {
 }
 
 func TestSourceConnConfig(t *testing.T) {
-	svc, repo, _ := newTestService(t)
+	svc, repo, _ := newTestManagedDBService(t)
 	d, err := svc.Create(context.Background(), validInput())
 	require.NoError(t, err)
 

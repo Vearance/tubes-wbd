@@ -21,9 +21,9 @@ type apiServer struct {
 	userManagement   *auth.UserManagementService
 	groupService     *access.GroupService
 	authorization    *access.AuthorizationService
-	managedDatabases *manageddb.Service
-	viewer           *viewer.Service
-	migrations       *migration.Service
+	managedDatabases *manageddb.ManagedDBService
+	viewer           *viewer.ViewerService
+	migrations       *migration.MigrationService
 	cookieOptions    middleware.CookieOptions
 }
 

@@ -12,12 +12,13 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"tubes-wbd/backend/access"
+	"tubes-wbd/backend/database/targetdb"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"tubes-wbd/backend/access"
-	"tubes-wbd/backend/database/targetdb"
 )
 
 const (
@@ -126,22 +127,22 @@ func (s staticSource) ConnConfig(_ context.Context, id targetdb.DatabaseID) (tar
 	return cfg, nil
 }
 
-func newIntegrationService(t *testing.T, targets staticSource, opts Options) *Service {
+func newIntegrationService(t *testing.T, targets staticSource, opts Options) *MigrationService {
 	t.Helper()
 	return newIntegrationServiceWithManager(t, targets, targetdb.Options{}, opts)
 }
 
-func newIntegrationServiceWithManager(t *testing.T, targets staticSource, managerOpts targetdb.Options, opts Options) *Service {
+func newIntegrationServiceWithManager(t *testing.T, targets staticSource, managerOpts targetdb.Options, opts Options) *MigrationService {
 	t.Helper()
 	return newIntegrationServiceWithAuthorizer(t, targets, managerOpts, opts, stubAuthorizer{})
 }
 
-func newIntegrationServiceWithAuthorizer(t *testing.T, targets staticSource, managerOpts targetdb.Options, opts Options, authz Authorizer) *Service {
+func newIntegrationServiceWithAuthorizer(t *testing.T, targets staticSource, managerOpts targetdb.Options, opts Options, authz Authorizer) *MigrationService {
 	t.Helper()
 	manager := targetdb.NewManager(targets, managerOpts)
 	t.Cleanup(manager.Close)
 
-	svc, err := NewService(authz, manager, newFakeRepo(), opts)
+	svc, err := NewMigrationService(authz, manager, newFakeRepo(), opts)
 	require.NoError(t, err)
 	return svc
 }
@@ -428,7 +429,7 @@ func TestIntegrationUnknownDatabase(t *testing.T) {
 	require.ErrorIs(t, err, targetdb.ErrUnknownDatabase)
 }
 
-func applyMigrations(t *testing.T, svc *Service, dbID uint, count int) {
+func applyMigrations(t *testing.T, svc *MigrationService, dbID uint, count int) {
 	t.Helper()
 	for i := 1; i <= count; i++ {
 		_, err := svc.Execute(context.Background(), uint(10+i), dbID, Migration{

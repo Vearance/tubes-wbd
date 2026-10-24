@@ -62,13 +62,13 @@ func (in Input) validate(requirePassword bool) error {
 	return nil
 }
 
-type Service struct {
+type ManagedDBService struct {
 	repo   Repository
 	cipher *Cipher
 	conn   Connector
 }
 
-func NewService(repo Repository, cipher *Cipher, conn Connector) (*Service, error) {
+func NewManagedDBService(repo Repository, cipher *Cipher, conn Connector) (*ManagedDBService, error) {
 	if repo == nil {
 		return nil, errors.New("managed database repository is nil")
 	}
@@ -79,10 +79,10 @@ func NewService(repo Repository, cipher *Cipher, conn Connector) (*Service, erro
 		return nil, errors.New("target database connector is nil")
 	}
 
-	return &Service{repo: repo, cipher: cipher, conn: conn}, nil
+	return &ManagedDBService{repo: repo, cipher: cipher, conn: conn}, nil
 }
 
-func (s *Service) Create(ctx context.Context, in Input) (*ManagedDatabase, error) {
+func (s *ManagedDBService) Create(ctx context.Context, in Input) (*ManagedDatabase, error) {
 	in = in.normalize()
 	if err := in.validate(true); err != nil {
 		return nil, err
@@ -104,15 +104,15 @@ func (s *Service) Create(ctx context.Context, in Input) (*ManagedDatabase, error
 	return d, nil
 }
 
-func (s *Service) Get(ctx context.Context, id uint) (*ManagedDatabase, error) {
+func (s *ManagedDBService) Get(ctx context.Context, id uint) (*ManagedDatabase, error) {
 	return s.repo.FindByID(ctx, id)
 }
 
-func (s *Service) List(ctx context.Context) ([]ManagedDatabase, error) {
+func (s *ManagedDBService) List(ctx context.Context) ([]ManagedDatabase, error) {
 	return s.repo.List(ctx)
 }
 
-func (s *Service) Update(ctx context.Context, id uint, in Input) (*ManagedDatabase, error) {
+func (s *ManagedDBService) Update(ctx context.Context, id uint, in Input) (*ManagedDatabase, error) {
 	in = in.normalize()
 	if err := in.validate(false); err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (s *Service) Update(ctx context.Context, id uint, in Input) (*ManagedDataba
 	return d, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id uint) error {
+func (s *ManagedDBService) Delete(ctx context.Context, id uint) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (s *Service) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (s *Service) TestConnection(ctx context.Context, in Input) error {
+func (s *ManagedDBService) TestConnection(ctx context.Context, in Input) error {
 	in = in.normalize()
 	if err := in.connConfig().Validate(); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidInput, err)
@@ -159,7 +159,7 @@ func (s *Service) TestConnection(ctx context.Context, in Input) error {
 	return s.conn.Test(ctx, in.connConfig())
 }
 
-func (s *Service) TestStored(ctx context.Context, id uint) error {
+func (s *ManagedDBService) TestStored(ctx context.Context, id uint) error {
 	d, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err

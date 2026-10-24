@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (s *Service) CreateDraft(ctx context.Context, userID, dbID uint, m Migration) (*Draft, error) {
+func (s *MigrationService) CreateDraft(ctx context.Context, userID, dbID uint, m Migration) (*Draft, error) {
 	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (s *Service) CreateDraft(ctx context.Context, userID, dbID uint, m Migratio
 	return d, nil
 }
 
-func (s *Service) UpdateDraft(ctx context.Context, userID, draftID uint, m Migration) (*Draft, error) {
+func (s *MigrationService) UpdateDraft(ctx context.Context, userID, draftID uint, m Migration) (*Draft, error) {
 	d, err := s.repo.FindDraft(ctx, draftID)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (s *Service) UpdateDraft(ctx context.Context, userID, draftID uint, m Migra
 	return d, nil
 }
 
-func (s *Service) GetDraft(ctx context.Context, userID, draftID uint) (*Draft, error) {
+func (s *MigrationService) GetDraft(ctx context.Context, userID, draftID uint) (*Draft, error) {
 	d, err := s.repo.FindDraft(ctx, draftID)
 	if err != nil {
 		return nil, err
@@ -64,14 +64,14 @@ func (s *Service) GetDraft(ctx context.Context, userID, draftID uint) (*Draft, e
 	return d, nil
 }
 
-func (s *Service) ListDrafts(ctx context.Context, userID, dbID uint) ([]Draft, error) {
+func (s *MigrationService) ListDrafts(ctx context.Context, userID, dbID uint) ([]Draft, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
 	return s.repo.ListDrafts(ctx, dbID)
 }
 
-func (s *Service) ListRuns(ctx context.Context, userID, draftID uint) ([]Run, error) {
+func (s *MigrationService) ListRuns(ctx context.Context, userID, draftID uint) ([]Run, error) {
 	d, err := s.repo.FindDraft(ctx, draftID)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (s *Service) ListRuns(ctx context.Context, userID, draftID uint) ([]Run, er
 	return s.repo.ListRuns(ctx, draftID)
 }
 
-func (s *Service) ExecuteDraft(ctx context.Context, userID, draftID uint) (*Run, error) {
+func (s *MigrationService) ExecuteDraft(ctx context.Context, userID, draftID uint) (*Run, error) {
 	d, err := s.repo.FindDraft(ctx, draftID)
 	if err != nil {
 		return nil, err

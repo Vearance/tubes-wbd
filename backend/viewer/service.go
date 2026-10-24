@@ -7,15 +7,14 @@ import (
 	"math"
 	"strings"
 	"time"
+	"tubes-wbd/backend/database/targetdb"
 	"unicode/utf8"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"tubes-wbd/backend/database/targetdb"
 )
 
 const (
-	DefaultPageSize = 50
-	MaxPageSize     = 100
 	maxPage         = math.MaxInt32
 	rollbackTimeout = 5 * time.Second
 )
@@ -28,23 +27,39 @@ type PoolProvider interface {
 	Pool(ctx context.Context, id targetdb.DatabaseID) (*pgxpool.Pool, error)
 }
 
-type Service struct {
-	authz Authorizer
-	pools PoolProvider
+type Config struct {
+	DefaultPageSize int
+	MaxPageSize     int
 }
 
-func NewService(authz Authorizer, pools PoolProvider) (*Service, error) {
+type ViewerService struct {
+	authz  Authorizer
+	pools  PoolProvider
+	config Config
+}
+
+func NewViewerService(
+	authz Authorizer,
+	pools PoolProvider,
+	config Config,
+) (*ViewerService, error) {
 	if authz == nil {
 		return nil, errors.New("viewer authorizer is nil")
 	}
 	if pools == nil {
 		return nil, errors.New("target database pool provider is nil")
 	}
+	if config.DefaultPageSize <= 0 {
+		return nil, errors.New("viewer default page size must be greater than zero")
+	}
+	if config.MaxPageSize < config.DefaultPageSize {
+		return nil, errors.New("viewer max page size must be greater than or equal to default page size")
+	}
 
-	return &Service{authz: authz, pools: pools}, nil
+	return &ViewerService{authz: authz, pools: pools, config: config}, nil
 }
 
-func (s *Service) ListSchemas(ctx context.Context, userID, dbID uint) ([]string, error) {
+func (s *ViewerService) ListSchemas(ctx context.Context, userID, dbID uint) ([]string, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -57,7 +72,7 @@ func (s *Service) ListSchemas(ctx context.Context, userID, dbID uint) ([]string,
 	return schemas, err
 }
 
-func (s *Service) ListTables(ctx context.Context, userID, dbID uint, schema string) ([]Table, error) {
+func (s *ViewerService) ListTables(ctx context.Context, userID, dbID uint, schema string) ([]Table, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -80,7 +95,7 @@ func (s *Service) ListTables(ctx context.Context, userID, dbID uint, schema stri
 	return tables, err
 }
 
-func (s *Service) DescribeTable(ctx context.Context, userID, dbID uint, schema, table string) (*TableDetail, error) {
+func (s *ViewerService) DescribeTable(ctx context.Context, userID, dbID uint, schema, table string) (*TableDetail, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -111,14 +126,14 @@ func (s *Service) DescribeTable(ctx context.Context, userID, dbID uint, schema, 
 	return detail, err
 }
 
-func (s *Service) TableData(ctx context.Context, userID, dbID uint, schema, table string, page, pageSize int) (*TablePage, error) {
+func (s *ViewerService) TableData(ctx context.Context, userID, dbID uint, schema, table string, page, pageSize int) (*TablePage, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
 	if err := validateTable(schema, table); err != nil {
 		return nil, err
 	}
-	page, pageSize, err := normalizePage(page, pageSize)
+	page, pageSize, err := normalizePage(page, pageSize, s.config)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +150,7 @@ func (s *Service) TableData(ctx context.Context, userID, dbID uint, schema, tabl
 	return result, err
 }
 
-func (s *Service) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
+func (s *ViewerService) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
 	pool, err := s.pools.Pool(ctx, dbID)
 	if err != nil {
 		return err
@@ -174,7 +189,7 @@ func validateIdentifier(what, value string) error {
 	return nil
 }
 
-func normalizePage(page, pageSize int) (int, int, error) {
+func normalizePage(page, pageSize int, config Config) (int, int, error) {
 	switch {
 	case page < 0 || pageSize < 0:
 		return 0, 0, fmt.Errorf("%w: page and page size must not be negative", ErrInvalidInput)
@@ -186,10 +201,10 @@ func normalizePage(page, pageSize int) (int, int, error) {
 		page = 1
 	}
 	if pageSize == 0 {
-		pageSize = DefaultPageSize
+		pageSize = config.DefaultPageSize
 	}
-	if pageSize > MaxPageSize {
-		pageSize = MaxPageSize
+	if pageSize > config.MaxPageSize {
+		pageSize = config.MaxPageSize
 	}
 	return page, pageSize, nil
 }

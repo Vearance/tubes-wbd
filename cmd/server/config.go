@@ -12,14 +12,20 @@ import (
 	"tubes-wbd/backend/auth"
 	"tubes-wbd/backend/database/platformdb"
 	"tubes-wbd/backend/manageddb"
+	"tubes-wbd/backend/viewer"
 )
 
-const defaultShutdownTimeout = 10 * time.Second
+const (
+	defaultShutdownTimeout       = 10 * time.Second
+	defaultViewerDefaultPageSize = 50
+	defaultViewerMaxPageSize     = 100
+)
 
 type serverConfig struct {
 	Port            string
 	PlatformDB      platformdb.Config
 	Auth            auth.ServiceConfig
+	Viewer          viewer.Config
 	AdminUsername   string
 	AdminPassword   string
 	CookieSecure    bool
@@ -75,6 +81,22 @@ func loadServerConfig() (serverConfig, error) {
 	pingTimeout, err := durationEnv("APP_PING_TIMEOUT")
 	if err != nil {
 		return serverConfig{}, err
+	}
+
+	viewerDefaultPageSize, err := positiveIntEnv("APP_VIEWER_DEFAULT_PAGE_SIZE")
+	if err != nil {
+		return serverConfig{}, err
+	}
+	if viewerDefaultPageSize == 0 {
+		viewerDefaultPageSize = defaultViewerDefaultPageSize
+	}
+
+	viewerMaxPageSize, err := positiveIntEnv("APP_VIEWER_MAX_PAGE_SIZE")
+	if err != nil {
+		return serverConfig{}, err
+	}
+	if viewerMaxPageSize == 0 {
+		viewerMaxPageSize = defaultViewerMaxPageSize
 	}
 
 	idleTimeout, err := durationEnv("APP_IDLE_TIMEOUT")
@@ -135,6 +157,10 @@ func loadServerConfig() (serverConfig, error) {
 			RotationInterval:    rotationInterval,
 			RotationGracePeriod: rotationGracePeriod,
 		},
+		Viewer: viewer.Config{
+			DefaultPageSize: viewerDefaultPageSize,
+			MaxPageSize:     viewerMaxPageSize,
+		},
 		AdminUsername:   adminUsername,
 		AdminPassword:   adminPassword,
 		CookieSecure:    cookieSecure,
@@ -155,6 +181,23 @@ func intEnv(name string) (int, error) {
 	}
 	if value < 0 {
 		return 0, fmt.Errorf("%s must be a non-negative integer", name)
+	}
+
+	return value, nil
+}
+
+func positiveIntEnv(name string) (int, error) {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return 0, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a positive integer: %w", name, err)
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
 	}
 
 	return value, nil

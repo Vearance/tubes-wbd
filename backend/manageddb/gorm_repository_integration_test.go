@@ -7,9 +7,10 @@ import (
 	"context"
 	"testing"
 	"time"
-	"github.com/stretchr/testify/require"
 	"tubes-wbd/backend/database/targetdb"
 	"tubes-wbd/backend/manageddb"
+
+	"github.com/stretchr/testify/require"
 )
 
 func newRow(name string) *manageddb.ManagedDatabase {
@@ -118,7 +119,7 @@ func TestIntegrationServiceToConnector(t *testing.T) {
 	require.NoError(t, err)
 	manager := targetdb.NewManager(source, targetdb.Options{})
 	t.Cleanup(manager.Close)
-	svc, err := manageddb.NewService(repo, cipher, manager)
+	svc, err := manageddb.NewManagedDBService(repo, cipher, manager)
 	require.NoError(t, err)
 
 	in := manageddb.Input{

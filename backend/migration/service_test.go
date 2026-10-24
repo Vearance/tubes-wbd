@@ -52,16 +52,16 @@ func (p *fakePools) Pool(context.Context, targetdb.DatabaseID) (*pgxpool.Pool, e
 	return nil, p.err
 }
 
-func newTestService(t *testing.T) (*Service, *fakeAuthorizer, *fakePools) {
+func newTestService(t *testing.T) (*MigrationService, *fakeAuthorizer, *fakePools) {
 	t.Helper()
 	svc, authz, pools, _ := newTestServiceWithRepo(t)
 	return svc, authz, pools
 }
 
-func newTestServiceWithRepo(t *testing.T) (*Service, *fakeAuthorizer, *fakePools, *fakeRepo) {
+func newTestServiceWithRepo(t *testing.T) (*MigrationService, *fakeAuthorizer, *fakePools, *fakeRepo) {
 	t.Helper()
 	authz, pools, repo := &fakeAuthorizer{}, &fakePools{}, newFakeRepo()
-	svc, err := NewService(authz, pools, repo, Options{})
+	svc, err := NewMigrationService(authz, pools, repo, Options{})
 	require.NoError(t, err)
 	return svc, authz, pools, repo
 }
@@ -70,12 +70,12 @@ func validMigration() Migration {
 	return Migration{Name: "add phone", SQL: "ALTER TABLE customers ADD COLUMN phone text"}
 }
 
-func TestNewServiceRejectsNilDependencies(t *testing.T) {
-	_, err := NewService(nil, &fakePools{}, newFakeRepo(), Options{})
+func TestNewMigrationServiceRejectsNilDependencies(t *testing.T) {
+	_, err := NewMigrationService(nil, &fakePools{}, newFakeRepo(), Options{})
 	require.Error(t, err)
-	_, err = NewService(&fakeAuthorizer{}, nil, newFakeRepo(), Options{})
+	_, err = NewMigrationService(&fakeAuthorizer{}, nil, newFakeRepo(), Options{})
 	require.Error(t, err)
-	_, err = NewService(&fakeAuthorizer{}, &fakePools{}, nil, Options{})
+	_, err = NewMigrationService(&fakeAuthorizer{}, &fakePools{}, nil, Options{})
 	require.Error(t, err)
 }
 
@@ -167,12 +167,12 @@ func TestExecutionErrorMatchesSentinel(t *testing.T) {
 	require.Contains(t, err.Error(), "42P01")
 }
 
-var historyOperations = map[string]func(*Service) error{
-	"History": func(s *Service) error {
+var historyOperations = map[string]func(*MigrationService) error{
+	"History": func(s *MigrationService) error {
 		_, err := s.History(context.Background(), 7, 3, 1, 10)
 		return err
 	},
-	"HistoryEntry": func(s *Service) error {
+	"HistoryEntry": func(s *MigrationService) error {
 		_, err := s.HistoryEntry(context.Background(), 7, 3, 1)
 		return err
 	},
@@ -195,24 +195,24 @@ func TestHistoryRequiresViewPermissionBeforeConnecting(t *testing.T) {
 
 func TestHistoryRejectsInvalidInputWithoutConnecting(t *testing.T) {
 	ctx := context.Background()
-	tests := map[string]func(*Service) error{
-		"negative page": func(s *Service) error {
+	tests := map[string]func(*MigrationService) error{
+		"negative page": func(s *MigrationService) error {
 			_, err := s.History(ctx, 1, 1, -1, 10)
 			return err
 		},
-		"negative page size": func(s *Service) error {
+		"negative page size": func(s *MigrationService) error {
 			_, err := s.History(ctx, 1, 1, 1, -1)
 			return err
 		},
-		"page too large": func(s *Service) error {
+		"page too large": func(s *MigrationService) error {
 			_, err := s.History(ctx, 1, 1, maxPage+1, 10)
 			return err
 		},
-		"zero version": func(s *Service) error {
+		"zero version": func(s *MigrationService) error {
 			_, err := s.HistoryEntry(ctx, 1, 1, 0)
 			return err
 		},
-		"negative version": func(s *Service) error {
+		"negative version": func(s *MigrationService) error {
 			_, err := s.HistoryEntry(ctx, 1, 1, -5)
 			return err
 		},

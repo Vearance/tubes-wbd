@@ -56,14 +56,14 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-type Service struct {
+type MigrationService struct {
 	authz Authorizer
 	pools PoolProvider
 	repo  Repository
 	opts  Options
 }
 
-func NewService(authz Authorizer, pools PoolProvider, repo Repository, opts Options) (*Service, error) {
+func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, opts Options) (*MigrationService, error) {
 	if authz == nil {
 		return nil, errors.New("migration authorizer is nil")
 	}
@@ -74,12 +74,12 @@ func NewService(authz Authorizer, pools PoolProvider, repo Repository, opts Opti
 		return nil, errors.New("migration repository is nil")
 	}
 
-	return &Service{authz: authz, pools: pools, repo: repo, opts: opts.withDefaults()}, nil
+	return &MigrationService{authz: authz, pools: pools, repo: repo, opts: opts.withDefaults()}, nil
 }
 
 // Execute runs SQL directly without a draft, so no run is recorded in the
 // Platform DB. User-facing flows should use ExecuteDraft.
-func (s *Service) Execute(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
+func (s *MigrationService) Execute(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
 	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (s *Service) Execute(ctx context.Context, userID, dbID uint, m Migration) (
 
 // run expects ctx to be detached from the request: a client that disconnects
 // must not cut a migration short; the statement timeout bounds it instead.
-func (s *Service) run(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
+func (s *MigrationService) run(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
 	pool, err := s.pools.Pool(ctx, dbID)
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func (s *Service) run(ctx context.Context, userID, dbID uint, m Migration) (*His
 	return apply(ctx, pool, m, userID, s.opts)
 }
 
-func (s *Service) History(ctx context.Context, userID, dbID uint, page, pageSize int) (*HistoryPage, error) {
+func (s *MigrationService) History(ctx context.Context, userID, dbID uint, page, pageSize int) (*HistoryPage, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (s *Service) History(ctx context.Context, userID, dbID uint, page, pageSize
 	return result, err
 }
 
-func (s *Service) HistoryEntry(ctx context.Context, userID, dbID uint, version int64) (*HistoryEntry, error) {
+func (s *MigrationService) HistoryEntry(ctx context.Context, userID, dbID uint, version int64) (*HistoryEntry, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (s *Service) HistoryEntry(ctx context.Context, userID, dbID uint, version i
 	return entry, err
 }
 
-func (s *Service) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
+func (s *MigrationService) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
 	pool, err := s.pools.Pool(ctx, dbID)
 	if err != nil {
 		return err

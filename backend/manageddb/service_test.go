@@ -3,8 +3,9 @@ package manageddb
 import (
 	"context"
 	"testing"
-	"github.com/stretchr/testify/require"
 	"tubes-wbd/backend/database/targetdb"
+
+	"github.com/stretchr/testify/require"
 )
 
 type fakeRepo struct {
@@ -89,11 +90,11 @@ func (c *fakeConnector) Invalidate(id targetdb.DatabaseID) {
 	c.invalidated = append(c.invalidated, id)
 }
 
-func newTestService(t *testing.T) (*Service, *fakeRepo, *fakeConnector) {
+func newTestManagedDBService(t *testing.T) (*ManagedDBService, *fakeRepo, *fakeConnector) {
 	t.Helper()
 	repo := newFakeRepo()
 	conn := &fakeConnector{}
-	svc, err := NewService(repo, newTestCipher(t, 1), conn)
+	svc, err := NewManagedDBService(repo, newTestCipher(t, 1), conn)
 	require.NoError(t, err)
 	return svc, repo, conn
 }
@@ -110,19 +111,19 @@ func validInput() Input {
 	}
 }
 
-func TestNewServiceRejectsNilDependencies(t *testing.T) {
+func TestNewManagedDBServiceRejectsNilDependencies(t *testing.T) {
 	repo, cipher, conn := newFakeRepo(), newTestCipher(t, 1), &fakeConnector{}
 
-	_, err := NewService(nil, cipher, conn)
+	_, err := NewManagedDBService(nil, cipher, conn)
 	require.Error(t, err)
-	_, err = NewService(repo, nil, conn)
+	_, err = NewManagedDBService(repo, nil, conn)
 	require.Error(t, err)
-	_, err = NewService(repo, cipher, nil)
+	_, err = NewManagedDBService(repo, cipher, nil)
 	require.Error(t, err)
 }
 
 func TestCreateEncryptsPassword(t *testing.T) {
-	svc, repo, _ := newTestService(t)
+	svc, repo, _ := newTestManagedDBService(t)
 
 	d, err := svc.Create(context.Background(), validInput())
 	require.NoError(t, err)
@@ -136,7 +137,7 @@ func TestCreateEncryptsPassword(t *testing.T) {
 }
 
 func TestCreateNormalizesInput(t *testing.T) {
-	svc, _, _ := newTestService(t)
+	svc, _, _ := newTestManagedDBService(t)
 	in := validInput()
 	in.Name = "  shop  "
 	in.Host = " db-a "
@@ -159,7 +160,7 @@ func TestCreateRejectsInvalidInput(t *testing.T) {
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
-			svc, repo, _ := newTestService(t)
+			svc, repo, _ := newTestManagedDBService(t)
 			in := validInput()
 			mutate(&in)
 
@@ -171,7 +172,7 @@ func TestCreateRejectsInvalidInput(t *testing.T) {
 }
 
 func TestCreateDuplicateName(t *testing.T) {
-	svc, _, _ := newTestService(t)
+	svc, _, _ := newTestManagedDBService(t)
 	_, err := svc.Create(context.Background(), validInput())
 	require.NoError(t, err)
 
@@ -180,7 +181,7 @@ func TestCreateDuplicateName(t *testing.T) {
 }
 
 func TestUpdateWithoutPasswordKeepsStoredPassword(t *testing.T) {
-	svc, repo, conn := newTestService(t)
+	svc, repo, conn := newTestManagedDBService(t)
 	ctx := context.Background()
 	d, err := svc.Create(ctx, validInput())
 	require.NoError(t, err)
@@ -198,7 +199,7 @@ func TestUpdateWithoutPasswordKeepsStoredPassword(t *testing.T) {
 }
 
 func TestUpdateWithPasswordReencrypts(t *testing.T) {
-	svc, repo, conn := newTestService(t)
+	svc, repo, conn := newTestManagedDBService(t)
 	ctx := context.Background()
 	d, err := svc.Create(ctx, validInput())
 	require.NoError(t, err)
@@ -218,7 +219,7 @@ func TestUpdateWithPasswordReencrypts(t *testing.T) {
 }
 
 func TestUpdateUnknownDatabase(t *testing.T) {
-	svc, _, conn := newTestService(t)
+	svc, _, conn := newTestManagedDBService(t)
 
 	_, err := svc.Update(context.Background(), 42, validInput())
 	require.ErrorIs(t, err, ErrNotFound)
@@ -226,7 +227,7 @@ func TestUpdateUnknownDatabase(t *testing.T) {
 }
 
 func TestUpdateInvalidInputDoesNotInvalidate(t *testing.T) {
-	svc, _, conn := newTestService(t)
+	svc, _, conn := newTestManagedDBService(t)
 	ctx := context.Background()
 	d, err := svc.Create(ctx, validInput())
 	require.NoError(t, err)
@@ -239,7 +240,7 @@ func TestUpdateInvalidInputDoesNotInvalidate(t *testing.T) {
 }
 
 func TestDeleteInvalidatesPool(t *testing.T) {
-	svc, repo, conn := newTestService(t)
+	svc, repo, conn := newTestManagedDBService(t)
 	ctx := context.Background()
 	d, err := svc.Create(ctx, validInput())
 	require.NoError(t, err)
@@ -250,7 +251,7 @@ func TestDeleteInvalidatesPool(t *testing.T) {
 }
 
 func TestDeleteUnknownDatabase(t *testing.T) {
-	svc, _, conn := newTestService(t)
+	svc, _, conn := newTestManagedDBService(t)
 
 	err := svc.Delete(context.Background(), 42)
 	require.ErrorIs(t, err, ErrNotFound)
@@ -258,7 +259,7 @@ func TestDeleteUnknownDatabase(t *testing.T) {
 }
 
 func TestTestConnectionPassesConfig(t *testing.T) {
-	svc, repo, conn := newTestService(t)
+	svc, repo, conn := newTestManagedDBService(t)
 	in := validInput()
 	in.SSLMode = ""
 
@@ -275,7 +276,7 @@ func TestTestConnectionPassesConfig(t *testing.T) {
 }
 
 func TestTestConnectionReturnsConnectorError(t *testing.T) {
-	svc, _, conn := newTestService(t)
+	svc, _, conn := newTestManagedDBService(t)
 	conn.testErr = targetdb.ErrAuthFailed
 
 	err := svc.TestConnection(context.Background(), validInput())
@@ -283,7 +284,7 @@ func TestTestConnectionReturnsConnectorError(t *testing.T) {
 }
 
 func TestTestConnectionRejectsInvalidInput(t *testing.T) {
-	svc, _, conn := newTestService(t)
+	svc, _, conn := newTestManagedDBService(t)
 	in := validInput()
 	in.Host = ""
 
@@ -293,7 +294,7 @@ func TestTestConnectionRejectsInvalidInput(t *testing.T) {
 }
 
 func TestTestStoredUsesDecryptedPassword(t *testing.T) {
-	svc, _, conn := newTestService(t)
+	svc, _, conn := newTestManagedDBService(t)
 	ctx := context.Background()
 	d, err := svc.Create(ctx, validInput())
 	require.NoError(t, err)
@@ -304,7 +305,7 @@ func TestTestStoredUsesDecryptedPassword(t *testing.T) {
 }
 
 func TestTestStoredUnknownDatabase(t *testing.T) {
-	svc, _, _ := newTestService(t)
+	svc, _, _ := newTestManagedDBService(t)
 
 	err := svc.TestStored(context.Background(), 42)
 	require.ErrorIs(t, err, ErrNotFound)

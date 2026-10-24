@@ -58,12 +58,12 @@ func newDraftEnv(t *testing.T, targetSetup string) *draftEnv {
 	}
 }
 
-func (e *draftEnv) service(t *testing.T, authz Authorizer) *Service {
+func (e *draftEnv) service(t *testing.T, authz Authorizer) *MigrationService {
 	t.Helper()
 	manager := targetdb.NewManager(e.targets, targetdb.Options{})
 	t.Cleanup(manager.Close)
 
-	svc, err := NewService(authz, manager, e.repo, Options{})
+	svc, err := NewMigrationService(authz, manager, e.repo, Options{})
 	require.NoError(t, err)
 	return svc
 }

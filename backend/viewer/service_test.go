@@ -3,10 +3,11 @@ package viewer
 import (
 	"context"
 	"testing"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/stretchr/testify/require"
 	"tubes-wbd/backend/access"
 	"tubes-wbd/backend/database/targetdb"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -39,45 +40,45 @@ func (p *fakePools) Pool(context.Context, targetdb.DatabaseID) (*pgxpool.Pool, e
 	return nil, p.err
 }
 
-func newTestService(t *testing.T) (*Service, *fakeAuthorizer, *fakePools) {
+func newTestViewerService(t *testing.T) (*ViewerService, *fakeAuthorizer, *fakePools) {
 	t.Helper()
 	authz, pools := &fakeAuthorizer{}, &fakePools{}
-	svc, err := NewService(authz, pools)
+	svc, err := NewViewerService(authz, pools, testViewerConfig())
 	require.NoError(t, err)
 	return svc, authz, pools
 }
 
 // operations calls every public method with valid arguments.
-var operations = map[string]func(*Service) error{
-	"ListSchemas": func(s *Service) error {
+var operations = map[string]func(*ViewerService) error{
+	"ListSchemas": func(s *ViewerService) error {
 		_, err := s.ListSchemas(context.Background(), 7, 3)
 		return err
 	},
-	"ListTables": func(s *Service) error {
+	"ListTables": func(s *ViewerService) error {
 		_, err := s.ListTables(context.Background(), 7, 3, "public")
 		return err
 	},
-	"DescribeTable": func(s *Service) error {
+	"DescribeTable": func(s *ViewerService) error {
 		_, err := s.DescribeTable(context.Background(), 7, 3, "public", "users")
 		return err
 	},
-	"TableData": func(s *Service) error {
+	"TableData": func(s *ViewerService) error {
 		_, err := s.TableData(context.Background(), 7, 3, "public", "users", 1, 10)
 		return err
 	},
 }
 
-func TestNewServiceRejectsNilDependencies(t *testing.T) {
-	_, err := NewService(nil, &fakePools{})
+func TestNewViewerServiceRejectsNilDependencies(t *testing.T) {
+	_, err := NewViewerService(nil, &fakePools{}, testViewerConfig())
 	require.Error(t, err)
-	_, err = NewService(&fakeAuthorizer{}, nil)
+	_, err = NewViewerService(&fakeAuthorizer{}, nil, testViewerConfig())
 	require.Error(t, err)
 }
 
 func TestPermissionIsCheckedBeforeConnecting(t *testing.T) {
 	for name, call := range operations {
 		t.Run(name, func(t *testing.T) {
-			svc, authz, pools := newTestService(t)
+			svc, authz, pools := newTestViewerService(t)
 			authz.err = access.ErrInsufficientPermission
 
 			require.ErrorIs(t, call(svc), access.ErrInsufficientPermission)
@@ -90,7 +91,7 @@ func TestPermissionIsCheckedBeforeConnecting(t *testing.T) {
 }
 
 func TestPermissionIsCheckedBeforeValidatingInput(t *testing.T) {
-	svc, authz, pools := newTestService(t)
+	svc, authz, pools := newTestViewerService(t)
 	authz.err = access.ErrInsufficientPermission
 
 	_, err := svc.TableData(context.Background(), 1, 1, "", "", -1, -1)
@@ -101,40 +102,40 @@ func TestPermissionIsCheckedBeforeValidatingInput(t *testing.T) {
 
 func TestInvalidInputDoesNotConnect(t *testing.T) {
 	ctx := context.Background()
-	tests := map[string]func(*Service) error{
-		"list tables, empty schema": func(s *Service) error {
+	tests := map[string]func(*ViewerService) error{
+		"list tables, empty schema": func(s *ViewerService) error {
 			_, err := s.ListTables(ctx, 1, 1, "")
 			return err
 		},
-		"describe, empty schema": func(s *Service) error {
+		"describe, empty schema": func(s *ViewerService) error {
 			_, err := s.DescribeTable(ctx, 1, 1, "", "users")
 			return err
 		},
-		"describe, empty table": func(s *Service) error {
+		"describe, empty table": func(s *ViewerService) error {
 			_, err := s.DescribeTable(ctx, 1, 1, "public", "")
 			return err
 		},
-		"data, empty table": func(s *Service) error {
+		"data, empty table": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "public", "", 1, 10)
 			return err
 		},
-		"data, NUL in table": func(s *Service) error {
+		"data, NUL in table": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "public", "us\x00ers", 1, 10)
 			return err
 		},
-		"data, invalid UTF-8 in schema": func(s *Service) error {
+		"data, invalid UTF-8 in schema": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "pub\xfflic", "users", 1, 10)
 			return err
 		},
-		"data, negative page": func(s *Service) error {
+		"data, negative page": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "public", "users", -1, 10)
 			return err
 		},
-		"data, negative page size": func(s *Service) error {
+		"data, negative page size": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "public", "users", 1, -10)
 			return err
 		},
-		"data, page too large": func(s *Service) error {
+		"data, page too large": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "public", "users", maxPage+1, 10)
 			return err
 		},
@@ -142,7 +143,7 @@ func TestInvalidInputDoesNotConnect(t *testing.T) {
 
 	for name, call := range tests {
 		t.Run(name, func(t *testing.T) {
-			svc, _, pools := newTestService(t)
+			svc, _, pools := newTestViewerService(t)
 
 			require.ErrorIs(t, call(svc), ErrInvalidInput)
 			require.Zero(t, pools.calls)
@@ -154,7 +155,7 @@ func TestPoolErrorsArePassedThrough(t *testing.T) {
 	for _, poolErr := range []error{targetdb.ErrUnknownDatabase, targetdb.ErrUnreachable, targetdb.ErrAuthFailed} {
 		for name, call := range operations {
 			t.Run(name+"/"+poolErr.Error(), func(t *testing.T) {
-				svc, _, pools := newTestService(t)
+				svc, _, pools := newTestViewerService(t)
 				pools.err = poolErr
 
 				require.ErrorIs(t, call(svc), poolErr)
@@ -162,6 +163,10 @@ func TestPoolErrorsArePassedThrough(t *testing.T) {
 			})
 		}
 	}
+}
+
+func testViewerConfig() Config {
+	return Config{DefaultPageSize: 50, MaxPageSize: 100}
 }
 
 func TestNormalizePage(t *testing.T) {
@@ -172,9 +177,9 @@ func TestNormalizePage(t *testing.T) {
 		wantSize    int
 		wantInvalid bool
 	}{
-		{name: "zero values use defaults", wantPage: 1, wantSize: DefaultPageSize},
+		{name: "zero values use defaults", wantPage: 1, wantSize: testViewerConfig().DefaultPageSize},
 		{name: "explicit values", page: 3, size: 20, wantPage: 3, wantSize: 20},
-		{name: "size is capped", page: 1, size: MaxPageSize + 1, wantPage: 1, wantSize: MaxPageSize},
+		{name: "size is capped", page: 1, size: testViewerConfig().MaxPageSize + 1, wantPage: 1, wantSize: testViewerConfig().MaxPageSize},
 		{name: "largest page", page: maxPage, size: 1, wantPage: maxPage, wantSize: 1},
 		{name: "negative page", page: -1, size: 10, wantInvalid: true},
 		{name: "negative size", page: 1, size: -1, wantInvalid: true},
@@ -183,7 +188,7 @@ func TestNormalizePage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			page, size, err := normalizePage(tt.page, tt.size)
+			page, size, err := normalizePage(tt.page, tt.size, testViewerConfig())
 
 			if tt.wantInvalid {
 				require.ErrorIs(t, err, ErrInvalidInput)

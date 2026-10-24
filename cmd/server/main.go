@@ -124,15 +124,15 @@ func run() error {
 	// only after server.Shutdown, so no request still holds a connection.
 	defer targetManager.Close()
 
-	managedDatabaseService, err := manageddb.NewService(managedRepository, cipher, targetManager)
+	managedDatabaseService, err := manageddb.NewManagedDBService(managedRepository, cipher, targetManager)
 	if err != nil {
 		return fmt.Errorf("creating managed database service: %w", err)
 	}
-	viewerService, err := viewer.NewService(authorizationService, targetManager)
+	viewerService, err := viewer.NewViewerService(authorizationService, targetManager, cfg.Viewer)
 	if err != nil {
 		return fmt.Errorf("creating viewer service: %w", err)
 	}
-	migrationService, err := migration.NewService(
+	migrationService, err := migration.NewMigrationService(
 		authorizationService,
 		targetManager,
 		migration.NewGormRepository(db),

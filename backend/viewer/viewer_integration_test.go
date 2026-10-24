@@ -145,14 +145,14 @@ func (s staticSource) ConnConfig(_ context.Context, id targetdb.DatabaseID) (tar
 	return cfg, nil
 }
 
-func newIntegrationService(t *testing.T) (*Service, *fakeAuthorizer) {
+func newIntegrationService(t *testing.T) (*ViewerService, *fakeAuthorizer) {
 	t.Helper()
 
 	manager := targetdb.NewManager(staticSource{1: target}, targetdb.Options{})
 	t.Cleanup(manager.Close)
 
 	authz := &fakeAuthorizer{}
-	svc, err := NewService(authz, manager)
+	svc, err := NewViewerService(authz, manager, testViewerConfig())
 	require.NoError(t, err)
 	return svc, authz
 }
@@ -446,7 +446,7 @@ func TestIntegrationPermissionDenied(t *testing.T) {
 	manager := targetdb.NewManager(staticSource{1: target}, targetdb.Options{})
 	t.Cleanup(manager.Close)
 	authz := &fakeAuthorizer{err: access.ErrInsufficientPermission}
-	svc, err := NewService(authz, manager)
+	svc, err := NewViewerService(authz, manager, testViewerConfig())
 	require.NoError(t, err)
 
 	_, err = svc.TableData(context.Background(), 5, 1, "shop", "customers", 1, 10)
