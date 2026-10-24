@@ -211,6 +211,9 @@ func (h *Handler) groupFormData(w http.ResponseWriter, r *http.Request, session 
 		return data, false
 	}
 	for index := range users {
+		if users[index].IsAdmin {
+			continue
+		}
 		data.AvailableUsers = append(data.AvailableUsers, adminUserView{
 			ID:       users[index].ID,
 			Username: users[index].Username,
@@ -246,6 +249,9 @@ func (h *Handler) groupFormData(w http.ResponseWriter, r *http.Request, session 
 	data.GroupID = groupID
 	data.Group.Name = group.Name
 	for index := range members {
+		if members[index].IsAdmin {
+			continue
+		}
 		data.Group.Members = append(data.Group.Members, adminMemberView{
 			ID:       members[index].ID,
 			Username: members[index].Username,
@@ -302,6 +308,10 @@ func (h *Handler) adminGroupSave(w http.ResponseWriter, r *http.Request, session
 	}
 
 	if err := h.syncGroupMembers(r, uint(groupID)); err != nil {
+		if errors.Is(err, access.ErrAdminMembershipNotAllowed) {
+			h.renderError(w, http.StatusUnprocessableEntity, "Platform Admin cannot be a group member")
+			return
+		}
 		h.renderError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}

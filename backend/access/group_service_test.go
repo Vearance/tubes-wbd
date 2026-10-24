@@ -183,6 +183,25 @@ func TestGroupServiceCreatesGroupsAndManagesMembership(t *testing.T) {
 	require.ErrorIs(t, service.RemoveMember(context.Background(), group.ID, 1), ErrMembershipNotFound)
 }
 
+func TestGroupServiceRejectsAdminMembership(t *testing.T) {
+	users := &fakeUserRepository{users: map[uint]*auth.User{
+		1: {ID: 1, Username: "admin", IsAdmin: true},
+	}}
+	groups := newFakeGroupRepository()
+	service, err := NewGroupService(users, groups)
+	require.NoError(t, err)
+
+	group, err := service.CreateGroup(context.Background(), "developers")
+	require.NoError(t, err)
+
+	require.ErrorIs(
+		t,
+		service.AddMember(context.Background(), group.ID, 1),
+		ErrAdminMembershipNotAllowed,
+	)
+	require.Empty(t, groups.memberships)
+}
+
 func TestGroupServiceRejectsInvalidAndDuplicateGroups(t *testing.T) {
 	users := &fakeUserRepository{users: map[uint]*auth.User{}}
 	groups := newFakeGroupRepository()

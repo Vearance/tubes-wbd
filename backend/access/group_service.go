@@ -86,8 +86,12 @@ func (s *GroupService) AddMember(
 	if _, err := s.groups.FindGroupByID(ctx, groupID); err != nil {
 		return err
 	}
-	if _, err := s.users.FindByID(ctx, userID); err != nil {
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
 		return fmt.Errorf("finding user for group membership: %w", err)
+	}
+	if user.IsAdmin {
+		return ErrAdminMembershipNotAllowed
 	}
 
 	existing, err := s.groups.FindUserGroup(ctx, userID, groupID)

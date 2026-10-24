@@ -3,10 +3,11 @@ package access
 import "errors"
 
 var (
-	ErrInvalidGroupName   = errors.New("invalid group name")
-	ErrGroupAlreadyExists = errors.New("group already exists")
-	ErrGroupNotFound      = errors.New("group not found")
-	ErrMembershipExists   = errors.New("membership already exists")
-	ErrMembershipNotFound = errors.New("membership not found")
-	ErrPermissionNotFound = errors.New("database permission not found")
+	ErrInvalidGroupName          = errors.New("invalid group name")
+	ErrGroupAlreadyExists        = errors.New("group already exists")
+	ErrGroupNotFound             = errors.New("group not found")
+	ErrMembershipExists          = errors.New("membership already exists")
+	ErrMembershipNotFound        = errors.New("membership not found")
+	ErrAdminMembershipNotAllowed = errors.New("platform admin cannot be a group member")
+	ErrPermissionNotFound        = errors.New("database permission not found")
 )
