@@ -11,6 +11,7 @@ import (
 
 	"tubes-wbd/backend/auth"
 	"tubes-wbd/backend/database/platformdb"
+	"tubes-wbd/backend/manageddb"
 )
 
 const defaultShutdownTimeout = 10 * time.Second
@@ -23,6 +24,7 @@ type serverConfig struct {
 	AdminPassword   string
 	CookieSecure    bool
 	ShutdownTimeout time.Duration
+	TargetDBKey     []byte
 }
 
 func loadServerConfig() (serverConfig, error) {
@@ -108,6 +110,15 @@ func loadServerConfig() (serverConfig, error) {
 		shutdownTimeout = defaultShutdownTimeout
 	}
 
+	encodedKey := os.Getenv("TARGET_DB_ENCRYPTION_KEY")
+	if strings.TrimSpace(encodedKey) == "" {
+		return serverConfig{}, fmt.Errorf("TARGET_DB_ENCRYPTION_KEY environment variable is required")
+	}
+	targetDBKey, err := manageddb.ParseKey(encodedKey)
+	if err != nil {
+		return serverConfig{}, fmt.Errorf("TARGET_DB_ENCRYPTION_KEY: %w", err)
+	}
+
 	return serverConfig{
 		Port: port,
 		PlatformDB: platformdb.Config{
@@ -128,6 +139,7 @@ func loadServerConfig() (serverConfig, error) {
 		AdminPassword:   adminPassword,
 		CookieSecure:    cookieSecure,
 		ShutdownTimeout: shutdownTimeout,
+		TargetDBKey:     targetDBKey,
 	}, nil
 }
 

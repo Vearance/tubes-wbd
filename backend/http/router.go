@@ -62,6 +62,31 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Get("/admin/groups/{groupId}/members", adminReadWrapper.ListAdminGroupMembers)
 	router.Post("/admin/groups/{groupId}/members", adminMutationWrapper.AddAdminGroupMember)
 	router.Delete("/admin/groups/{groupId}/members/{userId}", adminMutationWrapper.RemoveAdminGroupMember)
+	router.Get("/admin/groups/{groupId}/databases", adminReadWrapper.ListAdminGroupDatabases)
+	router.Put("/admin/groups/{groupId}/databases/{databaseId}", adminMutationWrapper.SetAdminGroupDatabase)
+	router.Delete("/admin/groups/{groupId}/databases/{databaseId}", adminMutationWrapper.RemoveAdminGroupDatabase)
+
+	router.Get("/admin/databases", adminReadWrapper.ListAdminDatabases)
+	router.Post("/admin/databases", adminMutationWrapper.CreateAdminDatabase)
+	router.Post("/admin/databases/test", adminMutationWrapper.TestAdminDatabaseConnection)
+	router.Get("/admin/databases/{databaseId}", adminReadWrapper.GetAdminDatabase)
+	router.Patch("/admin/databases/{databaseId}", adminMutationWrapper.UpdateAdminDatabase)
+	router.Delete("/admin/databases/{databaseId}", adminMutationWrapper.DeleteAdminDatabase)
+	router.Post("/admin/databases/{databaseId}/test", adminMutationWrapper.TestAdminStoredDatabase)
+
+	router.Get("/databases", protectedWrapper.ListDatabases)
+	router.Get("/databases/{databaseId}/schemas", protectedWrapper.ListDatabaseSchemas)
+	router.Get("/databases/{databaseId}/tables", protectedWrapper.ListDatabaseTables)
+	router.Get("/databases/{databaseId}/table-structure", protectedWrapper.GetDatabaseTableStructure)
+	router.Get("/databases/{databaseId}/table-rows", protectedWrapper.GetDatabaseTableRows)
+	router.Get("/databases/{databaseId}/migrations/history", protectedWrapper.ListMigrationHistory)
+	router.Get("/databases/{databaseId}/migrations/history/{version}", protectedWrapper.GetMigrationHistoryEntry)
+	router.Get("/databases/{databaseId}/migrations/drafts", protectedWrapper.ListMigrationDrafts)
+	router.Post("/databases/{databaseId}/migrations/drafts", protectedWrapper.CreateMigrationDraft)
+	router.Get("/migrations/drafts/{draftId}", protectedWrapper.GetMigrationDraft)
+	router.Patch("/migrations/drafts/{draftId}", protectedWrapper.UpdateMigrationDraft)
+	router.Post("/migrations/drafts/{draftId}/execute", protectedWrapper.ExecuteMigrationDraft)
+	router.Get("/migrations/drafts/{draftId}/runs", protectedWrapper.ListMigrationRuns)
 
 	return router
 }

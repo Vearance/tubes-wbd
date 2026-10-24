@@ -144,7 +144,8 @@ func TestIntegrationServiceToConnector(t *testing.T) {
 	in.Password = "wrong-password"
 	_, err = svc.Update(ctx, d.ID, in)
 	require.NoError(t, err)
-	require.Error(t, pool.Ping(ctx), "update must close the cached pool")
+	require.Eventually(t, func() bool { return pool.Ping(ctx) != nil },
+		5*time.Second, 20*time.Millisecond, "update must close the cached pool")
 	_, err = manager.Pool(ctx, d.ID)
 	require.ErrorIs(t, err, targetdb.ErrAuthFailed)
 

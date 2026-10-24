@@ -8,4 +8,5 @@ var (
 	ErrGroupNotFound      = errors.New("group not found")
 	ErrMembershipExists   = errors.New("membership already exists")
 	ErrMembershipNotFound = errors.New("membership not found")
+	ErrPermissionNotFound = errors.New("database permission not found")
 )

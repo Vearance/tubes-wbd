@@ -24,4 +24,7 @@ type GroupRepository interface {
 	FindUserGroup(ctx context.Context, userID uint, groupID uint) (*UserGroup, error)
 	ListMembers(ctx context.Context, groupID uint) ([]auth.User, error)
 	DeleteUserGroup(ctx context.Context, userID uint, groupID uint) error
+	UpsertDatabasePermission(ctx context.Context, permission *GroupDatabasePermission) error
+	DeleteDatabasePermission(ctx context.Context, groupID uint, managedDatabaseID uint) error
+	ListDatabasePermissions(ctx context.Context, groupID uint) ([]GroupDatabasePermission, error)
 }
