@@ -3,8 +3,8 @@ package targetdb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
+
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -23,6 +23,15 @@ const (
 	sqlstateInvalidPassword          = "28P01"
 	sqlstateInvalidAuthSpecification = "28000"
 )
+
+type connError struct {
+	kind  error
+	cause error
+}
+
+func (e *connError) Error() string { return e.kind.Error() }
+
+func (e *connError) Unwrap() []error { return []error{e.kind, e.cause} }
 
 func mapError(err error) error {
 	if err == nil {
@@ -46,5 +55,5 @@ func mapError(err error) error {
 	default:
 		mapped = ErrConnectionFailed
 	}
-	return fmt.Errorf("%w: %w", mapped, err)
+	return &connError{kind: mapped, cause: err}
 }

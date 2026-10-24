@@ -14,13 +14,13 @@ import (
 const applicationName = "dbm-platform"
 
 type Manager struct {
-	src  ConfigSource
-	opts Options
+	src    ConfigSource
+	opts   Options
 	mu     sync.Mutex
 	pools  map[DatabaseID]*pgxpool.Pool
 	gen    map[DatabaseID]uint64
 	closed bool
-	sf singleflight.Group
+	sf     singleflight.Group
 }
 
 func NewManager(src ConfigSource, opts Options) *Manager {
@@ -122,7 +122,7 @@ func (m *Manager) Invalidate(id DatabaseID) {
 	m.mu.Unlock()
 
 	if pool != nil {
-		pool.Close()
+		go pool.Close()
 	}
 }
 
