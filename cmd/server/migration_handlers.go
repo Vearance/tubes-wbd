@@ -45,6 +45,40 @@ func (s apiServer) ListMigrationHistory(
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (s apiServer) ExplainMigration(
+	w http.ResponseWriter,
+	r *http.Request,
+	databaseID httpapi.DatabaseId,
+	_ httpapi.ExplainMigrationParams,
+) {
+	userID, dbID, ok := viewerIDs(w, r, databaseID)
+	if !ok {
+		return
+	}
+
+	var request httpapi.MigrationExplainRequest
+	if !decodeJSONBodyWithLimit(w, r, &request, migrationBodyLimit) {
+		return
+	}
+
+	result, err := s.migrations.Explain(r.Context(), userID, dbID, request.Sql)
+	if err != nil {
+		writeServiceError(w, err, "explaining migration SQL")
+		return
+	}
+
+	response := httpapi.MigrationExplainResponse{
+		Statements: make([]httpapi.MigrationExplainStatement, 0, len(result.Statements)),
+	}
+	for _, statement := range result.Statements {
+		response.Statements = append(response.Statements, httpapi.MigrationExplainStatement{
+			Plan: statement.Plan,
+			Sql:  statement.SQL,
+		})
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (s apiServer) GetMigrationHistoryEntry(
 	w http.ResponseWriter,
 	r *http.Request,

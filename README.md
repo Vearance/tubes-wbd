@@ -63,6 +63,7 @@ These endpoints require a valid session and database permission. Viewer reads re
 - `GET /databases/{databaseId}/table-rows` reads table data with pagination.
 - `GET /databases/{databaseId}/migrations/history` lists migration history.
 - `GET /databases/{databaseId}/migrations/history/{version}` gets migration detail.
+- `POST /databases/{databaseId}/migrations/explain` returns PostgreSQL `EXPLAIN (FORMAT JSON)` plans without executing SQL. It requires View permission and an `X-CSRF-Token` header.
 - `GET /databases/{databaseId}/migrations/drafts` lists drafts.
 - `POST /databases/{databaseId}/migrations/drafts` creates a draft.
 - `GET /migrations/drafts/{draftId}` gets a draft.

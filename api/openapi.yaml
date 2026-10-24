@@ -870,6 +870,48 @@ paths:
           $ref: '#/components/responses/NotFound'
         '502':
           $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/migrations/explain:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    post:
+      operationId: explainMigration
+      summary: Explain migration SQL without executing it
+      description: Requires View permission. Runs PostgreSQL EXPLAIN (FORMAT JSON) in a read-only transaction and never uses EXPLAIN ANALYZE.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MigrationExplainRequest'
+      responses:
+        '200':
+          description: Query execution plans for each SQL statement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExplainResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The target database rejected the SQL for planning.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
   /databases/{databaseId}/migrations/history:
     parameters:
       - $ref: '#/components/parameters/DatabaseId'
@@ -1586,6 +1628,36 @@ components:
           type: integer
         has_next:
           type: boolean
+    MigrationExplainRequest:
+      type: object
+      required:
+        - sql
+      properties:
+        sql:
+          type: string
+          description: SQL to explain. It is never executed by this endpoint.
+    MigrationExplainResponse:
+      type: object
+      required:
+        - statements
+      properties:
+        statements:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationExplainStatement'
+    MigrationExplainStatement:
+      type: object
+      required:
+        - sql
+        - plan
+      properties:
+        sql:
+          type: string
+        plan:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     MigrationDraftRequest:
       type: object
       required:
