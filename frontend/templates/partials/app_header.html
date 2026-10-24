@@ -1,0 +1,25 @@
+{{define "app-header"}}
+<header class="app-header">
+    <a class="app-brand" href="/databases?mode={{.Mode}}">
+        <img src="/static/assets/bscheme-logo.svg" alt="" width="40" height="40">
+        <span>BScheme</span>
+    </a>
+
+    {{if .ActiveDatabase}}
+    <div class="active-database">
+        <span class="app-caption">Active database</span>
+        <strong>{{.ActiveDatabase.Name}}</strong>
+    </div>
+    <span class="badge badge-permission">{{.PermissionLabel}}</span>
+    <span class="connection-status status-success app-header-connection">● {{.ActiveDatabase.Status}}</span>
+    {{else}}
+    <div class="app-header-actions">
+        <span class="app-muted">{{.CurrentUser.Username}}</span>
+        <form method="post" action="/logout">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button class="btn btn-outline-secondary" type="submit">Log out</button>
+        </form>
+    </div>
+    {{end}}
+</header>
+{{end}}

@@ -1,0 +1,28 @@
+{{define "page-styles"}}<link rel="stylesheet" href="/static/css/user.css">{{end}}
+{{define "content"}}
+<div class="app-layout">
+    {{template "database-sidebar" .}}
+    <main class="app-main">
+        <nav class="app-breadcrumb"><a href="/databases?mode={{.Mode}}">Databases</a> / Customer Database / Query</nav>
+        <header class="page-header">
+            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1><p class="app-muted mb-0">Run bounded SELECT queries against the active database.</p></div>
+        </header>
+
+        <div class="app-alert mb-4">Data-changing statements are not executed here. Use a migration for INSERT, UPDATE, DELETE, or schema changes so the operation remains authorized, transactional, and recorded.</div>
+
+        <form class="app-panel query-editor" method="post" action="/databases/1/query">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="query-editor-toolbar"><label class="form-label mb-0" for="query-sql">SQL query</label><button class="btn btn-primary" type="submit">Run query</button></div>
+            <textarea class="form-control sql-editor" id="query-sql" name="sql" spellcheck="false" required>{{.QuerySQL}}</textarea>
+        </form>
+
+        {{if .QueryExecuted}}
+        <section class="mt-4" aria-labelledby="query-results-heading">
+            <div class="page-header mb-3"><div><h2 id="query-results-heading">Results</h2><p class="app-muted mb-0">2 rows · preview execution</p></div></div>
+            <div class="table-scroll"><table class="table"><thead><tr><th>id</th><th>name</th><th>email</th><th>status</th></tr></thead><tbody><tr><td class="cell-code">1</td><td>Alice</td><td>alice@example.com</td><td>active</td></tr><tr><td class="cell-code">2</td><td>Bob</td><td><span class="sql-null">NULL</span></td><td>inactive</td></tr></tbody></table></div>
+        </section>
+        {{end}}
+    </main>
+</div>
+{{end}}
+{{define "page-scripts"}}{{end}}

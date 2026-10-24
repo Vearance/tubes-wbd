@@ -1,0 +1,20 @@
+{{define "page-styles"}}<link rel="stylesheet" href="/static/css/user.css">{{end}}
+{{define "content"}}
+<div class="app-layout">
+    {{template "database-sidebar" .}}
+    <main class="app-main">
+        <nav class="app-breadcrumb"><a href="/databases?mode={{.Mode}}">Databases</a> / <a href="/databases/1?mode={{.Mode}}">Customer Database</a> / Migrations</nav>
+        <header class="page-header">
+            <div><p class="app-caption mb-2">Customer Database</p><h1>Migration history</h1><p class="app-muted mb-0">Linear schema and data changes for this database.</p></div>
+            {{if .CanEdit}}<a class="btn btn-primary" href="/databases/1/migrations/new?mode={{.Mode}}">New migration</a>{{end}}
+        </header>
+        <section class="app-panel p-0 migration-list" aria-label="Migration history">
+            <div class="migration-row" aria-hidden="true"><span>Version</span><span>Migration</span><span>User</span><span>Executed</span><span>Status</span></div>
+            {{range .Migrations}}
+            <a class="migration-row" href="/databases/1/migrations/{{.ID}}?mode={{$.Mode}}"><span class="cell-code">{{.Version}}</span><strong>{{.Name}}</strong><span>{{.Executor}}</span><time>{{.ExecutedAt}}</time><span class="{{.StatusClass}}">{{.Status}}</span></a>
+            {{end}}
+        </section>
+    </main>
+</div>
+{{end}}
+{{define "page-scripts"}}{{end}}
