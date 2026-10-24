@@ -41,6 +41,35 @@ also require the `X-CSRF-Token` returned by login:
 - `GET /admin/groups/{groupId}/members` lists group members.
 - `POST /admin/groups/{groupId}/members` adds a user to a group.
 - `DELETE /admin/groups/{groupId}/members/{userId}` removes a user from a group.
+- `GET /admin/groups/{groupId}/databases` lists group database permissions.
+- `PUT /admin/groups/{groupId}/databases/{databaseId}` sets View Only or View + Edit permission.
+- `DELETE /admin/groups/{groupId}/databases/{databaseId}` removes a group database permission.
+- `GET /admin/databases` lists managed target databases.
+- `POST /admin/databases` registers a target database.
+- `POST /admin/databases/test` tests a target database connection before storing it.
+- `GET /admin/databases/{databaseId}` gets managed database metadata.
+- `PATCH /admin/databases/{databaseId}` updates a managed target database.
+- `DELETE /admin/databases/{databaseId}` removes a managed target database.
+- `POST /admin/databases/{databaseId}/test` tests stored target database credentials.
+
+## protected database endpoints
+
+These endpoints require a valid session and database permission. Viewer reads require View Only or View + Edit; migration creation/update/execution requires View + Edit:
+
+- `GET /databases` lists managed databases visible to the current user.
+- `GET /databases/{databaseId}/schemas` lists schemas.
+- `GET /databases/{databaseId}/tables` lists tables for a schema.
+- `GET /databases/{databaseId}/table-structure` describes a table.
+- `GET /databases/{databaseId}/table-rows` reads table data with pagination.
+- `GET /databases/{databaseId}/migrations/history` lists migration history.
+- `GET /databases/{databaseId}/migrations/history/{version}` gets migration detail.
+- `GET /databases/{databaseId}/migrations/drafts` lists drafts.
+- `POST /databases/{databaseId}/migrations/drafts` creates a draft.
+- `GET /migrations/drafts/{draftId}` gets a draft.
+- `PATCH /migrations/drafts/{draftId}` updates a draft.
+- `POST /migrations/drafts/{draftId}/execute` executes a draft.
+- `GET /migrations/drafts/{draftId}/runs` lists execution runs.
+
 
 ## integration tests
 
