@@ -1,0 +1,14 @@
+{{define "content"}}
+<main class="app-main">
+    <nav class="app-breadcrumb"><a href="/admin/databases">Database connections</a> / {{if .Editing}}Edit{{else}}Connect{{end}}</nav>
+    <header class="page-header"><div><p class="app-caption mb-2">Existing PostgreSQL database</p><h1>{{if .Editing}}Edit connection{{else}}Connect database{{end}}</h1><p class="app-muted mb-0">This saves connection details; it does not create a PostgreSQL database.</p></div></header>
+    {{if .FormError}}<div class="app-alert app-alert-danger mb-4" role="alert">{{.FormError}}</div>{{end}}
+    <form class="app-panel" method="post" action="/admin/databases/save" id="connection-form">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="connection_id" value="{{.Connection.ID}}">
+        <div class="form-grid"><div><label class="form-label" for="display-name">Display name</label><input class="form-control" id="display-name" name="display_name" value="{{.Connection.Name}}" required></div><div><label class="form-label" for="host">Host</label><input class="form-control" id="host" name="host" value="{{.Connection.Host}}" required></div><div><label class="form-label" for="port">Port</label><input class="form-control" id="port" name="port" type="number" min="1" max="65535" value="{{.Connection.Port}}" required></div><div><label class="form-label" for="database">Database name</label><input class="form-control" id="database" name="database" value="{{.Connection.Database}}" required></div><div><label class="form-label" for="db-username">Username</label><input class="form-control" id="db-username" name="username" value="{{.Connection.Username}}" required></div><div><label class="form-label" for="db-password">Password</label><input class="form-control" id="db-password" name="password" type="password" autocomplete="new-password" {{if not .Editing}}required{{end}}><div class="form-text">{{if .Editing}}{{if .Connection.HasPassword}}Password configured. {{end}}Leave blank to keep it.{{else}}The password is not shown again.{{end}}</div></div><div><label class="form-label" for="ssl-mode">SSL mode</label><select class="form-select" id="ssl-mode" name="ssl_mode"><option {{if eq .Connection.SSLMode "Require"}}selected{{end}}>Require</option><option {{if eq .Connection.SSLMode "Prefer"}}selected{{end}}>Prefer</option><option {{if eq .Connection.SSLMode "Disable"}}selected{{end}}>Disable</option></select></div></div>
+        <div id="connection-result" class="connection-result app-alert" role="status" hidden></div>
+        <div class="form-actions"><button class="btn btn-outline-secondary" id="test-connection" type="button">Test connection</button><a class="btn btn-outline-secondary" href="/admin/databases">Cancel</a><button class="btn btn-primary" type="submit">Save connection</button></div>
+    </form>
+</main>
+{{end}}

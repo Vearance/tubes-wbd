@@ -1,0 +1,22 @@
+{{define "content"}}
+<main class="app-main">
+    <header class="page-header">
+        <div><p class="app-caption mb-2">Platform administration</p><h1>Users</h1></div>
+        <a class="btn btn-primary" href="/admin/users/new">New user</a>
+    </header>
+    {{if .Notice}}<div class="app-alert mb-4" role="status">{{.Notice}}</div>{{end}}
+    <section class="app-panel p-0" aria-label="Platform users">
+        <div class="table-scroll border-0"><table class="table table-hover admin-users-table">
+            <thead><tr><th>Username</th><th>Platform role</th><th>Status</th><th>Groups</th><th>Action</th></tr></thead>
+            <tbody>{{range .Users}}<tr>
+                <td><strong>{{.Username}}</strong></td>
+                <td>{{.Role}}</td>
+                <td class="{{.StatusClass}}">{{.Status}}</td>
+                <td><div class="admin-group-list">{{range .GroupNames}}<a href="/admin/groups/{{.ID}}">{{.Name}}</a>{{else}}<span class="app-muted">No groups</span>{{end}}</div></td>
+                <td><a class="btn btn-outline-secondary btn-sm" href="/admin/users/{{.Username}}/edit">Edit</a></td>
+            </tr>{{else}}<tr><td colspan="5">No users yet.</td></tr>{{end}}</tbody>
+        </table></div>
+    </section>
+    <p class="app-muted mt-3">Database access is assigned through groups.</p>
+</main>
+{{end}}

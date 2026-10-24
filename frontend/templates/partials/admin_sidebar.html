@@ -1,0 +1,21 @@
+{{define "admin-sidebar"}}
+<aside class="app-sidebar" aria-label="Platform administration">
+    <section class="sidebar-section">
+        <h2 class="sidebar-heading">Administration</h2>
+        <nav aria-label="Administration pages">
+            <a class="sidebar-link" href="/admin/users" {{if eq .ActiveAdminSection "users"}}aria-current="page"{{end}}>Users</a>
+            <a class="sidebar-link" href="/admin/groups" {{if eq .ActiveAdminSection "groups"}}aria-current="page"{{end}}>Groups</a>
+            <a class="sidebar-link" href="/admin/databases" {{if eq .ActiveAdminSection "databases"}}aria-current="page"{{end}}>Database connections</a>
+            <a class="sidebar-link" href="/admin/audit-logs" {{if eq .ActiveAdminSection "audit"}}aria-current="page"{{end}}>Audit logs</a>
+        </nav>
+    </section>
+    <footer class="sidebar-user">
+        <span class="app-caption">Signed in as</span>
+        <strong>{{.CurrentUser.Username}}</strong>
+        <form class="mt-4" method="post" action="/logout">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button class="btn btn-outline-secondary w-100" type="submit">Log out</button>
+        </form>
+    </footer>
+</aside>
+{{end}}
