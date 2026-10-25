@@ -137,14 +137,6 @@ type adminConnectionView struct {
 	StatusClass string
 }
 
-type adminAuditView struct {
-	Time         string
-	Actor        string
-	Action       string
-	Outcome      string
-	OutcomeClass string
-}
-
 type adminPageData struct {
 	Title              string
 	ActiveAdminSection string
@@ -154,7 +146,7 @@ type adminPageData struct {
 	Groups             []adminGroupView
 	Group              adminGroupDetailView
 	Connections        []adminConnectionView
-	AuditLogs          []adminAuditView
+
 	Editing            bool
 	FormUsername       string
 	FormIsAdmin        bool
@@ -166,8 +158,6 @@ type adminPageData struct {
 	GroupID            int
 	AvailableUsers     []adminUserView
 	AvailableDatabases []adminConnectionView
-	ActorFilter        string
-	OutcomeFilter      string
 }
 
 type migrationView struct {
@@ -230,7 +220,7 @@ func main() {
 	adminGroupsTemplate := mustParseAdminPage("frontend/templates/pages/admin_groups.html")
 	adminGroupTemplate := mustParseAdminPage("frontend/templates/pages/admin_group_detail.html")
 	adminDatabasesTemplate := mustParseAdminPage("frontend/templates/pages/admin_databases.html")
-	adminAuditTemplate := mustParseAdminPage("frontend/templates/pages/admin_audit_logs.html")
+
 	adminUserFormTemplate := mustParseAdminPage("frontend/templates/pages/admin_user_form.html")
 	adminDatabaseFormTemplate := mustParseAdminPage("frontend/templates/pages/admin_database_form.html")
 
@@ -619,14 +609,6 @@ func main() {
 		http.Redirect(w, r, "/admin/databases?saved=1", http.StatusSeeOther)
 	}))
 
-	mux.HandleFunc("GET /admin/audit-logs", requireAdmin(func(w http.ResponseWriter, r *http.Request, session previewSession) {
-		data := mockAdminPageData(session, "audit")
-		data.Title = "Audit logs · BScheme Admin"
-		data.ActorFilter, data.OutcomeFilter = r.URL.Query().Get("actor"), r.URL.Query().Get("outcome")
-		data.AuditLogs = adminState.auditList(data.ActorFilter, data.OutcomeFilter)
-		render(w, adminAuditTemplate, "admin-layout", data)
-	}))
-
 	mux.HandleFunc("POST /logout", requireSession(func(w http.ResponseWriter, r *http.Request, session previewSession) {
 		if !validCSRF(r, session) {
 			http.Error(w, "invalid CSRF token", http.StatusForbidden)
@@ -812,14 +794,6 @@ func mockAdminConnections() []adminConnectionView {
 	}
 }
 
-func mockAdminAuditLogs() []adminAuditView {
-	return []adminAuditView{
-		{Time: "Oct 24 18:42", Actor: "admin", Action: "group.access.updated", Outcome: "Success", OutcomeClass: "status-success"},
-		{Time: "Oct 24 18:10", Actor: "editor", Action: "migration.executed", Outcome: "Success", OutcomeClass: "status-success"},
-		{Time: "Oct 24 17:58", Actor: "viewer", Action: "login.failed", Outcome: "Failed", OutcomeClass: "status-danger"},
-	}
-}
-
 func mockPageData(session previewSession) pageData {
 	mode := "view"
 	permission := "View Only"
@@ -880,16 +854,16 @@ func queryDefault(r *http.Request, name, fallback string) string {
 
 // adminPreviewState holds temporary UI data. It does not change the real API or PostgreSQL.
 type adminPreviewState struct {
-	mu                        sync.RWMutex
-	users                     map[string]adminUserView
-	groups                    map[int]adminGroupDetailView
-	connections               map[int]adminConnectionView
-	audit                     []adminAuditView
+	mu          sync.RWMutex
+	users       map[string]adminUserView
+	groups      map[int]adminGroupDetailView
+	connections map[int]adminConnectionView
+
 	nextGroup, nextConnection int
 }
 
 func newAdminPreviewState() *adminPreviewState {
-	s := &adminPreviewState{users: map[string]adminUserView{}, groups: map[int]adminGroupDetailView{}, connections: map[int]adminConnectionView{}, audit: mockAdminAuditLogs(), nextGroup: 3, nextConnection: 3}
+	s := &adminPreviewState{users: map[string]adminUserView{}, groups: map[int]adminGroupDetailView{}, connections: map[int]adminConnectionView{}, nextGroup: 3, nextConnection: 3}
 	for _, user := range mockAdminUsers() {
 		s.users[user.Username] = user
 	}
@@ -961,7 +935,7 @@ func (s *adminPreviewState) saveUser(username, password, role, status string, ed
 		statusClass = "status-inactive"
 	}
 	s.users[username] = adminUserView{Username: username, Role: role, Status: status, StatusClass: statusClass}
-	s.record("admin", "user.saved", "Success")
+
 	return ""
 }
 
@@ -1022,7 +996,7 @@ func (s *adminPreviewState) saveGroup(id int, name string, members, databases, p
 		}
 	}
 	s.groups[id] = group
-	s.record("admin", "group.saved", "Success")
+
 	return id
 }
 
@@ -1087,23 +1061,6 @@ func (s *adminPreviewState) saveConnection(connection adminConnectionView, passw
 	}
 	connection.Status, connection.StatusClass = "Not tested", "status-inactive"
 	s.connections[connection.ID] = connection
-	s.record("admin", "database.connection.saved", "Success")
+
 	return ""
-}
-
-func (s *adminPreviewState) auditList(actor, outcome string) []adminAuditView {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	result := make([]adminAuditView, 0, len(s.audit))
-	for _, entry := range s.audit {
-		if (actor == "" || actor == entry.Actor) && (outcome == "" || outcome == entry.Outcome) {
-			result = append(result, entry)
-		}
-	}
-	return result
-}
-
-func (s *adminPreviewState) record(actor, action, outcome string) {
-	entry := adminAuditView{Time: time.Now().Format("Jan 02 15:04"), Actor: actor, Action: action, Outcome: outcome, OutcomeClass: "status-success"}
-	s.audit = append([]adminAuditView{entry}, s.audit...)
 }

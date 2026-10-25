@@ -62,9 +62,9 @@ These are frontend preview routes backed by mock data, not endpoints in the inte
 | `POST` | `/admin/groups/save` | Save preview membership and access (CSRF required) |
 | `GET` | `/admin/databases`, `/admin/databases/new`, `/admin/databases/{databaseID}/edit` | List and render connection forms |
 | `POST` | `/admin/databases/save` | Save a preview connection (CSRF required) |
-| `GET` | `/admin/audit-logs` | Filter preview logs by `actor` and `outcome` |
 
-The admin preview supports user forms, group membership and database access, connection forms, and audit filters. Users may belong to multiple groups. Saved changes last only until the preview restarts; newly created users are not added to the hardcoded login accounts. Test connection checks form fields only and does not contact PostgreSQL.
+
+The admin preview supports user forms, group membership and database access, and connection forms. Users may belong to multiple groups. Saved changes last only until the preview restarts; newly created users are not added to the hardcoded login accounts. Test connection checks form fields only and does not contact PostgreSQL.
 
 ## Testable States
 

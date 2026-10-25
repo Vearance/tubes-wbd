@@ -242,7 +242,7 @@ type adminPageData struct {
 	Groups             []adminGroupView
 	Group              adminGroupDetailView
 	Connections        []databaseView
-	AuditLogs          []adminAuditView
+
 	Editing            bool
 	FormUsername       string
 	FormRole           string
@@ -252,17 +252,8 @@ type adminPageData struct {
 	GroupID            uint
 	AvailableUsers     []adminUserView
 	AvailableDatabases []databaseView
-	ActorFilter        string
-	OutcomeFilter      string
-	Connection         databaseView
-}
 
-type adminAuditView struct {
-	Time         string
-	Actor        string
-	Action       string
-	Outcome      string
-	OutcomeClass string
+	Connection databaseView
 }
 
 func NewHandler(deps Dependencies) (*Handler, error) {
@@ -383,11 +374,6 @@ func parseTemplates() (map[string]*template.Template, error) {
 			page:   "templates/pages/admin_database_form.html",
 			files:  []string{"templates/partials/admin_header.html", "templates/partials/admin_sidebar.html"},
 		},
-		"admin-audit": {
-			layout: "templates/layouts/admin.html",
-			page:   "templates/pages/admin_audit_logs.html",
-			files:  []string{"templates/partials/admin_header.html", "templates/partials/admin_sidebar.html"},
-		},
 	}
 
 	result := make(map[string]*template.Template, len(pages))
@@ -457,7 +443,7 @@ func (h *Handler) routes() {
 	r.Get("/admin/databases/{databaseID}/edit", h.withAdmin(h.adminDatabaseEdit))
 	r.Post("/admin/databases/save", h.withAdmin(h.adminDatabaseSave))
 	r.Post("/admin/databases/test", h.withAdmin(h.adminDatabaseTest))
-	r.Get("/admin/audit-logs", h.withAdmin(h.adminAuditLogs))
+
 }
 
 func (h *Handler) root(w http.ResponseWriter, r *http.Request) {

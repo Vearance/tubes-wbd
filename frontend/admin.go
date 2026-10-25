@@ -509,15 +509,6 @@ func (h *Handler) adminDatabaseTest(w http.ResponseWriter, r *http.Request, sess
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) adminAuditLogs(w http.ResponseWriter, r *http.Request, session pageSession) {
-	data := h.baseAdmin(session, "audit")
-	data.Title = "Audit logs · BScheme Admin"
-	data.ActorFilter = r.URL.Query().Get("actor")
-	data.OutcomeFilter = r.URL.Query().Get("outcome")
-	data.Notice = "Persistent audit log belum diaktifkan di backend."
-	h.render(w, "admin-audit", "admin-layout", data, http.StatusNotImplemented)
-}
-
 func (h *Handler) findGroup(r *http.Request, groupID uint) (*access.Group, error) {
 	groups, err := h.deps.Groups.ListGroups(r.Context())
 	if err != nil {

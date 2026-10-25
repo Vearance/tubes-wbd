@@ -105,8 +105,6 @@ func samplePageCases() map[string]pageCase {
 	databaseForm := admin("databases")
 	databaseForm.Editing = true
 	databaseForm.Connection = databaseView{ID: 7, Name: "shop", Host: "db", Port: 5432, Database: "shop", Username: "app", SSLMode: "disable"}
-	audit := admin("audit")
-	audit.Notice = "Persistent audit log belum diaktifkan di backend."
 
 	return map[string]pageCase{
 		"login": {
@@ -249,11 +247,6 @@ func samplePageCases() map[string]pageCase {
 				`name="connection_id" value="7"`,
 				`name="csrf_token" value="csrf-token"`,
 			},
-		},
-		"admin-audit": {
-			layout:   "admin-layout",
-			data:     audit,
-			contains: []string{"Persistent audit log belum diaktifkan di backend."},
 		},
 	}
 }
