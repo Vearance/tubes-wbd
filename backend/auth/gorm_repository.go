@@ -243,7 +243,7 @@ func (r *GormSessionRepository) RevokeAllByUser(
 ) error {
 	if err := r.db.WithContext(ctx).
 		Model(&Session{}).
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND revoked_at IS NULL", userID).
 		Update("revoked_at", revokedAt).
 		Error; err != nil {
 		return fmt.Errorf("revoking user sessions: %w", err)
