@@ -36,8 +36,7 @@
                 </select>
             </div>
         </div>
-        <div class="form-actions"><a class="btn btn-outline-secondary" href="/app/admin/users">Cancel</a><button class="btn btn-primary" type="submit">{{if .Editing}}Save changes{{else}}Create user{{end}}</button></div>
+        <div class="form-actions"><a class="btn btn-outline-secondary btn-with-icon" href="/app/admin/users">{{template "icon-cancel"}}<span>Cancel</span></a><button class="btn btn-primary btn-with-icon" type="submit">{{if .Editing}}{{template "icon-save"}}<span>Save changes</span>{{else}}{{template "icon-add"}}<span>Create user</span>{{end}}</button></div>
     </form>
 </main>
 {{end}}
-</div>

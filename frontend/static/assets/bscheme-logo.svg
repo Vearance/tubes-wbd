@@ -2,8 +2,6 @@
      viewBox="0 0 1024 1024" fill="none" role="img"
      aria-labelledby="logo-title logo-description">
   <title id="logo-title">BScheme beaver logo</title>
-  <desc id="logo-description">An orange, right-facing seated beaver forming the letter B, with an upright paddle tail on its left.</desc>
-  <!-- Editable vector paths. Orange: #D38C4B. Background and eye are transparent. -->
   <path fill="#D38C4B" fill-rule="evenodd" clip-rule="evenodd"
         transform="translate(-108 -124)"
         d="M 564 365

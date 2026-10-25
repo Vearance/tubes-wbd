@@ -134,7 +134,11 @@ type pageData struct {
 	MigrationRuns   []migrationRunView
 	QuerySQL        string
 	QueryExecuted   bool
+	QueryColumns    []string
+	QueryRows       []tableRowView
+	QueryTruncated  bool
 	QueryPlan       string
+	QueryError      string
 	Notice          string
 	FormError       string
 }
@@ -307,7 +311,7 @@ func parseTemplates() (map[string]*template.Template, error) {
 		"databases": {
 			layout: "templates/layouts/app.html",
 			page:   "templates/pages/databases.html",
-			files:  []string{"templates/partials/app_header.html", "templates/partials/database_sidebar.html"},
+			files:  []string{"templates/partials/app_header.html", "templates/partials/database_list_sidebar.html"},
 		},
 		"workspace": {
 			layout: "templates/layouts/app.html",
@@ -383,7 +387,15 @@ func parseTemplates() (map[string]*template.Template, error) {
 
 	result := make(map[string]*template.Template, len(pages))
 	for name, page := range pages {
-		files := append([]string{page.layout}, page.files...)
+		sharedPartials := []string{
+			page.layout,
+			"templates/partials/icons.html",
+			"templates/partials/sidebar_account.html",
+			"templates/partials/admin_sidebar_navigation.html",
+			"templates/partials/database_sidebar_entities.html",
+			"templates/partials/database_sidebar_workspace.html",
+		}
+		files := append(sharedPartials, page.files...)
 		files = append(files, page.page)
 		tmpl, err := template.New(name).ParseFS(frontendFiles, files...)
 		if err != nil {

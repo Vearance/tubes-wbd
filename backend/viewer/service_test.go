@@ -66,6 +66,10 @@ var operations = map[string]func(*ViewerService) error{
 		_, err := s.TableData(context.Background(), 7, 3, "public", "users", 1, 10)
 		return err
 	},
+	"Query": func(s *ViewerService) error {
+		_, err := s.Query(context.Background(), 7, 3, "SELECT 1")
+		return err
+	},
 }
 
 func TestNewViewerServiceRejectsNilDependencies(t *testing.T) {
@@ -95,6 +99,16 @@ func TestPermissionIsCheckedBeforeValidatingInput(t *testing.T) {
 	authz.err = access.ErrInsufficientPermission
 
 	_, err := svc.TableData(context.Background(), 1, 1, "", "", -1, -1)
+
+	require.ErrorIs(t, err, access.ErrInsufficientPermission)
+	require.Zero(t, pools.calls)
+}
+
+func TestQueryPermissionIsCheckedBeforeValidatingInput(t *testing.T) {
+	svc, authz, pools := newTestViewerService(t)
+	authz.err = access.ErrInsufficientPermission
+
+	_, err := svc.Query(context.Background(), 1, 1, "DELETE FROM users")
 
 	require.ErrorIs(t, err, access.ErrInsufficientPermission)
 	require.Zero(t, pools.calls)
@@ -137,6 +151,14 @@ func TestInvalidInputDoesNotConnect(t *testing.T) {
 		},
 		"data, page too large": func(s *ViewerService) error {
 			_, err := s.TableData(ctx, 1, 1, "public", "users", maxPage+1, 10)
+			return err
+		},
+		"query, changing statement": func(s *ViewerService) error {
+			_, err := s.Query(ctx, 1, 1, "DELETE FROM users")
+			return err
+		},
+		"query, multiple statements": func(s *ViewerService) error {
+			_, err := s.Query(ctx, 1, 1, "SELECT 1; SELECT 2")
 			return err
 		},
 	}

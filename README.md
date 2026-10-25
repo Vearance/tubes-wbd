@@ -1,4 +1,10 @@
-# tubes-wbd
+# BScheme
+
+## description
+
+![BScheme Logo](frontend/static/assets/bscheme-logo.png)
+
+BScheme is a web-based PostgreSQL management system that helps teams explore schemas and data, manage database access, and review and execute migrations through a simple interface.
 
 ## start server + Platform DB
 ```bash

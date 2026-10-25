@@ -5,20 +5,35 @@
     <main class="app-main">
         <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / {{.ActiveDatabase.Name}} / Query</nav>
         <header class="page-header">
-            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1><p class="app-muted mb-0">Request an execution plan for SQL against the active database.</p></div>
+            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1></div>
         </header>
 
-        <div class="app-alert mb-4">SQL is sent to PostgreSQL through EXPLAIN (FORMAT JSON). The statement is planned in a read-only transaction and is never executed.</div>
+        <div class="app-alert mb-4">Only one row-returning query is accepted. It runs in a read-only transaction with a 5-second timeout and displays at most 100 rows. Use migrations for data or schema changes.</div>
+
+        {{if .QueryError}}<div class="alert alert-danger" role="alert">{{.QueryError}}</div>{{end}}
 
         <form class="app-panel query-editor" method="post" action="/app/databases/{{.ActiveDatabase.ID}}/query">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div class="query-editor-toolbar"><label class="form-label mb-0" for="query-sql">SQL query</label><button class="btn btn-primary" type="submit">Explain query</button></div>
+            <div class="query-editor-toolbar">
+                <label class="form-label mb-0" for="query-sql">SQL query</label>
+                <div class="query-editor-actions">
+                    <button class="btn btn-outline-secondary btn-with-icon" type="submit" name="action" value="explain">{{template "icon-search"}}<span>Explain</span></button>
+                    <button class="btn btn-primary btn-with-icon" type="submit" name="action" value="run">{{template "icon-execute"}}<span>Run query</span></button>
+                </div>
+            </div>
             <textarea class="form-control sql-editor" id="query-sql" name="sql" spellcheck="false" required>{{.QuerySQL}}</textarea>
         </form>
 
-        {{if .QueryPlan}}
+        {{if .QueryExecuted}}
         <section class="mt-4" aria-labelledby="query-results-heading">
-            <div class="page-header mb-3"><div><h2 id="query-results-heading">Execution plan</h2><p class="app-muted mb-0">Generated with PostgreSQL EXPLAIN (FORMAT JSON); the query was not executed.</p></div></div>
+            <div class="page-header mb-3"><div><h2 id="query-results-heading">Results</h2><p class="app-muted mb-0">{{len .QueryRows}} rows{{if .QueryTruncated}} shown; additional rows were omitted{{end}}.</p></div></div>
+            <div class="table-scroll"><table class="table"><thead><tr>{{range .QueryColumns}}<th>{{.}}</th>{{else}}<th>Result</th>{{end}}</tr></thead><tbody>{{range .QueryRows}}<tr>{{range .Cells}}<td>{{if .Null}}<span class="sql-null">NULL</span>{{else}}{{.Value}}{{end}}</td>{{end}}</tr>{{else}}<tr><td colspan="{{len .QueryColumns}}">The query returned no rows.</td></tr>{{end}}</tbody></table></div>
+        </section>
+        {{end}}
+
+        {{if .QueryPlan}}
+        <section class="mt-4" aria-labelledby="query-plan-heading">
+            <div class="page-header mb-3"><div><h2 id="query-plan-heading">Execution plan</h2><p class="app-muted mb-0">Generated with PostgreSQL EXPLAIN (FORMAT JSON); the query was not executed.</p></div></div>
             <pre class="sql-preview"><code>{{.QueryPlan}}</code></pre>
         </section>
         {{end}}

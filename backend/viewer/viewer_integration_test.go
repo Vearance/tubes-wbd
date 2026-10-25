@@ -390,6 +390,43 @@ func TestIntegrationTableDataFromView(t *testing.T) {
 	require.ElementsMatch(t, [][]string{{"1", "Ann"}, {"2", "NULL"}}, cells(result))
 }
 
+func TestIntegrationReadOnlyQuery(t *testing.T) {
+	svc, _ := newIntegrationService(t)
+
+	result, err := svc.Query(context.Background(), 1, 1, `
+		SELECT id, name, age
+		FROM shop.customers
+		ORDER BY id
+	`)
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"id", "name", "age"}, result.Columns)
+	require.Equal(t, [][]string{{"1", "Ann", "30"}, {"2", "NULL", "NULL"}}, cells(&TablePage{Rows: result.Rows}))
+	require.False(t, result.Truncated)
+}
+
+func TestIntegrationReadOnlyQueryCapsRows(t *testing.T) {
+	svc, _ := newIntegrationService(t)
+
+	result, err := svc.Query(context.Background(), 1, 1, "SELECT n FROM shop.numbers ORDER BY n")
+
+	require.NoError(t, err)
+	require.Len(t, result.Rows, maxQueryRows)
+	require.True(t, result.Truncated)
+}
+
+func TestIntegrationReadOnlyQueryCannotMutateThroughFunction(t *testing.T) {
+	svc, _ := newIntegrationService(t)
+	ctx := context.Background()
+
+	_, err := svc.Query(ctx, 1, 1, "SELECT shop.sneaky()")
+
+	require.ErrorContains(t, err, "read-only transaction")
+	var written int
+	require.NoError(t, adminPool.QueryRow(ctx, "SELECT count(*) FROM shop.audit").Scan(&written))
+	require.Zero(t, written)
+}
+
 func TestIntegrationQueriesRunInReadOnlyTransaction(t *testing.T) {
 	svc, _ := newIntegrationService(t)
 	ctx := context.Background()

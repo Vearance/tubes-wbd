@@ -83,14 +83,14 @@ Access is determined by the logged-in preview account, not a query parameter.
 | `GET` | `/databases` | List accessible preview databases |
 | `GET` | `/databases/{databaseID}` | Table workspace; `schema`, `table`, and `tab` query parameters select the view |
 | `GET` | `/databases/{databaseID}/schemas/{schema}` | Schema overview |
-| `GET` | `/databases/{databaseID}/query` | Query editor and optional simulated result (`?executed=true`) |
-| `POST` | `/databases/{databaseID}/query` | Simulate a query result (CSRF required) |
+| `GET` | `/databases/{databaseID}/query` | Read-only query editor |
+| `POST` | `/databases/{databaseID}/query` | Run a bounded read-only query or request its execution plan (CSRF required) |
 | `GET` | `/databases/{databaseID}/migrations` | Migration history |
 | `GET` | `/databases/{databaseID}/migrations/new` | New migration form; View Only receives `403` |
 | `POST` | `/databases/{databaseID}/migrations` | Simulate saving a migration (View + Edit and CSRF required) |
 | `GET` | `/databases/{databaseID}/migrations/{migrationID}` | Migration detail |
 
-View Only can browse tables, run the read-only query preview, and view migration history/detail. Opening New Migration returns `403`. View + Edit additionally sees and can submit migration actions.
+View Only can browse tables, run bounded read-only queries, inspect execution plans, and view migration history/detail. Opening New Migration returns `403`. View + Edit additionally sees and can submit migration actions.
 
 To test access checking:
 

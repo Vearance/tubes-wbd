@@ -103,6 +103,8 @@ a:hover { color: var(--app-orange-hover); }
 
 /* Bootstrap button (primary copper, secondary outline, danger muted red) */
 .btn { font-family: var(--app-serif); border-radius: 0.2rem; padding: 0.5rem 1rem; }
+.btn-with-icon { display: inline-flex; align-items: center; justify-content: center; gap: 0.625rem; }
+.button-icon { flex: 0 0 auto; width: 1rem; height: 1rem; fill: currentColor; }
 .btn-primary {
   --bs-btn-color: #0d0d0d; --bs-btn-bg: var(--app-orange); --bs-btn-border-color: var(--app-orange);
   --bs-btn-hover-color: #0d0d0d; --bs-btn-hover-bg: var(--app-orange-hover); --bs-btn-hover-border-color: var(--app-orange-hover);

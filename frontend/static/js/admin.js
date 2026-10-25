@@ -12,8 +12,9 @@
     const cell = (row, text) => { const td = row.insertCell(); td.textContent = text; return td; };
     const removeButton = (row, kind) => {
       const button = document.createElement('button');
-      button.type = 'button'; button.className = 'btn btn-outline-secondary btn-sm';
-      button.dataset.remove = kind; button.textContent = 'Remove';
+      button.type = 'button'; button.className = 'btn btn-outline-secondary btn-sm btn-with-icon';
+      button.dataset.remove = kind;
+      button.innerHTML = '<svg class="button-icon" aria-hidden="true"><use href="/static/assets/bootstrap-icons.svg#trash"></use></svg><span>Remove</span>';
       row.insertCell().append(button);
     };
     document.getElementById('add-member').addEventListener('click', () => {
