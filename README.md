@@ -104,7 +104,9 @@ The old `frontend/preview` command remains a mock-only visual preview and is not
 `docker compose up --build` starts two PostgreSQL services:
 
 - `platform-db`: the Platform DB used by the backend. Its schema is created by GORM `AutoMigrate` when the backend starts.
-- `test-db`: a separate target database named `targetdb`, seeded automatically from [`scripts/seed-target.sql`](scripts/seed-target.sql) when its volume is initialized.
+- `test-db`: a separate target database named `targetdb`, seeded automatically from [`scripts/seed-target.sql`](scripts/seed-target.sql) when its volume is initialized. The seed is a Tracen Academy record: `teams`, `trainees` (60 rows, so the viewer shows more than one page), `races`, `race_results`, and the `race_winners` view.
+
+PostgreSQL runs the seed only when the volume is empty. After changing the seed, recreate the volumes with `docker compose down -v`, which deletes all data in both databases.
 
 The backend connects to the target database through the Compose network, so register it in the UI with:
 
@@ -117,23 +119,24 @@ Password: target_password
 SSL mode: Disable
 ```
 
-To add a regular development user and an empty-access group to the Platform DB, run this after the backend has started and completed `AutoMigrate`:
+To add development users and groups to the Platform DB, run this after the backend has started and completed `AutoMigrate`:
 
 ```bash
 docker compose exec -T platform-db psql -U platform -d platform < scripts/seed-platform.sql
 ```
 
-The seed creates:
+The seed creates these users, all with the password `password`:
 
 ```text
-Username: user
-Password: password
-Group:    group 1
+Group            Members                  Suggested permission on targetdb
+Student Council  rudolf, airgroove        View + Edit
+Team Spica       specialweek, goldship    View Only
+(no group)       tachyon                  none
 ```
 
-The user is a member of `group 1`, but the group receives no database permission. The script is safe to run repeatedly and does not overwrite an existing user password. If `APP_USER` or `APP_NAME` is customized in `.env`, replace `platform` in the command with the configured values.
+The groups receive no database permission from the seed, because a permission needs a registered managed database and its password is encrypted with `TARGET_DB_ENCRYPTION_KEY`. Sign in as the Platform Admin, register `targetdb` with the connection above, then assign it to `Student Council` with View + Edit and to `Team Spica` with View Only. The platform admin manages these assignments but does not receive target-database access automatically.
 
-To let `user` access a target database, assign that database to `group 1` with either `View Only` or `View + Edit`. The platform admin manages this assignment but does not receive target-database access automatically.
+The script is safe to run repeatedly and does not overwrite an existing user password. If `APP_USER` or `APP_NAME` is customized in `.env`, replace `platform` in the command with the configured values.
 
 ## integration tests
 
@@ -142,3 +145,12 @@ Integration tests use Testcontainers and require Docker:
 ```bash
 go test -tags=integration ./...
 ```
+
+## coverage report
+
+```bash
+bash scripts/coverage.sh          # unit + integration tests (requires Docker)
+bash scripts/coverage.sh --unit   # unit tests only
+```
+
+The script prints the statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. Coverage counts code exercised from any package's tests, so the HTTP flow tests in `frontend` also count toward `auth`, `access`, `viewer`, and `migration`. The generated `backend/http/api.gen.go` and the mock preview server in `frontend/preview` are excluded.
