@@ -5,20 +5,54 @@
     <main class="app-main">
         <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / {{.ActiveDatabase.Name}} / Query</nav>
         <header class="page-header">
-            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1><p class="app-muted mb-0">Request an execution plan for SQL against the active database.</p></div>
+            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1><p class="app-muted mb-0">Inspect data or request an execution plan for the active database.</p></div>
         </header>
 
-        <div class="app-alert mb-4">SQL is sent to PostgreSQL through EXPLAIN (FORMAT JSON). The statement is planned in a read-only transaction and is never executed.</div>
+        {{if eq .QueryMode "results"}}
+        <div class="app-alert mb-4">View results only accepts a single read-only SELECT or WITH query. Results are limited to the configured maximum row count.</div>
+        {{else}}
+        <div class="app-alert mb-4">Explain mode</h1> uses PostgreSQL EXPLAIN (FORMAT JSON). The statement is planned in a read-only transaction and is never executed.</div>
+        {{end}}
 
         <form class="app-panel query-editor" method="post" action="/app/databases/{{.ActiveDatabase.ID}}/query">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div class="query-editor-toolbar"><label class="form-label mb-0" for="query-sql">SQL query</label><button class="btn btn-primary" type="submit">Explain query</button></div>
+            <div class="query-editor-toolbar">
+                <label class="form-label mb-0" for="query-sql">SQL query</label>
+                <div class="query-editor-actions">
+                    <select class="form-select" name="mode" id="query-mode" aria-label="Query mode">
+                        <option value="results" {{if eq .QueryMode "results"}}selected{{end}}>View results</option>
+                        <option value="explain" {{if eq .QueryMode "explain"}}selected{{end}}>Explain plan</option>
+                    </select>
+                    <button class="btn btn-primary" type="submit">{{if eq .QueryMode "explain"}}Explain query{{else}}Run read-only query{{end}}</button>
+                </div>
+            </div>
             <textarea class="form-control sql-editor" id="query-sql" name="sql" spellcheck="false" required>{{.QuerySQL}}</textarea>
         </form>
 
-        {{if .QueryPlan}}
+        {{if .QueryError}}
+        <div class="app-alert app-alert-danger mt-4" role="alert">{{.QueryPlan}}</div>
+        {{else if eq .QueryMode "results"}}
+        {{if .QueryHasResult}}
         <section class="mt-4" aria-labelledby="query-results-heading">
-            <div class="page-header mb-3"><div><h2 id="query-results-heading">Execution plan</h2><p class="app-muted mb-0">Generated with PostgreSQL EXPLAIN (FORMAT JSON); the query was not executed.</p></div></div>
+            <div class="page-header mb-3"><div><h2 id="query-results-heading">Query results</h2><p class="app-muted mb-0">Rows were read in a PostgreSQL read-only transaction.</p></div></div>
+            <div class="table-scroll">
+                <table class="table table-hover">
+                    <thead><tr>{{range .QueryColumns}}<th>{{.}}</th>{{end}}</tr></thead>
+                    <tbody>
+                        {{range .QueryRows}}
+                        <tr>{{range .Cells}}<td>{{if .Null}}<span class="sql-null">NULL</span>{{else}}{{.Value}}{{end}}</td>{{end}}</tr>
+                        {{else}}
+                        <tr><td colspan="99">No rows.</td></tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            {{if .QueryHasNext}}<p class="app-muted mt-3 mb-0">More rows exist, but only the configured maximum was displayed.</p>{{end}}
+        </section>
+        {{end}}
+        {{else if .QueryPlan}}
+        <section class="mt-4" aria-labelledby="query-plan-heading">
+            <div class="page-header mb-3"><div><h2 id="query-plan-heading">Execution plan</h2><p class="app-muted mb-0">Generated with PostgreSQL EXPLAIN (FORMAT JSON); the query was not executed.</p></div></div>
             <pre class="sql-preview"><code>{{.QueryPlan}}</code></pre>
         </section>
         {{end}}

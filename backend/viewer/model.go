@@ -50,3 +50,9 @@ type TablePage struct {
 	PageSize int
 	HasNext  bool
 }
+
+type QueryResult struct {
+	Columns []string
+	Rows    [][]*string
+	HasNext bool
+}

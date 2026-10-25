@@ -150,6 +150,23 @@ func (s *ViewerService) TableData(ctx context.Context, userID, dbID uint, schema
 	return result, err
 }
 
+func (s *ViewerService) ReadOnlyQuery(ctx context.Context, userID, dbID uint, sql string) (*QueryResult, error) {
+	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+		return nil, err
+	}
+	query, err := validateReadOnlyQuery(sql)
+	if err != nil {
+		return nil, err
+	}
+
+	var result *QueryResult
+	err = s.readOnly(ctx, dbID, func(tx pgx.Tx) error {
+		result, err = queryRows(ctx, tx, query, s.config.MaxPageSize)
+		return err
+	})
+	return result, err
+}
+
 func (s *ViewerService) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
 	pool, err := s.pools.Pool(ctx, dbID)
 	if err != nil {

@@ -86,6 +86,11 @@ func (h *Handler) schema(w http.ResponseWriter, r *http.Request, session pageSes
 	h.render(w, "schema", "app-layout", data, http.StatusOK)
 }
 
+const (
+	queryModeResults = "results"
+	queryModeExplain = "explain"
+)
+
 func (h *Handler) queryGet(w http.ResponseWriter, r *http.Request, session pageSession) {
 	db, permission, err := h.databaseContext(r, session)
 	if err != nil {
@@ -98,6 +103,7 @@ func (h *Handler) queryGet(w http.ResponseWriter, r *http.Request, session pageS
 	}
 	data.Title = "Query · " + db.Name
 	data.ActiveSection = "query"
+	data.QueryMode = normalizeQueryMode(r.URL.Query().Get("mode"))
 	data.QuerySQL = "SELECT * FROM public.customers LIMIT 50;"
 	h.render(w, "query", "app-layout", data, http.StatusOK)
 }
@@ -115,17 +121,48 @@ func (h *Handler) queryPost(w http.ResponseWriter, r *http.Request, session page
 		h.renderError(w, http.StatusBadRequest, "Invalid form")
 		return
 	}
+
+	mode := normalizeQueryMode(r.FormValue("mode"))
 	sql := strings.TrimSpace(r.FormValue("sql"))
-	result, err := h.deps.Migrations.Explain(r.Context(), session.User.ID, db.ID, sql)
 	data, ok := h.workspaceData(w, r, session, db, permission)
 	if !ok {
 		return
 	}
 	data.Title = "Query · " + db.Name
 	data.ActiveSection = "query"
+	data.QueryMode = mode
 	data.QuerySQL = sql
+
+	if mode == queryModeResults {
+		result, err := h.deps.Viewer.ReadOnlyQuery(r.Context(), session.User.ID, db.ID, sql)
+		if err != nil {
+			data.QueryError = true
+			data.QueryPlan = err.Error()
+			h.render(w, "query", "app-layout", data, http.StatusUnprocessableEntity)
+			return
+		}
+		data.QueryExecuted = true
+		data.QueryHasResult = true
+		data.QueryColumns = result.Columns
+		data.QueryHasNext = result.HasNext
+		for _, row := range result.Rows {
+			view := tableRowView{Cells: make([]tableCellView, 0, len(row))}
+			for _, value := range row {
+				if value == nil {
+					view.Cells = append(view.Cells, tableCellView{Null: true})
+					continue
+				}
+				view.Cells = append(view.Cells, tableCellView{Value: *value})
+			}
+			data.QueryRows = append(data.QueryRows, view)
+		}
+		h.render(w, "query", "app-layout", data, http.StatusOK)
+		return
+	}
+
+	result, err := h.deps.Migrations.Explain(r.Context(), session.User.ID, db.ID, sql)
 	if err != nil {
-		data.QueryExecuted = false
+		data.QueryError = true
 		data.QueryPlan = err.Error()
 		h.render(w, "query", "app-layout", data, http.StatusUnprocessableEntity)
 		return
@@ -138,6 +175,13 @@ func (h *Handler) queryPost(w http.ResponseWriter, r *http.Request, session page
 	data.QueryExecuted = true
 	data.QueryPlan = string(plan)
 	h.render(w, "query", "app-layout", data, http.StatusOK)
+}
+
+func normalizeQueryMode(mode string) string {
+	if mode == queryModeExplain {
+		return queryModeExplain
+	}
+	return queryModeResults
 }
 
 func (h *Handler) migrationHistory(w http.ResponseWriter, r *http.Request, session pageSession) {

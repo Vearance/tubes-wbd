@@ -7,9 +7,9 @@
         <header class="page-header">
             <div>
                 <p class="app-caption mb-2">{{.ActiveDatabase.Name}}</p>
-                <h1>{{.MigrationDraft.Name}}</h1></div>
+                <h1>{{.MigrationDraft.Name}}</h1>
                 <p class="app-muted mb-0">Review and manage this migration draft before applying it.</p>
-            </div>
+            </</div>div>
             <div class="page-actions"><span class="badge badge-permission {{.MigrationDraft.StatusClass}}">{{.MigrationDraft.Status}}</span></div>
         </header>
 
@@ -45,9 +45,9 @@
 
             {{if .MigrationDraft.CanExecute}}
             <section class="app-panel">
-                <div</div></h2> class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                     <div><h2>Execute migration</h2><p class="app-muted mb-0">The migration runs in a transaction on the selected database.</p></div>
-                    <form method="post" action="/app/databases/{{.ActiveDatabase.ID}}/</h2>migrations/drafts/{{.MigrationDraft.ID}}/execute">
+                    <form method="post" action="/app/databases/{{.ActiveDatabase.ID}}/migrations/drafts/{{.MigrationDraft.ID}}/execute">
                         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                         <button class="btn btn-primary" type="submit">Execute draft</button>
                     </form>
@@ -68,8 +68,8 @@
                     <div class="migration-row migration-run-row" aria-hidden="true"><span>Status</span><span>Version</span><span>Executed by</span><span>Started</span><span>Finished</span></div>
                     {{range .MigrationRuns}}
                     <div class="migration-row migration-run-row">
-                        <span class="{{.StatusClass}}">{{.Status}}</</span>span>
-                        <span class="cell-code">{{.Version}}</</span></span></span>span>
+                        <span class="{{.StatusClass}}">{{.Status}}</span>
+                        <span class="cell-code">{{.Version}}</span>
                         <span>{{.ExecutedBy}}</span>
                         <time>{{.StartedAt}}</time>
                         <time>{{.FinishedAt}}</time>

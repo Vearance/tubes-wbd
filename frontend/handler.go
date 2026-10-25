@@ -133,8 +133,14 @@ type pageData struct {
 	MigrationDraft  *migrationDraftView
 	MigrationRuns   []migrationRunView
 	QuerySQL        string
+	QueryMode       string
 	QueryExecuted   bool
 	QueryPlan       string
+	QueryColumns    []string
+	QueryRows       []tableRowView
+	QueryHasNext    bool
+	QueryHasResult  bool
+	QueryError      bool
 	Notice          string
 	FormError       string
 }
