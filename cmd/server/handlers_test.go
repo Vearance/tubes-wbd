@@ -245,6 +245,53 @@ func TestAuthHTTPLoginRejectsInvalidCredentials(t *testing.T) {
 	require.NotContains(t, response.Body.String(), "password mismatch")
 }
 
+func TestAuthHTTPLoginRequiresJSONContentType(t *testing.T) {
+	service, sessions := newHandlerAuthService(t)
+	api := apiServer{authService: service}
+
+	for _, contentType := range []string{
+		"",
+		"text/plain",
+		"application/x-www-form-urlencoded",
+		"multipart/form-data; boundary=x",
+	} {
+		t.Run(contentType, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/auth/login",
+				strings.NewReader(`{"username":"alice","password":"secret"}`),
+			)
+			if contentType != "" {
+				request.Header.Set("Content-Type", contentType)
+			}
+			response := httptest.NewRecorder()
+
+			api.PostAuthLogin(response, request)
+
+			require.Equal(t, http.StatusUnsupportedMediaType, response.Code)
+			require.Nil(t, findCookie(response.Result().Cookies(), middleware.SessionCookieName))
+			require.Nil(t, sessions.session)
+		})
+	}
+}
+
+func TestAuthHTTPLoginAcceptsJSONContentTypeWithCharset(t *testing.T) {
+	service, _ := newHandlerAuthService(t)
+	api := apiServer{authService: service}
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/auth/login",
+		strings.NewReader(`{"username":"alice","password":"secret"}`),
+	)
+	request.Header.Set("Content-Type", "Application/JSON; charset=utf-8")
+	response := httptest.NewRecorder()
+
+	api.PostAuthLogin(response, request)
+
+	require.Equal(t, http.StatusOK, response.Code)
+}
+
 func TestAuthHTTPLogoutRejectsInvalidCSRF(t *testing.T) {
 	service, _ := newHandlerAuthService(t)
 	api := apiServer{authService: service}

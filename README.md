@@ -36,7 +36,7 @@ go generate ./backend/http
 
 ## authentication endpoints
 
-- `POST /auth/login` creates the session cookie and returns a CSRF token.
+- `POST /auth/login` creates the session cookie and returns a CSRF token. The request must use `Content-Type: application/json`; other content types receive `415`, so cross-site HTML forms cannot submit a login.
 - `POST /auth/logout` requires the session cookie and `X-CSRF-Token` header.
 - `GET /admin/ping` requires a valid session belonging to a platform admin.
 
