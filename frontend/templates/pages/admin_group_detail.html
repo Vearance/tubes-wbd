@@ -6,7 +6,15 @@
     {{if .FormError}}<div class="app-alert app-alert-danger mb-4" role="alert">{{.FormError}}</div>{{end}}
     <form method="post" action="/app/admin/groups/save" id="group-form" class="app-stack">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="group_id" value="{{.GroupID}}">
-        <section class="app-panel"><label class="form-label" for="group-name">Group name</label><input class="form-control" id="group-name" name="name" value="{{.Group.Name}}" required></section>
+        <section class="app-panel">
+            <label class="form-label" for="group-name">Group name</label>
+            {{if .GroupID}}
+            <p class="form-control-plaintext" id="group-name">{{.Group.Name}}</p>
+            <input type="hidden" name="name" value="{{.Group.Name}}">
+            {{else}}
+            <input class="form-control" id="group-name" name="name" value="{{.Group.Name}}" required>
+            {{end}}
+        </section>
         <section class="app-panel admin-section">
             <div class="admin-section-header"><div><h2>Members</h2></div><div class="admin-add-controls"><label class="visually-hidden" for="member-choice">User to add</label><select class="form-select" id="member-choice"><option value="">Select user</option>{{range .AvailableUsers}}<option value="{{.Username}}" data-role="{{.Role}}">{{.Username}}</option>{{end}}</select><button class="btn btn-outline-secondary btn-with-icon" id="add-member" type="button">{{template "icon-add"}}<span>Add member</span></button></div></div>
             <div class="table-scroll"><table class="table"><thead><tr><th>Username</th><th>Platform role</th><th></th></tr></thead><tbody id="member-rows">{{range .Group.Members}}<tr data-member="{{.Username}}"><td><input type="hidden" name="member" value="{{.Username}}">{{.Username}}</td><td>{{.Role}}</td><td><button class="btn btn-outline-secondary btn-sm btn-with-icon" type="button" data-remove="member">{{template "icon-remove"}}<span>Remove</span></button></td></tr>{{end}}</tbody></table></div>

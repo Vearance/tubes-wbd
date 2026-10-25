@@ -10,13 +10,15 @@ import (
 )
 
 type GroupService struct {
-	users  auth.UserRepository
-	groups GroupRepository
+	users    auth.UserRepository
+	groups   GroupRepository
+	rotation auth.SessionRotationRequester
 }
 
 func NewGroupService(
 	users auth.UserRepository,
 	groups GroupRepository,
+	rotation ...auth.SessionRotationRequester,
 ) (*GroupService, error) {
 	if users == nil {
 		return nil, errors.New("user repository is nil")
@@ -25,7 +27,11 @@ func NewGroupService(
 		return nil, errors.New("group repository is nil")
 	}
 
-	return &GroupService{users: users, groups: groups}, nil
+	service := &GroupService{users: users, groups: groups}
+	if len(rotation) > 0 {
+		service.rotation = rotation[0]
+	}
+	return service, nil
 }
 
 func (s *GroupService) CreateGroup(
@@ -107,6 +113,16 @@ func (s *GroupService) AddMember(
 		GroupID: groupID,
 	}); err != nil {
 		return fmt.Errorf("creating group membership: %w", err)
+	}
+
+	permissions, err := s.groups.ListDatabasePermissions(ctx, groupID)
+	if err != nil {
+		return fmt.Errorf("checking group database permissions: %w", err)
+	}
+	if len(permissions) > 0 && s.rotation != nil {
+		if err := s.rotation.RequireRotationByUser(ctx, userID); err != nil {
+			return fmt.Errorf("requiring session rotation after group membership change: %w", err)
+		}
 	}
 
 	return nil

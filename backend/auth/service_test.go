@@ -354,6 +354,24 @@ func TestService_ValidateSessionRejectsIdleAndAbsoluteExpiration(t *testing.T) {
 	}
 }
 
+func TestService_RotatesSessionWhenPrivilegeRequiresIt(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	_, sessions, service := newServiceWithLogin(t, &now)
+	result, err := service.Login(context.Background(), "alice", "secret")
+	require.NoError(t, err)
+
+	sessions.sessions[1].RotationRequired = true
+	validation, err := service.ValidateSession(context.Background(), result.Token)
+
+	require.NoError(t, err)
+	require.NotNil(t, validation.Rotation)
+	require.NotEqual(t, result.Token, validation.Rotation.Token)
+	session, err := sessions.FindByID(context.Background(), 1)
+	require.NoError(t, err)
+	require.False(t, session.RotationRequired)
+	require.Equal(t, hashToken(result.Token), *session.PreviousTokenHash)
+}
+
 func TestService_RotatesSessionAndHonorsGracePeriod(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	_, sessions, service := newServiceWithLogin(t, &now)

@@ -104,7 +104,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating user management service: %w", err)
 	}
-	groupService, err := access.NewGroupService(userRepository, accessRepository)
+	groupService, err := access.NewGroupService(userRepository, accessRepository, sessionRepository)
 	if err != nil {
 		return fmt.Errorf("creating group service: %w", err)
 	}

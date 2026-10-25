@@ -221,6 +221,19 @@ func (s *AuthService) ValidateSession(
 		if session.PreviousTokenExpiresAt == nil || !now.Before(*session.PreviousTokenExpiresAt) {
 			return SessionValidation{}, ErrStaleSessionToken
 		}
+		if session.RotationRequired {
+			rotation, err := s.rotateSession(ctx, session, now)
+			if err != nil {
+				return SessionValidation{}, err
+			}
+			return SessionValidation{
+				AuthenticatedSession: AuthenticatedSession{
+					UserID:    session.UserID,
+					SessionID: session.ID,
+				},
+				Rotation: &rotation,
+			}, nil
+		}
 
 		if err := s.sessions.Touch(ctx, session.ID, now); err != nil {
 			return SessionValidation{}, fmt.Errorf("touching session activity: %w", err)
@@ -234,7 +247,7 @@ func (s *AuthService) ValidateSession(
 		}, nil
 	}
 
-	shouldRotate := s.rotationDue(session, now)
+	shouldRotate := session.RotationRequired || s.rotationDue(session, now)
 
 	validation := SessionValidation{
 		AuthenticatedSession: AuthenticatedSession{
@@ -335,6 +348,7 @@ func (s *AuthService) rotateSession(
 	session.TokenHash = hashToken(newToken)
 	session.LastActivityAt = now
 	session.LastRotatedAt = now
+	session.RotationRequired = false
 
 	if err := s.sessions.Update(ctx, session); err != nil {
 		return SessionRotation{}, fmt.Errorf("saving rotated session: %w", err)

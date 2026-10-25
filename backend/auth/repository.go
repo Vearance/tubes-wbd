@@ -30,3 +30,7 @@ type SessionRepository interface {
 type SessionRevoker interface {
 	RevokeAllByUser(ctx context.Context, userID uint, revokedAt time.Time) error
 }
+
+type SessionRotationRequester interface {
+	RequireRotationByUser(ctx context.Context, userID uint) error
+}

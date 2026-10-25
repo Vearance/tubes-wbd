@@ -120,6 +120,7 @@ type GormSessionRepository struct {
 
 var _ SessionRepository = (*GormSessionRepository)(nil)
 var _ SessionRevoker = (*GormSessionRepository)(nil)
+var _ SessionRotationRequester = (*GormSessionRepository)(nil)
 
 func NewGormSessionRepository(db *gorm.DB) *GormSessionRepository {
 	return &GormSessionRepository{db: db}
@@ -231,6 +232,21 @@ func (r *GormSessionRepository) Revoke(
 	}
 	if result.RowsAffected == 0 {
 		return ErrSessionNotFound
+	}
+
+	return nil
+}
+
+func (r *GormSessionRepository) RequireRotationByUser(
+	ctx context.Context,
+	userID uint,
+) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Session{}).
+		Where("user_id = ? AND revoked_at IS NULL", userID).
+		Update("rotation_required", true).
+		Error; err != nil {
+		return fmt.Errorf("requiring session rotation for user: %w", err)
 	}
 
 	return nil

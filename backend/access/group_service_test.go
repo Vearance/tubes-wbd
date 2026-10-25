@@ -17,6 +17,18 @@ type fakeGroupRepository struct {
 	nextGroup   uint
 }
 
+type fakeSessionRotationRequester struct {
+	userIDs []uint
+}
+
+func (r *fakeSessionRotationRequester) RequireRotationByUser(
+	_ context.Context,
+	userID uint,
+) error {
+	r.userIDs = append(r.userIDs, userID)
+	return nil
+}
+
 func newFakeGroupRepository() *fakeGroupRepository {
 	return &fakeGroupRepository{
 		groups:      map[uint]*Group{},
@@ -215,6 +227,41 @@ func TestGroupServiceRejectsInvalidAndDuplicateGroups(t *testing.T) {
 	require.NoError(t, err)
 	_, err = service.CreateGroup(context.Background(), "developers")
 	require.ErrorIs(t, err, ErrGroupAlreadyExists)
+}
+
+func TestGroupServiceAddingMemberWithDatabaseAccessRequiresRotation(t *testing.T) {
+	users := &fakeUserRepository{users: map[uint]*auth.User{
+		1: {ID: 1, Username: "alice"},
+	}}
+	groups := newFakeGroupRepository()
+	groups.groups[1] = &Group{ID: 1, Name: "developers"}
+	groups.permissions[[2]uint{1, 10}] = &GroupDatabasePermission{
+		GroupID: 1, ManagedDatabaseID: 10, Permission: PermissionViewOnly,
+	}
+	rotation := &fakeSessionRotationRequester{}
+	service, err := NewGroupService(users, groups, rotation)
+	require.NoError(t, err)
+
+	err = service.AddMember(context.Background(), 1, 1)
+
+	require.NoError(t, err)
+	require.Equal(t, []uint{1}, rotation.userIDs)
+}
+
+func TestGroupServiceAddingMemberWithoutDatabaseAccessDoesNotRequireRotation(t *testing.T) {
+	users := &fakeUserRepository{users: map[uint]*auth.User{
+		1: {ID: 1, Username: "alice"},
+	}}
+	groups := newFakeGroupRepository()
+	groups.groups[1] = &Group{ID: 1, Name: "developers"}
+	rotation := &fakeSessionRotationRequester{}
+	service, err := NewGroupService(users, groups, rotation)
+	require.NoError(t, err)
+
+	err = service.AddMember(context.Background(), 1, 1)
+
+	require.NoError(t, err)
+	require.Empty(t, rotation.userIDs)
 }
 
 func TestGroupServiceRejectsMissingGroupOrUser(t *testing.T) {
