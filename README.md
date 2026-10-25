@@ -142,3 +142,12 @@ Integration tests use Testcontainers and require Docker:
 ```bash
 go test -tags=integration ./...
 ```
+
+## coverage report
+
+```bash
+bash scripts/coverage.sh          # unit + integration tests (requires Docker)
+bash scripts/coverage.sh --unit   # unit tests only
+```
+
+The script prints the statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. Coverage counts code exercised from any package's tests, so the HTTP flow tests in `frontend` also count toward `auth`, `access`, `viewer`, and `migration`. The generated `backend/http/api.gen.go` and the mock preview server in `frontend/preview` are excluded.
