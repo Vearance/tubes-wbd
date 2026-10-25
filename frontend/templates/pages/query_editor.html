@@ -5,7 +5,7 @@
     <main class="app-main">
         <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / {{.ActiveDatabase.Name}} / Query</nav>
         <header class="page-header">
-            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1><p class="app-muted mb-0">Run bounded read-only queries or inspect their execution plan.</p></div>
+            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1></div>
         </header>
 
         <div class="app-alert mb-4">Only one row-returning query is accepted. It runs in a read-only transaction with a 5-second timeout and displays at most 100 rows. Use migrations for data or schema changes.</div>
