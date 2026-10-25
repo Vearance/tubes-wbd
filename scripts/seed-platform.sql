@@ -1,8 +1,3 @@
--- Run this after the backend has completed GORM AutoMigrate.
--- Username: user
--- Password: password
--- The user is a member of group 1, which intentionally has no database access.
-
 BEGIN;
 
 INSERT INTO users (
@@ -12,13 +7,15 @@ INSERT INTO users (
     created_at,
     updated_at
 )
-VALUES (
-    'user',
+SELECT
+    username,
     '$2a$10$o8lu/YDq9Igp5MhcXDlnMOsBpY3EWnlhP9Z0mabUBIXZh8yoAspmW',
     FALSE,
     NOW(),
     NOW()
-)
+FROM (
+    VALUES ('rudolf'), ('airgroove'), ('specialweek'), ('goldship'), ('tachyon')
+) AS seed(username)
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO "groups" (
@@ -26,11 +23,9 @@ INSERT INTO "groups" (
     created_at,
     updated_at
 )
-VALUES (
-    'group 1',
-    NOW(),
-    NOW()
-)
+VALUES
+    ('Student Council', NOW(), NOW()),
+    ('Team Spica', NOW(), NOW())
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO user_groups (
@@ -42,12 +37,15 @@ SELECT
     users.id,
     platform_group.id,
     NOW()
-FROM users
-CROSS JOIN "groups" AS platform_group
-WHERE users.username = 'user'
-  AND platform_group.name = 'group 1'
+FROM (
+    VALUES
+        ('rudolf', 'Student Council'),
+        ('airgroove', 'Student Council'),
+        ('specialweek', 'Team Spica'),
+        ('goldship', 'Team Spica')
+) AS seed(username, group_name)
+JOIN users ON users.username = seed.username
+JOIN "groups" AS platform_group ON platform_group.name = seed.group_name
 ON CONFLICT (user_id, group_id) DO NOTHING;
-
--- No rows are inserted into group_database_permissions on purpose.
 
 COMMIT;
