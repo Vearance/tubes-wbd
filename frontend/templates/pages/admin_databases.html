@@ -1,7 +1,7 @@
 {{define "content"}}
 <main class="app-main">
-    <header class="page-header"><div><p class="app-caption mb-2">Platform administration</p><h1>Database connections</h1></div><a class="btn btn-primary" href="/app/admin/databases/new">Connect database</a></header>
+    <header class="page-header"><div><p class="app-caption mb-2">Platform administration</p><h1>Database Connections</h1></div><a class="btn btn-primary btn-with-icon" href="/app/admin/databases/new">{{template "icon-connect"}}<span>Connect database</span></a></header>
     {{if .Notice}}<div class="app-alert mb-4" role="status">{{.Notice}}</div>{{end}}
-    <section class="app-panel p-0"><div class="table-scroll border-0"><table class="table table-hover"><thead><tr><th>Name</th><th>Host</th><th>Database</th><th>Status</th><th></th></tr></thead><tbody>{{range .Connections}}<tr><td><strong>{{.Name}}</strong></td><td class="cell-code">{{.Host}}:{{.Port}}</td><td class="cell-code">{{.Database}}</td><td class="{{.StatusClass}}">{{.Status}}</td><td><a class="btn btn-outline-secondary btn-sm" href="/app/admin/databases/{{.ID}}/edit">Edit</a></td></tr>{{else}}<tr><td colspan="5">No connections registered.</td></tr>{{end}}</tbody></table></div></section>
+    <section class="app-panel p-0"><div class="table-scroll border-0"><table class="table table-hover"><thead><tr><th>Name</th><th>Host</th><th>Database</th><th>Status</th><th></th></tr></thead><tbody>{{range .Connections}}<tr><td><strong>{{.Name}}</strong></td><td class="cell-code">{{.Host}}:{{.Port}}</td><td class="cell-code">{{.Database}}</td><td class="{{.StatusClass}}">{{.Status}}</td><td><a class="btn btn-outline-secondary btn-sm btn-with-icon" href="/app/admin/databases/{{.ID}}/edit">{{template "icon-edit"}}<span>Edit</span></a></td></tr>{{else}}<tr><td colspan="5">No connections registered.</td></tr>{{end}}</tbody></table></div></section>
 </main>
 {{end}}

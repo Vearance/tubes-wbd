@@ -12,14 +12,6 @@
     </div>
     <span class="badge badge-permission">{{.PermissionLabel}}</span>
     <span class="connection-status status-success app-header-connection">● {{.ActiveDatabase.Status}}</span>
-    {{else}}
-    <div class="app-header-actions">
-        <span class="app-muted">{{.CurrentUser.Username}}</span>
-        <form method="post" action="/app/logout">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <button class="btn btn-outline-secondary" type="submit">Log out</button>
-        </form>
-    </div>
     {{end}}
 </header>
 {{end}}

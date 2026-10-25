@@ -11,10 +11,10 @@
             <div class="mb-4"><label class="form-label" for="migration-name">Migration name</label><input class="form-control" id="migration-name" name="name" type="text" value="Add customer phone number" required></div>
             <div><label class="form-label" for="migration-sql">SQL</label><textarea class="form-control sql-editor" id="migration-sql" name="sql" spellcheck="false" required>ALTER TABLE public.customers
 ADD COLUMN phone_number TEXT;</textarea></div>
-            <div class="form-actions"><a class="btn btn-outline-secondary" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">Cancel</a><button class="btn btn-primary" type="submit">Save draft</button></div>
+            <div class="form-actions"><a class="btn btn-outline-secondary btn-with-icon" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">{{template "icon-cancel"}}<span>Cancel</span></a><button class="btn btn-primary btn-with-icon" type="submit">{{template "icon-save"}}<span>Save draft</span></button></div>
         </form>
         {{else}}
-        <section class="app-panel empty-state"><h2>View Only access</h2><p>You do not have permission to create migrations for this database.</p><a class="btn btn-outline-secondary" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">Back to history</a></section>
+        <section class="app-panel empty-state"><h2>View Only access</h2><p>You do not have permission to create migrations for this database.</p><a class="btn btn-outline-secondary btn-with-icon" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">{{template "icon-back"}}<span>Back to history</span></a></section>
         {{end}}
     </main>
 </div>

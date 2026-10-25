@@ -62,9 +62,10 @@
 
                 {{template "feedback" .}}
 
-                <button class="btn btn-primary w-100" id="login-submit" type="submit">
+                <button class="btn btn-primary btn-with-icon w-100" id="login-submit" type="submit">
+                    {{template "icon-login"}}
                     <span data-submit-label>Sign in</span>
-                    <span class="spinner-border spinner-border-sm ms-2 d-none" data-submit-spinner aria-hidden="true"></span>
+                    <span class="spinner-border spinner-border-sm d-none" data-submit-spinner aria-hidden="true"></span>
                 </button>
             </form>
         </section>

@@ -5,14 +5,14 @@
     <main class="app-main">
         <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / {{.ActiveDatabase.Name}} / Query</nav>
         <header class="page-header">
-            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1><p class="app-muted mb-0">Request an execution plan for SQL against the active database.</p></div>
+            <div><p class="app-caption mb-2">Read-only workspace</p><h1>Query</h1></div>
         </header>
 
         <div class="app-alert mb-4">SQL is sent to PostgreSQL through EXPLAIN (FORMAT JSON). The statement is planned in a read-only transaction and is never executed.</div>
 
         <form class="app-panel query-editor" method="post" action="/app/databases/{{.ActiveDatabase.ID}}/query">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div class="query-editor-toolbar"><label class="form-label mb-0" for="query-sql">SQL query</label><button class="btn btn-primary" type="submit">Explain query</button></div>
+            <div class="query-editor-toolbar"><label class="form-label mb-0" for="query-sql">SQL query</label><button class="btn btn-primary btn-with-icon" type="submit">{{template "icon-search"}}<span>Explain query</span></button></div>
             <textarea class="form-control sql-editor" id="query-sql" name="sql" spellcheck="false" required>{{.QuerySQL}}</textarea>
         </form>
 

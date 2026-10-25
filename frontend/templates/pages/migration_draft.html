@@ -32,8 +32,8 @@
                 <div class="mb-4"><label class="form-label" for="draft-name">Migration name</label><input class="form-control" id="draft-name" name="name" type="text" value="{{.MigrationDraft.Name}}" required></div>
                 <div><label class="form-label" for="draft-sql">SQL</label><textarea class="form-control sql-editor" id="draft-sql" name="sql" spellcheck="false" required>{{.MigrationDraft.SQL}}</textarea></div>
                 <div class="form-actions">
-                    <a class="btn btn-outline-secondary" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">Back to history</a>
-                    <button class="btn btn-primary" type="submit">Save changes</button>
+                    <a class="btn btn-outline-secondary btn-with-icon" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}">{{template "icon-back"}}<span>Back to history</span></a>
+                    <button class="btn btn-primary btn-with-icon" type="submit">{{template "icon-save"}}<span>Save changes</span></button>
                 </div>
             </form>
             {{else}}
@@ -49,7 +49,7 @@
                     <div><h2>Execute migration</h2><p class="app-muted mb-0">The migration runs in a transaction on the selected database.</p></div>
                     <form method="post" action="/app/databases/{{.ActiveDatabase.ID}}/</h2>migrations/drafts/{{.MigrationDraft.ID}}/execute">
                         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                        <button class="btn btn-primary" type="submit">Execute draft</button>
+                        <button class="btn btn-primary btn-with-icon" type="submit">{{template "icon-execute"}}<span>Execute draft</span></button>
                     </form>
                 </div>
             </section>

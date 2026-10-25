@@ -2,7 +2,7 @@
 
 .active-database { display: grid; line-height: 1.2; }
 .active-database strong { font-family: var(--app-serif); font-weight: 400; }
-.connection-status { font-size: 0.8125rem; }
+.connection-status { font-size: 0.8125rem; margin-inline-end: 1rem;}
 .database-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; }
 .database-card { display: grid; gap: 1.25rem; }
 .database-card-header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }

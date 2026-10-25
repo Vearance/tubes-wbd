@@ -5,8 +5,8 @@
     <main class="app-main">
         <nav class="app-breadcrumb"><a href="/app/databases?mode={{.Mode}}">Databases</a> / <a href="/app/databases/{{.ActiveDatabase.ID}}?mode={{.Mode}}">{{.ActiveDatabase.Name}}</a> / Migrations</nav>
         <header class="page-header">
-            <div><p class="app-caption mb-2">{{.ActiveDatabase.Name}}</p><h1>Migration history</h1><p class="app-muted mb-0">Linear schema and data changes for this database.</p></div>
-            {{if .CanEdit}}<a class="btn btn-primary" href="/app/databases/{{.ActiveDatabase.ID}}/migrations/new?mode={{.Mode}}">New migration</a>{{end}}
+            <div><p class="app-caption mb-2">{{.ActiveDatabase.Name}}</p><h1>Migration history</h1></div>
+            {{if .CanEdit}}<a class="btn btn-primary btn-with-icon" href="/app/databases/{{.ActiveDatabase.ID}}/migrations/new?mode={{.Mode}}">{{template "icon-add"}}<span>New migration</span></a>{{end}}
         </header>
         {{if .Drafts}}
         <section class="app-stack mb-5" aria-labelledby="drafts-heading">

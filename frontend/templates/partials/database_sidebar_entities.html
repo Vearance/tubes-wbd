@@ -1,0 +1,23 @@
+{{define "database-sidebar-entities"}}
+<section class="sidebar-section">
+    <h2 class="sidebar-heading">Entities</h2>
+    {{range .Schemas}}
+    {{$schema := .Name}}
+    <details class="entity-schema" {{if eq $schema $.ActiveSchema}}open{{end}}>
+        <summary>{{$schema}}</summary>
+        <nav class="entity-list" aria-label="{{$schema}} entities">
+            <a class="entity-link entity-overview" href="/app/databases/{{$.ActiveDatabase.ID}}/schemas/{{$schema}}?mode={{$.Mode}}" {{if and (eq $schema $.ActiveSchema) (eq $.ActiveSection "schema")}}aria-current="page"{{end}}>
+                <span class="entity-icon entity-icon-schema" aria-hidden="true">◇</span>
+                Schema overview
+            </a>
+            {{range .Tables}}
+            <a class="entity-link" href="/app/databases/{{$.ActiveDatabase.ID}}?mode={{$.Mode}}&schema={{$schema}}&table={{.}}" {{if and (eq $schema $.ActiveSchema) (eq . $.ActiveTable) (eq $.ActiveSection "table")}}aria-current="page"{{end}}>
+                <span class="entity-icon" aria-hidden="true">▦</span>
+                {{.}}
+            </a>
+            {{end}}
+        </nav>
+    </details>
+    {{end}}
+</section>
+{{end}}

@@ -1,0 +1,12 @@
+{{define "database-sidebar-workspace"}}
+<section class="sidebar-section">
+    <h2 class="sidebar-heading">Workspace</h2>
+    <nav aria-label="Workspace pages">
+        <a class="sidebar-link" href="/app/databases/{{.ActiveDatabase.ID}}/query?mode={{.Mode}}" {{if eq .ActiveSection "query"}}aria-current="page"{{end}}>Query</a>
+        {{if .CanEdit}}
+        <a class="sidebar-link" href="/app/databases/{{.ActiveDatabase.ID}}/migrations/new?mode={{.Mode}}">New migration</a>
+        {{end}}
+        <a class="sidebar-link" href="/app/databases/{{.ActiveDatabase.ID}}/migrations?mode={{.Mode}}" {{if eq .ActiveSection "migrations"}}aria-current="page"{{end}}>History</a>
+    </nav>
+</section>
+{{end}}

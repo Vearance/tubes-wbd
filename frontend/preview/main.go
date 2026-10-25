@@ -63,6 +63,7 @@ type databaseView struct {
 	Name        string
 	Status      string
 	Description string
+	Permission  string
 }
 
 type schemaView struct {
@@ -341,8 +342,8 @@ func main() {
 		data.Title = "Your databases · BScheme"
 		if session.HasDatabaseAccess {
 			data.Databases = []databaseView{
-				{ID: 1, Name: "Customer Database", Status: "Available"},
-				{ID: 2, Name: "Analytics Database", Status: "Available"},
+				{ID: 1, Name: "Customer Database", Status: "Available", Permission: data.PermissionLabel},
+				{ID: 2, Name: "Analytics Database", Status: "Available", Permission: data.PermissionLabel},
 			}
 		}
 		data.ActiveDatabase = nil
@@ -691,6 +692,14 @@ func newPreviewLoginData() loginPageData {
 }
 
 func mustParseTemplate(files ...string) *template.Template {
+	sharedPartials := []string{
+		"frontend/templates/partials/icons.html",
+		"frontend/templates/partials/sidebar_account.html",
+		"frontend/templates/partials/admin_sidebar_navigation.html",
+		"frontend/templates/partials/database_sidebar_entities.html",
+		"frontend/templates/partials/database_sidebar_workspace.html",
+	}
+	files = append(sharedPartials, files...)
 	tmpl, err := template.ParseFiles(files...)
 	if err != nil {
 		log.Fatalf("parse template: %v", err)
@@ -703,6 +712,7 @@ func mustParseAppPage(page string) *template.Template {
 		"frontend/templates/layouts/app.html",
 		"frontend/templates/partials/app_header.html",
 		"frontend/templates/partials/database_sidebar.html",
+		"frontend/templates/partials/database_list_sidebar.html",
 		page,
 	)
 }

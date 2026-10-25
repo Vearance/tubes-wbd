@@ -1,0 +1,10 @@
+{{define "sidebar-account"}}
+<footer class="sidebar-user">
+    <span class="app-caption">Signed in as</span>
+    <strong>{{.CurrentUser.Username}}</strong>
+    <form class="mt-4" method="post" action="/app/logout">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button class="btn btn-outline-secondary btn-with-icon w-100" type="submit">{{template "icon-logout"}}<span>Log out</span></button>
+    </form>
+</footer>
+{{end}}
