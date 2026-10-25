@@ -30,8 +30,7 @@ func newDraftEnv(t *testing.T, targetSetup string) *draftEnv {
 	t.Helper()
 	ctx := context.Background()
 
-	platformCfg, _ := newTarget(t, "")
-	platform, err := platformdb.Open(ctx, platformdb.Config{DSN: dsn(platformCfg)})
+	platform, err := platformdb.Open(ctx, platformdb.Config{DSN: dsn(newPlatformDB(t))})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = platformdb.Close(platform) })
 	require.NoError(t, manageddb.AutoMigrate(platform))

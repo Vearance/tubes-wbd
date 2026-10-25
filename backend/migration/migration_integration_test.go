@@ -26,10 +26,17 @@ const (
 	testPassword = "target_password"
 )
 
+const (
+	platformUser     = "platform"
+	platformPassword = "platform_password"
+)
+
 var (
-	server    targetdb.ConnConfig
-	adminPool *pgxpool.Pool
-	dbCounter atomic.Int64
+	server            targetdb.ConnConfig
+	adminPool         *pgxpool.Pool
+	platformServer    targetdb.ConnConfig
+	platformAdminPool *pgxpool.Pool
+	dbCounter         atomic.Int64
 )
 
 func TestMain(m *testing.M) {
@@ -39,45 +46,61 @@ func TestMain(m *testing.M) {
 func runWithServer(m *testing.M) int {
 	ctx := context.Background()
 
+	var stop func()
+	var err error
+	server, adminPool, stop, err = startServer(ctx, testUser, testPassword)
+	defer stop()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "start target server:", err)
+		return 1
+	}
+	platformServer, platformAdminPool, stop, err = startServer(ctx, platformUser, platformPassword)
+	defer stop()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "start platform server:", err)
+		return 1
+	}
+
+	return m.Run()
+}
+
+func startServer(ctx context.Context, user, password string) (targetdb.ConnConfig, *pgxpool.Pool, func(), error) {
 	ctr, err := tcpostgres.Run(ctx, "postgres:17-alpine",
 		tcpostgres.WithDatabase("postgres"),
-		tcpostgres.WithUsername(testUser),
-		tcpostgres.WithPassword(testPassword),
+		tcpostgres.WithUsername(user),
+		tcpostgres.WithPassword(password),
 		tcpostgres.BasicWaitStrategies(),
 	)
-	defer testcontainers.TerminateContainer(ctr)
+	stop := func() { _ = testcontainers.TerminateContainer(ctr) }
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "start server:", err)
-		return 1
+		return targetdb.ConnConfig{}, nil, stop, err
 	}
 
 	host, err := ctr.Host(ctx)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "server host:", err)
-		return 1
+		return targetdb.ConnConfig{}, nil, stop, fmt.Errorf("server host: %w", err)
 	}
 	port, err := ctr.MappedPort(ctx, "5432/tcp")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "server port:", err)
-		return 1
+		return targetdb.ConnConfig{}, nil, stop, fmt.Errorf("server port: %w", err)
 	}
-	server = targetdb.ConnConfig{
+	cfg := targetdb.ConnConfig{
 		Host:     host,
 		Port:     port.Num(),
-		User:     testUser,
-		Password: testPassword,
+		User:     user,
+		Password: password,
 		DBName:   "postgres",
 		SSLMode:  "disable",
 	}
 
-	adminPool, err = pgxpool.New(ctx, dsn(server))
+	pool, err := pgxpool.New(ctx, dsn(cfg))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "admin pool:", err)
-		return 1
+		return targetdb.ConnConfig{}, nil, stop, fmt.Errorf("admin pool: %w", err)
 	}
-	defer adminPool.Close()
-
-	return m.Run()
+	return cfg, pool, func() {
+		pool.Close()
+		stop()
+	}, nil
 }
 
 func dsn(c targetdb.ConnConfig) string {
@@ -87,18 +110,29 @@ func dsn(c targetdb.ConnConfig) string {
 
 func newTarget(t *testing.T, setupSQL string) (targetdb.ConnConfig, *pgxpool.Pool) {
 	t.Helper()
+	return newDatabaseOn(t, server, adminPool, "target", setupSQL)
+}
+
+func newPlatformDB(t *testing.T) targetdb.ConnConfig {
+	t.Helper()
+	cfg, _ := newDatabaseOn(t, platformServer, platformAdminPool, "platform", "")
+	return cfg
+}
+
+func newDatabaseOn(t *testing.T, base targetdb.ConnConfig, admin *pgxpool.Pool, prefix, setupSQL string) (targetdb.ConnConfig, *pgxpool.Pool) {
+	t.Helper()
 	ctx := context.Background()
 
-	cfg := server
-	cfg.DBName = fmt.Sprintf("target_%d", dbCounter.Add(1))
-	_, err := adminPool.Exec(ctx, "CREATE DATABASE "+cfg.DBName)
+	cfg := base
+	cfg.DBName = fmt.Sprintf("%s_%d", prefix, dbCounter.Add(1))
+	_, err := admin.Exec(ctx, "CREATE DATABASE "+cfg.DBName)
 	require.NoError(t, err)
 
 	pool, err := pgxpool.New(ctx, dsn(cfg))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		pool.Close()
-		_, _ = adminPool.Exec(context.Background(), "DROP DATABASE IF EXISTS "+cfg.DBName+" WITH (FORCE)")
+		_, _ = admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+cfg.DBName+" WITH (FORCE)")
 	})
 
 	if setupSQL != "" {

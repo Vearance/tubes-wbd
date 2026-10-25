@@ -104,13 +104,9 @@ func TestIntegrationRepositoryUnknownID(t *testing.T) {
 }
 
 func TestIntegrationServiceToConnector(t *testing.T) {
-	db, ctr := startPlatformDB(t)
+	db := openPlatformDB(t)
+	in := startTargetDB(t)
 	ctx := context.Background()
-
-	host, err := ctr.Host(ctx)
-	require.NoError(t, err)
-	port, err := ctr.MappedPort(ctx, "5432/tcp")
-	require.NoError(t, err)
 
 	cipher, err := manageddb.NewCipher(bytes.Repeat([]byte{1}, manageddb.KeySize))
 	require.NoError(t, err)
@@ -122,20 +118,11 @@ func TestIntegrationServiceToConnector(t *testing.T) {
 	svc, err := manageddb.NewManagedDBService(repo, cipher, manager)
 	require.NoError(t, err)
 
-	in := manageddb.Input{
-		Name:     "self",
-		Host:     host,
-		Port:     port.Num(),
-		Username: "platform",
-		Password: "platform_password",
-		DBName:   "platform",
-		SSLMode:  "disable",
-	}
 	require.NoError(t, svc.TestConnection(ctx, in))
 
 	d, err := svc.Create(ctx, in)
 	require.NoError(t, err)
-	require.NotContains(t, string(d.EncryptedPassword), "platform_password")
+	require.NotContains(t, string(d.EncryptedPassword), in.Password)
 	require.NoError(t, svc.TestStored(ctx, d.ID))
 
 	pool, err := manager.Pool(ctx, d.ID)

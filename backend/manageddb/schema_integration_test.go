@@ -18,12 +18,6 @@ import (
 
 func openPlatformDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, _ := startPlatformDB(t)
-	return db
-}
-
-func startPlatformDB(t *testing.T) (*gorm.DB, *tcpostgres.PostgresContainer) {
-	t.Helper()
 	ctx := context.Background()
 
 	ctr, err := tcpostgres.Run(ctx, "postgres:17-alpine",
@@ -44,7 +38,35 @@ func startPlatformDB(t *testing.T) (*gorm.DB, *tcpostgres.PostgresContainer) {
 
 	require.NoError(t, manageddb.AutoMigrate(db))
 	require.NoError(t, access.AutoMigrate(db))
-	return db, ctr
+	return db
+}
+
+func startTargetDB(t *testing.T) manageddb.Input {
+	t.Helper()
+	ctx := context.Background()
+
+	ctr, err := tcpostgres.Run(ctx, "postgres:17-alpine",
+		tcpostgres.WithDatabase("shop"),
+		tcpostgres.WithUsername("shop_owner"),
+		tcpostgres.WithPassword("shop_password"),
+		tcpostgres.BasicWaitStrategies(),
+	)
+	t.Cleanup(func() { _ = testcontainers.TerminateContainer(ctr) })
+	require.NoError(t, err)
+
+	host, err := ctr.Host(ctx)
+	require.NoError(t, err)
+	port, err := ctr.MappedPort(ctx, "5432/tcp")
+	require.NoError(t, err)
+	return manageddb.Input{
+		Name:     "shop",
+		Host:     host,
+		Port:     port.Num(),
+		Username: "shop_owner",
+		Password: "shop_password",
+		DBName:   "shop",
+		SSLMode:  "disable",
+	}
 }
 
 func TestIntegrationPermissionsCascadeOnDelete(t *testing.T) {
