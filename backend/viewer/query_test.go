@@ -1,11 +1,26 @@
 package viewer
 
 import (
+	"math/big"
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
+
+func TestQueryValueTextFormatsNumeric(t *testing.T) {
+	value := pgtype.Numeric{
+		Int:   big.NewInt(129900),
+		Exp:   -2,
+		Valid: true,
+	}
+
+	formatted := queryValueText(value, 170)
+
+	require.NotNil(t, formatted)
+	require.Equal(t, "1299.00", *formatted)
+}
 
 func TestValidateReadQuery(t *testing.T) {
 	tests := []struct {

@@ -2,6 +2,7 @@ package viewer
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -297,6 +298,15 @@ func queryValueText(value any, oid uint32) *string {
 			text = fmt.Sprint(typed)
 		} else {
 			text = string(encoded)
+		}
+	case driver.Valuer:
+		encoded, err := typed.Value()
+		if err != nil {
+			text = fmt.Sprint(typed)
+		} else if encoded == nil {
+			return nil
+		} else {
+			text = fmt.Sprint(encoded)
 		}
 	default:
 		text = fmt.Sprint(typed)
