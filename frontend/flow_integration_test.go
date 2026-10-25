@@ -33,31 +33,41 @@ import (
 	"tubes-wbd/frontend"
 )
 
-const (
-	pgUser     = "platform"
-	pgPassword = "platform_password"
-)
-
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
-// flowEnv is the whole application wired as in cmd/server, backed by one
-// PostgreSQL container that hosts both the Platform DB and the target DB.
+// flowEnv is the whole application wired as in cmd/server. As in
+// docker-compose.yml, the Platform DB and the target DB run in separate
+// PostgreSQL containers with different credentials.
 type flowEnv struct {
 	server         *httptest.Server
+	platform       *pgx.Conn
 	target         *pgx.Conn
 	databaseID     uint
 	userManagement *auth.UserManagementService
 	users          map[string]*auth.User
 }
 
-func newFlowEnv(t *testing.T) *flowEnv {
+type postgresContainer struct {
+	host     string
+	port     uint16
+	user     string
+	password string
+	dbName   string
+}
+
+func (c postgresContainer) dsn() string {
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable",
+		c.user, c.password, net.JoinHostPort(c.host, strconv.Itoa(int(c.port))), c.dbName)
+}
+
+func startPostgres(t *testing.T, dbName, user, password string) postgresContainer {
 	t.Helper()
 	ctx := context.Background()
 
 	ctr, err := tcpostgres.Run(ctx, "postgres:17-alpine",
-		tcpostgres.WithDatabase("platform"),
-		tcpostgres.WithUsername(pgUser),
-		tcpostgres.WithPassword(pgPassword),
+		tcpostgres.WithDatabase(dbName),
+		tcpostgres.WithUsername(user),
+		tcpostgres.WithPassword(password),
 		tcpostgres.BasicWaitStrategies(),
 	)
 	t.Cleanup(func() { _ = testcontainers.TerminateContainer(ctr) })
@@ -67,27 +77,33 @@ func newFlowEnv(t *testing.T) *flowEnv {
 	require.NoError(t, err)
 	port, err := ctr.MappedPort(ctx, "5432/tcp")
 	require.NoError(t, err)
-	dsn := func(dbName string) string {
-		return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable",
-			pgUser, pgPassword, net.JoinHostPort(host, strconv.Itoa(int(port.Num()))), dbName)
-	}
+	return postgresContainer{host: host, port: port.Num(), user: user, password: password, dbName: dbName}
+}
 
-	platformConn, err := pgx.Connect(ctx, dsn("platform"))
+func connect(t *testing.T, c postgresContainer) *pgx.Conn {
+	t.Helper()
+	conn, err := pgx.Connect(context.Background(), c.dsn())
 	require.NoError(t, err)
-	_, err = platformConn.Exec(ctx, "CREATE DATABASE shop")
-	require.NoError(t, err)
-	require.NoError(t, platformConn.Close(ctx))
+	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+	return conn
+}
 
-	target, err := pgx.Connect(ctx, dsn("shop"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = target.Close(context.Background()) })
-	_, err = target.Exec(ctx, `
+func newFlowEnv(t *testing.T) *flowEnv {
+	t.Helper()
+	ctx := context.Background()
+
+	platformContainer := startPostgres(t, "platform", "platform", "platform_password")
+	targetContainer := startPostgres(t, "shop", "shop_owner", "shop_password")
+	require.NotEqual(t, platformContainer.port, targetContainer.port, "the databases must run in separate containers")
+
+	target := connect(t, targetContainer)
+	_, err := target.Exec(ctx, `
 		CREATE TABLE public.customers (id serial PRIMARY KEY, name text NOT NULL);
 		INSERT INTO public.customers (name) VALUES ('Alice'), ('Bob');
 	`)
 	require.NoError(t, err)
 
-	db, err := platformdb.Open(ctx, platformdb.Config{DSN: dsn("platform")})
+	db, err := platformdb.Open(ctx, platformdb.Config{DSN: platformContainer.dsn()})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = platformdb.Close(db) })
 	require.NoError(t, auth.AutoMigrate(db))
@@ -150,17 +166,18 @@ func newFlowEnv(t *testing.T) *flowEnv {
 	// Edit, a viewer group with View Only, and an outsider in no group.
 	shop, err := managedDatabases.Create(ctx, manageddb.Input{
 		Name:     "shop",
-		Host:     host,
-		Port:     port.Num(),
-		Username: pgUser,
-		Password: pgPassword,
-		DBName:   "shop",
+		Host:     targetContainer.host,
+		Port:     targetContainer.port,
+		Username: targetContainer.user,
+		Password: targetContainer.password,
+		DBName:   targetContainer.dbName,
 		SSLMode:  "disable",
 	})
 	require.NoError(t, err)
 
 	env := &flowEnv{
 		server:         server,
+		platform:       connect(t, platformContainer),
 		target:         target,
 		databaseID:     shop.ID,
 		userManagement: userManagement,
@@ -199,6 +216,13 @@ func (e *flowEnv) columnExists(t *testing.T, column string) bool {
 		`SELECT EXISTS (SELECT 1 FROM information_schema.columns
 		 WHERE table_schema = 'public' AND table_name = 'customers' AND column_name = $1)`,
 		column).Scan(&exists))
+	return exists
+}
+
+func tableExists(t *testing.T, conn *pgx.Conn, name string) bool {
+	t.Helper()
+	var exists bool
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT to_regclass($1) IS NOT NULL", name).Scan(&exists))
 	return exists
 }
 
@@ -342,6 +366,16 @@ func TestIntegrationEditorFlowFromLoginToMigrationHistory(t *testing.T) {
 	require.NotContains(t, executed.body, draftPath+`/execute"`, "an applied draft cannot be executed again")
 	require.True(t, env.columnExists(t, "phone"))
 	require.Equal(t, []int64{1}, env.historyVersions(t))
+
+	// The applied history lives in the target container; users, drafts, and
+	// runs live in the Platform DB container. Neither leaks into the other.
+	require.True(t, tableExists(t, env.target, "_dbm.migration_history"))
+	require.False(t, tableExists(t, env.platform, "_dbm.migration_history"))
+	require.False(t, tableExists(t, env.platform, "public.customers"))
+	for _, table := range []string{"public.users", "public.sessions", "public.migration_drafts", "public.migration_runs"} {
+		require.True(t, tableExists(t, env.platform, table), table)
+		require.False(t, tableExists(t, env.target, table), table)
+	}
 
 	// Migration history shows version, name, and executor.
 	history := editor.get(env.dbPath("/migrations"))
