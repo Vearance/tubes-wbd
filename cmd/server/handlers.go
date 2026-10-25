@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 
 	"tubes-wbd/backend/access"
@@ -38,6 +39,10 @@ func (apiServer) GetAdminPing(w http.ResponseWriter, r *http.Request) {
 func (s apiServer) PostAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if s.authService == nil {
 		writeAPIError(w, http.StatusInternalServerError, "authentication service unavailable")
+		return
+	}
+
+	if !requireJSONContentType(w, r) {
 		return
 	}
 
@@ -365,6 +370,16 @@ func groupResponse(group *access.Group) httpapi.Group {
 		Id:   int64(group.ID),
 		Name: group.Name,
 	}
+}
+
+func requireJSONContentType(w http.ResponseWriter, r *http.Request) bool {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeAPIError(w, http.StatusUnsupportedMediaType, "content type must be application/json")
+		return false
+	}
+
+	return true
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {

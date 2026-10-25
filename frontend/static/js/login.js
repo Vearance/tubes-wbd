@@ -3,7 +3,7 @@
 (() => {
   "use strict";
 
-  const form = document.querySelector('form[action="/login"]');
+  const form = document.querySelector('form[action$="/login"]');
   if (!(form instanceof HTMLFormElement)) {
     return;
   }
