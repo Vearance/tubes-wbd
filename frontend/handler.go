@@ -134,7 +134,11 @@ type pageData struct {
 	MigrationRuns   []migrationRunView
 	QuerySQL        string
 	QueryExecuted   bool
+	QueryColumns    []string
+	QueryRows       []tableRowView
+	QueryTruncated  bool
 	QueryPlan       string
+	QueryError      string
 	Notice          string
 	FormError       string
 }

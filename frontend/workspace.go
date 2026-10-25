@@ -98,7 +98,7 @@ func (h *Handler) queryGet(w http.ResponseWriter, r *http.Request, session pageS
 	}
 	data.Title = "Query · " + db.Name
 	data.ActiveSection = "query"
-	data.QuerySQL = "SELECT * FROM public.customers LIMIT 50;"
+	data.QuerySQL = "SELECT * FROM public.customers LIMIT 50"
 	h.render(w, "query", "app-layout", data, http.StatusOK)
 }
 
@@ -116,7 +116,6 @@ func (h *Handler) queryPost(w http.ResponseWriter, r *http.Request, session page
 		return
 	}
 	sql := strings.TrimSpace(r.FormValue("sql"))
-	result, err := h.deps.Migrations.Explain(r.Context(), session.User.ID, db.ID, sql)
 	data, ok := h.workspaceData(w, r, session, db, permission)
 	if !ok {
 		return
@@ -124,19 +123,44 @@ func (h *Handler) queryPost(w http.ResponseWriter, r *http.Request, session page
 	data.Title = "Query · " + db.Name
 	data.ActiveSection = "query"
 	data.QuerySQL = sql
+
+	if r.FormValue("action") == "explain" {
+		result, err := h.deps.Migrations.Explain(r.Context(), session.User.ID, db.ID, sql)
+		if err != nil {
+			data.QueryError = err.Error()
+			h.render(w, "query", "app-layout", data, http.StatusUnprocessableEntity)
+			return
+		}
+		plan, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			h.renderError(w, http.StatusInternalServerError, "Unable to format query plan")
+			return
+		}
+		data.QueryPlan = string(plan)
+		h.render(w, "query", "app-layout", data, http.StatusOK)
+		return
+	}
+
+	result, err := h.deps.Viewer.Query(r.Context(), session.User.ID, db.ID, sql)
 	if err != nil {
-		data.QueryExecuted = false
-		data.QueryPlan = err.Error()
+		data.QueryError = err.Error()
 		h.render(w, "query", "app-layout", data, http.StatusUnprocessableEntity)
 		return
 	}
-	plan, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		h.renderError(w, http.StatusInternalServerError, "Unable to format query plan")
-		return
-	}
 	data.QueryExecuted = true
-	data.QueryPlan = string(plan)
+	data.QueryColumns = result.Columns
+	data.QueryTruncated = result.Truncated
+	for _, row := range result.Rows {
+		view := tableRowView{Cells: make([]tableCellView, 0, len(row))}
+		for _, value := range row {
+			if value == nil {
+				view.Cells = append(view.Cells, tableCellView{Null: true})
+				continue
+			}
+			view.Cells = append(view.Cells, tableCellView{Value: *value})
+		}
+		data.QueryRows = append(data.QueryRows, view)
+	}
 	h.render(w, "query", "app-layout", data, http.StatusOK)
 }
 

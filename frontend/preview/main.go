@@ -78,6 +78,15 @@ type schemaTableView struct {
 	Indexes     int
 }
 
+type tableCellView struct {
+	Value string
+	Null  bool
+}
+
+type tableRowView struct {
+	Cells []tableCellView
+}
+
 type adminUserView struct {
 	Username    string
 	Role        string
@@ -191,6 +200,11 @@ type pageData struct {
 	Migration       migrationView
 	QuerySQL        string
 	QueryExecuted   bool
+	QueryColumns    []string
+	QueryRows       []tableRowView
+	QueryTruncated  bool
+	QueryPlan       string
+	QueryError      string
 }
 
 var previewAccounts = map[string]previewAccount{
@@ -373,8 +387,12 @@ func main() {
 		data := mockPageData(session)
 		data.Title = "Query · BScheme"
 		data.ActiveSection = "query"
-		data.QuerySQL = "SELECT id, name, email, status\nFROM public.customers\nORDER BY id\nLIMIT 50;"
+		data.QuerySQL = "SELECT id, name, email, status\nFROM public.customers\nORDER BY id\nLIMIT 50"
 		data.QueryExecuted = r.URL.Query().Get("executed") == "true"
+		if data.QueryExecuted {
+			data.QueryColumns = []string{"id", "name", "email", "status"}
+			data.QueryRows = mockQueryRows()
+		}
 		render(w, queryTemplate, "app-layout", data)
 	}))
 
@@ -383,7 +401,18 @@ func main() {
 			http.Error(w, "invalid CSRF token", http.StatusForbidden)
 			return
 		}
-		http.Redirect(w, r, "/databases/1/query?executed=true", http.StatusSeeOther)
+		data := mockPageData(session)
+		data.Title = "Query · BScheme"
+		data.ActiveSection = "query"
+		data.QuerySQL = strings.TrimSpace(r.FormValue("sql"))
+		if r.FormValue("action") == "explain" {
+			data.QueryPlan = `{"Statements":[{"SQL":"` + data.QuerySQL + `","Plan":[{"Plan":{"Node Type":"Seq Scan"}}]}]}`
+		} else {
+			data.QueryExecuted = true
+			data.QueryColumns = []string{"id", "name", "email", "status"}
+			data.QueryRows = mockQueryRows()
+		}
+		render(w, queryTemplate, "app-layout", data)
 	}))
 
 	mux.HandleFunc("GET /databases/{databaseID}/migrations", requireDatabaseAccess(func(w http.ResponseWriter, r *http.Request, session previewSession) {
@@ -813,6 +842,13 @@ func mockPageData(session previewSession) pageData {
 		ActiveSchema: "public",
 		ActiveTable:  "customers",
 		ActiveTab:    "data",
+	}
+}
+
+func mockQueryRows() []tableRowView {
+	return []tableRowView{
+		{Cells: []tableCellView{{Value: "1"}, {Value: "Alice"}, {Value: "alice@example.com"}, {Value: "active"}}},
+		{Cells: []tableCellView{{Value: "2"}, {Value: "Bob"}, {Null: true}, {Value: "inactive"}}},
 	}
 }
 

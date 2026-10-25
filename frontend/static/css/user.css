@@ -48,6 +48,7 @@
 .permission-switcher a[aria-current="page"] { color: #0d0d0d; background: var(--app-orange); border-color: var(--app-orange); }
 .query-editor { padding: 0; overflow: hidden; }
 .query-editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--app-border); background: var(--app-raised); }
+.query-editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.625rem; }
 .query-editor .sql-editor { min-height: 16rem; border: 0; outline-offset: -2px; }
 @media (max-width: 60rem) {
   .migration-row { grid-template-columns: 4rem minmax(10rem, 1fr) 7rem; }
