@@ -100,7 +100,7 @@ func run() error {
 		return fmt.Errorf("creating authorization service: %w", err)
 	}
 
-	userManagementService, err := auth.NewUserManagementService(userRepository, passwordHasher)
+	userManagementService, err := auth.NewUserManagementService(userRepository, sessionRepository, passwordHasher)
 	if err != nil {
 		return fmt.Errorf("creating user management service: %w", err)
 	}

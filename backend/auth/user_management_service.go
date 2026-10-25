@@ -9,26 +9,32 @@ import (
 )
 
 type UserManagementService struct {
-	users  UserManagementRepository
-	hasher PasswordHasher
-	now    func() time.Time
+	users    UserManagementRepository
+	sessions SessionRevoker
+	hasher   PasswordHasher
+	now      func() time.Time
 }
 
 func NewUserManagementService(
 	users UserManagementRepository,
+	sessions SessionRevoker,
 	hasher PasswordHasher,
 ) (*UserManagementService, error) {
 	if users == nil {
 		return nil, errors.New("user management repository is nil")
+	}
+	if sessions == nil {
+		return nil, errors.New("session revoker is nil")
 	}
 	if hasher == nil {
 		return nil, errors.New("password hasher is nil")
 	}
 
 	return &UserManagementService{
-		users:  users,
-		hasher: hasher,
-		now:    time.Now,
+		users:    users,
+		sessions: sessions,
+		hasher:   hasher,
+		now:      time.Now,
 	}, nil
 }
 
@@ -100,6 +106,11 @@ func (s *UserManagementService) SetDisabled(
 	}
 	if err := s.users.Update(ctx, user); err != nil {
 		return nil, fmt.Errorf("updating user status: %w", err)
+	}
+	if disabled {
+		if err := s.sessions.RevokeAllByUser(ctx, user.ID, s.now().UTC()); err != nil {
+			return nil, fmt.Errorf("revoking user sessions: %w", err)
+		}
 	}
 
 	return user, nil

@@ -81,10 +81,38 @@ func (r *fakeUserManagementRepository) Update(_ context.Context, user *User) err
 	return nil
 }
 
+type fakeSessionRevoker struct {
+	calls     int
+	userID    uint
+	revokedAt time.Time
+	err       error
+}
+
+func (r *fakeSessionRevoker) RevokeAllByUser(
+	_ context.Context,
+	userID uint,
+	revokedAt time.Time,
+) error {
+	r.calls++
+	r.userID = userID
+	r.revokedAt = revokedAt
+	return r.err
+}
+
+func newTestUserManagementService(
+	t *testing.T,
+	repository *fakeUserManagementRepository,
+) (*UserManagementService, *fakeSessionRevoker) {
+	t.Helper()
+	sessions := &fakeSessionRevoker{}
+	service, err := NewUserManagementService(repository, sessions, fakePasswordHasher{})
+	require.NoError(t, err)
+	return service, sessions
+}
+
 func TestUserManagementServiceCreatesRegularUser(t *testing.T) {
 	repository := newFakeUserManagementRepository()
-	service, err := NewUserManagementService(repository, fakePasswordHasher{})
-	require.NoError(t, err)
+	service, _ := newTestUserManagementService(t, repository)
 
 	user, err := service.CreateUser(context.Background(), " alice ", "secret")
 	require.NoError(t, err)
@@ -99,10 +127,9 @@ func TestUserManagementServiceRejectsDuplicateAndInvalidUser(t *testing.T) {
 		Username:     "alice",
 		PasswordHash: "hash:secret",
 	}))
-	service, err := NewUserManagementService(repository, fakePasswordHasher{})
-	require.NoError(t, err)
+	service, _ := newTestUserManagementService(t, repository)
 
-	_, err = service.CreateUser(context.Background(), "alice", "secret")
+	_, err := service.CreateUser(context.Background(), "alice", "secret")
 	require.ErrorIs(t, err, ErrUserAlreadyExists)
 
 	_, err = service.CreateUser(context.Background(), "", "secret")
@@ -115,12 +142,13 @@ func TestUserManagementServiceDisablesAndEnablesUser(t *testing.T) {
 		Username:     "alice",
 		PasswordHash: "hash:secret",
 	}))
-	service, err := NewUserManagementService(repository, fakePasswordHasher{})
-	require.NoError(t, err)
+	service, sessions := newTestUserManagementService(t, repository)
 
 	user, err := service.SetDisabled(context.Background(), 1, true)
 	require.NoError(t, err)
 	require.NotNil(t, user.DisabledAt)
+	require.Equal(t, 1, sessions.calls)
+	require.Equal(t, uint(1), sessions.userID)
 
 	user, err = service.SetDisabled(context.Background(), 1, false)
 	require.NoError(t, err)
@@ -134,10 +162,9 @@ func TestUserManagementServiceCannotDisableAdmin(t *testing.T) {
 		PasswordHash: "hash:secret",
 		IsAdmin:      true,
 	}))
-	service, err := NewUserManagementService(repository, fakePasswordHasher{})
-	require.NoError(t, err)
+	service, _ := newTestUserManagementService(t, repository)
 
-	_, err = service.SetDisabled(context.Background(), 1, true)
+	_, err := service.SetDisabled(context.Background(), 1, true)
 	require.ErrorIs(t, err, ErrCannotDisableAdmin)
 }
 
@@ -147,8 +174,7 @@ func TestUserManagementServiceUsesUTCClockForDisabledAt(t *testing.T) {
 		Username:     "alice",
 		PasswordHash: "hash:secret",
 	}))
-	service, err := NewUserManagementService(repository, fakePasswordHasher{})
-	require.NoError(t, err)
+	service, _ := newTestUserManagementService(t, repository)
 	service.now = func() time.Time {
 		return time.Date(2026, 1, 1, 12, 0, 0, 0, time.FixedZone("test", 7*60*60))
 	}

@@ -14,7 +14,9 @@ http://localhost:8080/app/login
 
 The integrated UI is mounted at `/app`; the JSON API keeps its existing routes.
 HTML forms use the backend session cookie `labpro_sucks` and submit the CSRF token
-as a hidden form field.
+as a hidden form field. The login form first receives a separate pre-authentication
+CSRF cookie, because the authenticated session CSRF token does not exist until login
+succeeds.
 
 ## Mock preview
 
@@ -49,7 +51,7 @@ Preview credentials:
 
 ### Platform Admin Preview Routes
 
-These are frontend preview routes backed by mock data, not endpoints in the main API. The main API contract in [`api/openapi.yaml`](../api/openapi.yaml) currently defines `/health`, `/auth/login`, `/auth/logout`, and `/admin/ping`.
+These are frontend preview routes backed by mock data, not endpoints in the integrated main API. The integrated JSON API contract in [`api/openapi.yaml`](../api/openapi.yaml) covers authentication, platform-admin management, database access, viewer, and migration endpoints. The server-rendered frontend routes remain under `/app` and are documented separately in the repository README.
 
 | Method | Route | Behavior |
 | --- | --- | --- |

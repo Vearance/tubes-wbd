@@ -459,7 +459,7 @@ func newAdminEndpointRouter(
 	)
 	require.NoError(t, err)
 
-	userManagement, err := auth.NewUserManagementService(users, handlerHasher{})
+	userManagement, err := auth.NewUserManagementService(users, sessions, handlerHasher{})
 	require.NoError(t, err)
 	groups := &adminEndpointGroups{
 		groups:      map[uint]*access.Group{},
