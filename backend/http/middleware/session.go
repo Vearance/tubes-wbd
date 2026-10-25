@@ -18,7 +18,7 @@ type CookieOptions struct {
 }
 
 func (o CookieOptions) withDefaults() CookieOptions {
-	if o.SameSite == http.SameSiteDefaultMode {
+	if o.SameSite == 0 || o.SameSite == http.SameSiteDefaultMode {
 		o.SameSite = http.SameSiteLaxMode
 	}
 	if o.Path == "" {

@@ -26,3 +26,7 @@ type SessionRepository interface {
 	Update(ctx context.Context, session *Session) error
 	Revoke(ctx context.Context, sessionID uint, revokedAt time.Time) error
 }
+
+type SessionRevoker interface {
+	RevokeAllByUser(ctx context.Context, userID uint, revokedAt time.Time) error
+}

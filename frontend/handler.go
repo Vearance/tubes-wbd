@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -27,8 +28,12 @@ import (
 var frontendFiles embed.FS
 
 const (
-	BasePath       = "/app"
-	CSRFCookieName = "labpro_sucks_csrf"
+	BasePath            = "/app"
+	CSRFCookieName      = "labpro_sucks_csrf"
+	LoginCSRFCookieName = "labpro_sucks_login_csrf"
+
+	loginCSRFTokenBytes = 32
+	loginCSRFCookieAge  = 10 * time.Minute
 )
 
 type Dependencies struct {
@@ -478,7 +483,17 @@ func (h *Handler) loginGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := loginPageData{Title: "Sign in · BScheme", FieldErrors: map[string]string{}}
+	csrfToken, err := h.ensureLoginCSRFToken(w, r)
+	if err != nil {
+		h.renderError(w, http.StatusInternalServerError, "Unable to prepare sign-in")
+		return
+	}
+
+	data := loginPageData{
+		Title:       "Sign in · BScheme",
+		CSRFToken:   csrfToken,
+		FieldErrors: map[string]string{},
+	}
 	switch r.URL.Query().Get("state") {
 	case "expired":
 		data.SessionExpired = true
@@ -499,7 +514,13 @@ func (h *Handler) loginPost(w http.ResponseWriter, r *http.Request) {
 	data := loginPageData{
 		Title:       "Sign in · BScheme",
 		Username:    username,
+		CSRFToken:   h.loginCSRFCookie(r),
 		FieldErrors: map[string]string{},
+	}
+	if !h.validateLoginCSRF(r, r.FormValue("csrf_token")) {
+		data.Error = "Invalid CSRF token. Refresh the sign-in page and try again."
+		h.render(w, "login", "public-layout", data, http.StatusForbidden)
+		return
 	}
 	if username == "" {
 		data.FieldErrors["username"] = "Enter your username."
@@ -525,6 +546,7 @@ func (h *Handler) loginPost(w http.ResponseWriter, r *http.Request) {
 
 	middleware.SetSessionCookie(w, result.Token, result.ExpiresAt, h.deps.CookieOptions)
 	h.setCSRFCookie(w, result.CSRFToken, result.ExpiresAt)
+	h.clearLoginCSRFCookie(w)
 	if result.User.IsAdmin {
 		h.redirect(w, r, "/admin/users")
 	} else {
@@ -612,12 +634,80 @@ func (h *Handler) validateCSRF(w http.ResponseWriter, r *http.Request, session p
 	return true
 }
 
+func (h *Handler) ensureLoginCSRFToken(w http.ResponseWriter, r *http.Request) (string, error) {
+	if token := h.loginCSRFCookie(r); token != "" {
+		return token, nil
+	}
+
+	token, err := auth.GenerateToken(loginCSRFTokenBytes)
+	if err != nil {
+		return "", fmt.Errorf("generating login csrf token: %w", err)
+	}
+
+	h.setLoginCSRFCookie(w, token)
+	return token, nil
+}
+
+func (h *Handler) validateLoginCSRF(r *http.Request, token string) bool {
+	cookieToken := h.loginCSRFCookie(r)
+	return cookieToken != "" && token != "" && subtle.ConstantTimeCompare([]byte(cookieToken), []byte(token)) == 1
+}
+
+func (h *Handler) loginCSRFCookie(r *http.Request) string {
+	cookie, err := r.Cookie(LoginCSRFCookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+func (h *Handler) setLoginCSRFCookie(w http.ResponseWriter, token string) {
+	options := h.deps.CookieOptions
+	if options.Path == "" {
+		options.Path = "/"
+	}
+	if options.SameSite == 0 || options.SameSite == http.SameSiteDefaultMode {
+		options.SameSite = http.SameSiteLaxMode
+	}
+	expiresAt := time.Now().UTC().Add(loginCSRFCookieAge)
+	http.SetCookie(w, &http.Cookie{
+		Name:     LoginCSRFCookieName,
+		Value:    token,
+		Path:     options.Path,
+		Expires:  expiresAt,
+		MaxAge:   int(loginCSRFCookieAge / time.Second),
+		HttpOnly: true,
+		Secure:   options.Secure,
+		SameSite: options.SameSite,
+	})
+}
+
+func (h *Handler) clearLoginCSRFCookie(w http.ResponseWriter) {
+	options := h.deps.CookieOptions
+	if options.Path == "" {
+		options.Path = "/"
+	}
+	if options.SameSite == 0 || options.SameSite == http.SameSiteDefaultMode {
+		options.SameSite = http.SameSiteLaxMode
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     LoginCSRFCookieName,
+		Value:    "",
+		Path:     options.Path,
+		Expires:  time.Unix(1, 0).UTC(),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   options.Secure,
+		SameSite: options.SameSite,
+	})
+}
+
 func (h *Handler) setCSRFCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
 	options := h.deps.CookieOptions
 	if options.Path == "" {
 		options.Path = "/"
 	}
-	if options.SameSite == http.SameSiteDefaultMode {
+	if options.SameSite == 0 || options.SameSite == http.SameSiteDefaultMode {
 		options.SameSite = http.SameSiteLaxMode
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -634,6 +724,9 @@ func (h *Handler) clearCSRFCookie(w http.ResponseWriter) {
 	options := h.deps.CookieOptions
 	if options.Path == "" {
 		options.Path = "/"
+	}
+	if options.SameSite == 0 || options.SameSite == http.SameSiteDefaultMode {
+		options.SameSite = http.SameSiteLaxMode
 	}
 	http.SetCookie(w, &http.Cookie{Name: CSRFCookieName, Value: "", Path: options.Path, MaxAge: -1, Expires: time.Unix(1, 0).UTC(), Secure: options.Secure, SameSite: options.SameSite})
 }

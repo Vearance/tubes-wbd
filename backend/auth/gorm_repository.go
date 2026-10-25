@@ -119,6 +119,7 @@ type GormSessionRepository struct {
 }
 
 var _ SessionRepository = (*GormSessionRepository)(nil)
+var _ SessionRevoker = (*GormSessionRepository)(nil)
 
 func NewGormSessionRepository(db *gorm.DB) *GormSessionRepository {
 	return &GormSessionRepository{db: db}
@@ -230,6 +231,22 @@ func (r *GormSessionRepository) Revoke(
 	}
 	if result.RowsAffected == 0 {
 		return ErrSessionNotFound
+	}
+
+	return nil
+}
+
+func (r *GormSessionRepository) RevokeAllByUser(
+	ctx context.Context,
+	userID uint,
+	revokedAt time.Time,
+) error {
+	if err := r.db.WithContext(ctx).
+		Model(&Session{}).
+		Where("user_id = ?", userID).
+		Update("revoked_at", revokedAt).
+		Error; err != nil {
+		return fmt.Errorf("revoking user sessions: %w", err)
 	}
 
 	return nil

@@ -143,6 +143,17 @@ func (r *handlerSessions) Revoke(
 	return nil
 }
 
+func (r *handlerSessions) RevokeAllByUser(
+	_ context.Context,
+	userID uint,
+	revokedAt time.Time,
+) error {
+	if r.session != nil && r.session.UserID == userID {
+		r.session.RevokedAt = &revokedAt
+	}
+	return nil
+}
+
 func TestAuthHTTPLoginAndLogout(t *testing.T) {
 	service, sessions := newHandlerAuthService(t)
 	api := apiServer{

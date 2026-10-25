@@ -66,7 +66,16 @@ also require the `X-CSRF-Token` returned by login:
 
 ## protected database endpoints
 
-These endpoints require a valid session and database permission. Viewer reads require View Only or View + Edit; migration creation/update/execution requires View + Edit:
+These endpoints require a valid session and database permission. Viewer reads require View Only or View + Edit; migration creation/update/execution requires View + Edit.
+
+Database permission is evaluated independently for each target database. For one specific database, if a user belongs to multiple groups, the effective permission is the highest permission assigned to that same database by any of those groups. There is no single global database permission for a user:
+
+```text
+User + Database A: max(permission from the user's groups for Database A)
+User + Database B: max(permission from the user's groups for Database B)
+
+None < View Only < View + Edit
+```
 
 - `GET /databases` lists managed databases visible to the current user.
 - `GET /databases/{databaseId}/schemas` lists schemas.
@@ -123,6 +132,8 @@ Group:    group 1
 ```
 
 The user is a member of `group 1`, but the group receives no database permission. The script is safe to run repeatedly and does not overwrite an existing user password. If `APP_USER` or `APP_NAME` is customized in `.env`, replace `platform` in the command with the configured values.
+
+To let `user` access a target database, assign that database to `group 1` with either `View Only` or `View + Edit`. The platform admin manages this assignment but does not receive target-database access automatically.
 
 ## integration tests
 
