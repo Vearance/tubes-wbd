@@ -2,9 +2,11 @@
 
 ## description
 
-![BScheme Logo](frontend/static/assets/bscheme-logo.png)
+<img src="frontend/static/assets/bscheme-logo.png" alt="BScheme Logo" width="200">
 
 BScheme is a web-based PostgreSQL management system that helps teams explore schemas and data, manage database access, and review and execute migrations through a simple interface.
+
+Made for IF3110 Web Development Course.
 
 ## start server + Platform DB
 ```bash
@@ -154,3 +156,12 @@ bash scripts/coverage.sh --unit   # unit tests only
 ```
 
 The script prints the statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. Coverage counts code exercised from any package's tests, so the HTTP flow tests in `frontend` also count toward `auth`, `access`, `viewer`, and `migration`. The generated `backend/http/api.gen.go` and the mock preview server in `frontend/preview` are excluded.
+
+
+## contributors
+
+| Nama | NIM |
+| --- | --- |
+| Jennifer Khang | 13524110 |
+| Nathaniel Christian | 13524122 |
+| Azri Arzaq Pohan | 13524139 |
