@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	httpapi "tubes-wbd/backend/http"
-	"tubes-wbd/backend/migration"
+	httpapi "tubes-wbd/internal/http"
+	"tubes-wbd/internal/migration"
 )
 
 const migrationBodyLimit = 2*migration.MaxSQLBytes + 4<<10

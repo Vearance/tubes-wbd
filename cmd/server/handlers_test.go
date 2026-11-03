@@ -12,9 +12,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"tubes-wbd/backend/auth"
-	httpapi "tubes-wbd/backend/http"
-	"tubes-wbd/backend/http/middleware"
+	"tubes-wbd/internal/auth"
+	httpapi "tubes-wbd/internal/http"
+	"tubes-wbd/internal/http/middleware"
 )
 
 type handlerHasher struct{}

@@ -1,7 +1,7 @@
 name: tubes-wbd
 
 services:
-  backend:
+  internal:
     build:
       context: .
       dockerfile: Dockerfile

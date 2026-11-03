@@ -3,9 +3,9 @@ package main
 import (
 	"net/http"
 
-	"tubes-wbd/backend/access"
-	httpapi "tubes-wbd/backend/http"
-	"tubes-wbd/backend/manageddb"
+	"tubes-wbd/internal/access"
+	httpapi "tubes-wbd/internal/http"
+	"tubes-wbd/internal/manageddb"
 )
 
 func (s apiServer) ListAdminDatabases(w http.ResponseWriter, r *http.Request) {

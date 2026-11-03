@@ -2,8 +2,8 @@ package main
 
 import (
 	"net/http"
-	httpapi "tubes-wbd/backend/http"
-	"tubes-wbd/backend/viewer"
+	httpapi "tubes-wbd/internal/http"
+	"tubes-wbd/internal/viewer"
 )
 
 func (s apiServer) ListDatabaseSchemas(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId) {

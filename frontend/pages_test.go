@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tubes-wbd/backend/viewer"
+	"tubes-wbd/internal/viewer"
 )
 
 type pageCase struct {

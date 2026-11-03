@@ -23,13 +23,13 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"golang.org/x/crypto/bcrypt"
 
-	"tubes-wbd/backend/access"
-	"tubes-wbd/backend/auth"
-	"tubes-wbd/backend/database/platformdb"
-	"tubes-wbd/backend/database/targetdb"
-	"tubes-wbd/backend/manageddb"
-	"tubes-wbd/backend/migration"
-	"tubes-wbd/backend/viewer"
+	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/database/platformdb"
+	"tubes-wbd/internal/database/targetdb"
+	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/viewer"
 	"tubes-wbd/frontend"
 )
 
@@ -479,7 +479,7 @@ func TestIntegrationViewOnlyCanReadButNotChangeThroughUI(t *testing.T) {
 	require.Contains(t, viewerDraft.body, "Add phone")
 	require.NotContains(t, viewerDraft.body, draft.path+`/execute"`)
 
-	// The backend rejects writes even when the forms are posted directly.
+	// The internal rejects writes even when the forms are posted directly.
 	created := viewOnly.submit(queryPage, env.dbPath("/migrations"), url.Values{
 		"name": {"Viewer migration"},
 		"sql":  {"ALTER TABLE public.customers ADD COLUMN hacked text"},

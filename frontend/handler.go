@@ -16,12 +16,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"tubes-wbd/backend/access"
-	"tubes-wbd/backend/auth"
-	"tubes-wbd/backend/http/middleware"
-	"tubes-wbd/backend/manageddb"
-	"tubes-wbd/backend/migration"
-	"tubes-wbd/backend/viewer"
+	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/http/middleware"
+	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/viewer"
 )
 
 //go:embed templates static

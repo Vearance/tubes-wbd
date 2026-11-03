@@ -8,13 +8,13 @@ import (
 	"mime"
 	"net/http"
 
-	"tubes-wbd/backend/access"
-	"tubes-wbd/backend/auth"
-	httpapi "tubes-wbd/backend/http"
-	"tubes-wbd/backend/http/middleware"
-	"tubes-wbd/backend/manageddb"
-	"tubes-wbd/backend/migration"
-	"tubes-wbd/backend/viewer"
+	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/auth"
+	httpapi "tubes-wbd/internal/http"
+	"tubes-wbd/internal/http/middleware"
+	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/viewer"
 )
 
 type apiServer struct {

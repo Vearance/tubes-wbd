@@ -12,8 +12,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"tubes-wbd/backend/auth"
-	"tubes-wbd/backend/http/middleware"
+	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/http/middleware"
 )
 
 type loginTestUsers struct {

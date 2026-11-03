@@ -9,10 +9,10 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"tubes-wbd/backend/auth"
-	"tubes-wbd/backend/database/platformdb"
-	"tubes-wbd/backend/manageddb"
-	"tubes-wbd/backend/viewer"
+	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/database/platformdb"
+	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/viewer"
 )
 
 const (

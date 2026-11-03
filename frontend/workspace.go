@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"tubes-wbd/backend/access"
-	"tubes-wbd/backend/manageddb"
-	"tubes-wbd/backend/migration"
+	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/migration"
 )
 
 func (h *Handler) listDatabases(w http.ResponseWriter, r *http.Request, session pageSession) {

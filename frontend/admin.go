@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"tubes-wbd/backend/access"
-	"tubes-wbd/backend/auth"
-	"tubes-wbd/backend/manageddb"
+	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/manageddb"
 )
 
 func (h *Handler) adminRoot(w http.ResponseWriter, r *http.Request, _ pageSession) {
