@@ -3,7 +3,7 @@ name: tubes-wbd
 services:
   internal:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: app
     environment:
