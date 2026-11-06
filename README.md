@@ -2,36 +2,36 @@
 
 ## description
 
-![BScheme Logo](frontend/static/assets/bscheme-logo.png)
+<img src="frontend/static/assets/bscheme-logo.png" alt="BScheme Logo" width="200">
 
 BScheme is a web-based PostgreSQL management system that helps teams explore schemas and data, manage database access, and review and execute migrations through a simple interface.
+
+Made for IF3110 Web Development Course.
 
 ## start server + Platform DB
 ```bash
 docker compose up --build
 ```
 
-The server-rendered frontend is served by the same backend at:
-
-```text
-http://localhost:8080/app/login
-```
+The backend runs at `http://localhost:8080`.
 
 ## start server only
 ```bash
+cd backend
 go run ./cmd/server
 ```
 
 ## OpenAPI
 
-The API contract is defined in [`api/openapi.yaml`](api/openapi.yaml). Generated
-handlers and models are written to `backend/http/api.gen.go`; do not edit that
+The API contract is defined in [`backend/api/openapi.yaml`](backend/api/openapi.yaml). Generated
+handlers and models are written to `backend/internal/http/api.gen.go`; do not edit that
 file manually.
 
 Regenerate the OpenAPI code after changing the contract:
 
 ```bash
-go generate ./backend/http
+cd backend
+go generate ./internal/http
 ```
 
 ## authentication endpoints
@@ -143,6 +143,7 @@ The script is safe to run repeatedly and does not overwrite an existing user pas
 Integration tests use Testcontainers and require Docker:
 
 ```bash
+cd backend
 go test -tags=integration ./...
 ```
 
@@ -153,4 +154,13 @@ bash scripts/coverage.sh          # unit + integration tests (requires Docker)
 bash scripts/coverage.sh --unit   # unit tests only
 ```
 
-The script prints the statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. Coverage counts code exercised from any package's tests, so the HTTP flow tests in `frontend` also count toward `auth`, `access`, `viewer`, and `migration`. The generated `backend/http/api.gen.go` and the mock preview server in `frontend/preview` are excluded.
+The script prints statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. It runs Go coverage from `backend/` and excludes the generated `backend/internal/http/api.gen.go` from the report.
+
+
+## contributors
+
+| Nama | NIM |
+| --- | --- |
+| Jennifer Khang | 13524110 |
+| Nathaniel Christian | 13524122 |
+| Azri Arzaq Pohan | 13524139 |
