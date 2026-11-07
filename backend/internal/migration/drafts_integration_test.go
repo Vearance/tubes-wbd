@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -65,6 +66,39 @@ func (e *draftEnv) service(t *testing.T, authz Authorizer) *MigrationService {
 	svc, err := NewMigrationService(authz, manager, e.repo, Options{})
 	require.NoError(t, err)
 	return svc
+}
+
+func TestIntegrationRecordRunRollsBackWhenDraftIsNotRunning(t *testing.T) {
+	env := newDraftEnv(t, "SELECT 1")
+	ctx := context.Background()
+	draft := &Draft{
+		ManagedDatabaseID: env.dbID,
+		Name:              "draft",
+		SQL:               "SELECT 1",
+		Status:            DraftStatusDraft,
+		CreatedBy:         1,
+		UpdatedBy:         1,
+	}
+	require.NoError(t, env.repo.CreateDraft(ctx, draft))
+	require.NoError(t, env.repo.ClaimDraft(ctx, draft.ID, DraftStatusDraft))
+	require.NoError(t, env.repo.ReleaseDraft(ctx, draft.ID, DraftStatusFailed))
+
+	now := time.Now()
+	run := &Run{
+		DraftID:           draft.ID,
+		ManagedDatabaseID: env.dbID,
+		Status:            RunStatusFailed,
+		SQL:               "SELECT 1",
+		ExecutedBy:        1,
+		StartedAt:         now,
+		FinishedAt:        now,
+	}
+	err := env.repo.RecordRun(ctx, run, DraftStatusFailed, nil)
+
+	require.ErrorIs(t, err, ErrDraftNotExecutable)
+	runs, err := env.repo.ListRuns(ctx, draft.ID)
+	require.NoError(t, err)
+	require.Empty(t, runs, "the transaction must roll back the orphan run")
 }
 
 func TestIntegrationDraftLifecycle(t *testing.T) {

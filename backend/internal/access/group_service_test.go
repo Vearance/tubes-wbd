@@ -2,6 +2,7 @@ package access
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"testing"
 
@@ -19,6 +20,7 @@ type fakeGroupRepository struct {
 
 type fakeSessionRotationRequester struct {
 	userIDs []uint
+	err     error
 }
 
 func (r *fakeSessionRotationRequester) RequireRotationByUser(
@@ -26,7 +28,7 @@ func (r *fakeSessionRotationRequester) RequireRotationByUser(
 	userID uint,
 ) error {
 	r.userIDs = append(r.userIDs, userID)
-	return nil
+	return r.err
 }
 
 func newFakeGroupRepository() *fakeGroupRepository {
@@ -246,6 +248,25 @@ func TestGroupServiceAddingMemberWithDatabaseAccessRequiresRotation(t *testing.T
 
 	require.NoError(t, err)
 	require.Equal(t, []uint{1}, rotation.userIDs)
+}
+
+func TestGroupServiceDoesNotAddMemberWhenRotationFails(t *testing.T) {
+	users := &fakeUserRepository{users: map[uint]*auth.User{
+		1: {ID: 1, Username: "alice"},
+	}}
+	groups := newFakeGroupRepository()
+	groups.groups[1] = &Group{ID: 1, Name: "developers"}
+	groups.permissions[[2]uint{1, 10}] = &GroupDatabasePermission{
+		GroupID: 1, ManagedDatabaseID: 10, Permission: PermissionViewOnly,
+	}
+	rotation := &fakeSessionRotationRequester{err: errors.New("session store unavailable")}
+	service, err := NewGroupService(users, groups, rotation)
+	require.NoError(t, err)
+
+	err = service.AddMember(context.Background(), 1, 1)
+
+	require.ErrorContains(t, err, "session store unavailable")
+	require.Empty(t, groups.memberships)
 }
 
 func TestGroupServiceAddingMemberWithoutDatabaseAccessDoesNotRequireRotation(t *testing.T) {

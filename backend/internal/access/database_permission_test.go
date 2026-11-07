@@ -2,6 +2,7 @@ package access
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,6 +86,19 @@ func TestSetDatabasePermissionRequiresRotationWhenPermissionIsRaised(t *testing.
 
 	require.NoError(t, err)
 	require.ElementsMatch(t, []uint{7, 8}, rotation.userIDs)
+}
+
+func TestSetDatabasePermissionDoesNotPersistElevationWhenRotationFails(t *testing.T) {
+	groups := newFakeGroups(1)
+	groups.members = []auth.User{{ID: 7}}
+	rotation := &fakeSessionRotationRequester{err: errors.New("session store unavailable")}
+	svc, err := NewGroupService(fakeUsers{}, groups, rotation)
+	require.NoError(t, err)
+
+	_, err = svc.SetDatabasePermission(context.Background(), 1, 5, PermissionViewEdit)
+
+	require.ErrorContains(t, err, "session store unavailable")
+	require.NotContains(t, groups.permissions, [2]uint{1, 5})
 }
 
 func TestSetDatabasePermissionDoesNotRequireRotationWhenUnchangedOrLowered(t *testing.T) {

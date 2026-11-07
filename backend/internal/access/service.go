@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/users"
 )
 
 var (
@@ -14,12 +14,12 @@ var (
 )
 
 type AuthorizationService struct {
-	users  auth.UserRepository
+	users  users.IdentityRepository
 	access Repository
 }
 
 func NewAuthorizationService(
-	users auth.UserRepository,
+	users users.IdentityRepository,
 	access Repository,
 ) (*AuthorizationService, error) {
 	if users == nil {
@@ -38,13 +38,13 @@ func NewAuthorizationService(
 func (s *AuthorizationService) IsAdmin(ctx context.Context, userID uint) (bool, error) {
 	user, err := s.users.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			return false, auth.ErrUserNotFound
+		if errors.Is(err, users.ErrUserNotFound) {
+			return false, users.ErrUserNotFound
 		}
 		return false, fmt.Errorf("finding user for admin check: %w", err)
 	}
 	if user == nil {
-		return false, auth.ErrUserNotFound
+		return false, users.ErrUserNotFound
 	}
 
 	return user.IsAdmin, nil

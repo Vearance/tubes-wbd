@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"tubes-wbd/internal/manageddb"
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
-	"tubes-wbd/internal/manageddb"
 )
 
 const sqlstateForeignKeyViolation = "23503"
@@ -110,15 +111,18 @@ func (r *GormRepository) RecordRun(ctx context.Context, run *Run, status DraftSt
 		if err := tx.Create(run).Error; err != nil {
 			return fmt.Errorf("creating migration run: %w", err)
 		}
-		err := tx.Model(&Draft{}).
+		result := tx.Model(&Draft{}).
 			Where("id = ? AND status = ?", run.DraftID, DraftStatusRunning).
 			Updates(map[string]any{
 				"status":          status,
 				"applied_version": appliedVersion,
 				"updated_at":      time.Now(),
-			}).Error
-		if err != nil {
-			return fmt.Errorf("finishing migration draft: %w", err)
+			})
+		if result.Error != nil {
+			return fmt.Errorf("finishing migration draft: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrDraftNotExecutable
 		}
 		return nil
 	})

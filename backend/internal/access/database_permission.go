@@ -35,10 +35,6 @@ func (s *GroupService) SetDatabasePermission(
 		ManagedDatabaseID: managedDatabaseID,
 		Permission:        level,
 	}
-	if err := s.groups.UpsertDatabasePermission(ctx, permission); err != nil {
-		return nil, err
-	}
-
 	if level > previousLevel && s.rotation != nil {
 		members, err := s.groups.ListMembers(ctx, groupID)
 		if err != nil {
@@ -49,6 +45,10 @@ func (s *GroupService) SetDatabasePermission(
 				return nil, fmt.Errorf("requiring session rotation for user %d: %w", member.ID, err)
 			}
 		}
+	}
+
+	if err := s.groups.UpsertDatabasePermission(ctx, permission); err != nil {
+		return nil, err
 	}
 
 	return permission, nil
