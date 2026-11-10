@@ -34,8 +34,13 @@ type serverConfig struct {
 }
 
 func loadServerConfig() (serverConfig, error) {
-	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
-		return serverConfig{}, fmt.Errorf("loading .env: %w", err)
+	if err := godotenv.Load(); err != nil {
+		if !os.IsNotExist(err) {
+			return serverConfig{}, fmt.Errorf("loading .env: %w", err)
+		}
+		if err := godotenv.Load("../.env"); err != nil && !os.IsNotExist(err) {
+			return serverConfig{}, fmt.Errorf("loading ../.env: %w", err)
+		}
 	}
 
 	port := os.Getenv("APP_PORT")

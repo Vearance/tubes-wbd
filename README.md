@@ -12,7 +12,7 @@ Made for IF3110 Web Development Course.
 docker compose up --build
 ```
 
-The backend runs at `http://localhost:8080`.
+The backend runs at `http://localhost:8080`, and the frontend runs at `http://localhost:5173`.
 
 ## start server only
 ```bash
@@ -94,7 +94,7 @@ None < View Only < View + Edit
 
 ## frontend
 
-The frontend is a React application built with Vite. It runs separately from the Go backend and uses the backend JSON API. Start the backend first, then run the frontend in a separate terminal:
+The frontend is a React application built with Vite and uses the backend JSON API. `docker compose up --build` starts both the backend and frontend. To run the frontend outside Docker, start the backend first, then run the frontend in a separate terminal:
 
 ```bash
 cd frontend
@@ -102,7 +102,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5173`. During development, Vite proxies API requests to the backend port set by `APP_PORT` in the repository-root `.env` file (default `8080`). The backend does not serve the frontend build.
+Open `http://localhost:5173`. During development, Vite reads `APP_PORT` and `BACKEND_HOST` from the repository-root `.env` file. Use `BACKEND_HOST=localhost` when running locally; Docker Compose overrides it to `internal`. The backend does not serve the frontend build.
 
 ## local test databases and development seed
 

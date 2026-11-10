@@ -5,9 +5,9 @@ import { defineConfig, loadEnv } from 'vite'
 const envDir = fileURLToPath(new URL('..', import.meta.url))
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, envDir, '')
+  const env = loadEnv(mode, envDir, ['APP_PORT', 'BACKEND_HOST'])
   const backendProxy = {
-    target: `http://localhost:${env.APP_PORT || '8080'}`,
+    target: `http://${env.BACKEND_HOST}:${env.APP_PORT}`,
     changeOrigin: true,
   }
 
