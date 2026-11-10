@@ -146,25 +146,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating migration service: %w", err)
 	}
-	frontendHandler, err := frontend.NewHandler(frontend.Dependencies{
-		Auth:            authService,
-		Users:           userRepository,
-		UserManagement:  userManagementService,
-		Groups:          groupService,
-		Authorization:   authorizationService,
-		ManagedDatabase: managedDatabaseService,
-		Viewer:          viewerService,
-		Migrations:      migrationService,
-		CookieOptions:   middleware.CookieOptions{Secure: cfg.CookieSecure},
-	})
-	if err != nil {
-		return fmt.Errorf("creating frontend handler: %w", err)
-	}
-	staticHandler, err := frontendHandler.StaticHandler()
-	if err != nil {
-		return fmt.Errorf("creating frontend static handler: %w", err)
-	}
-
 	// Register HTTP routes and inject authentication dependencies.
 	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
 	api := apiServer{
@@ -182,9 +163,7 @@ func run() error {
 		AdminAuthorizer: authorizationService,
 		CookieOptions:   cookieOptions,
 	})
-	// Serve the server-rendered frontend from the same process and origin.
-	mux.Handle("/static/*", staticHandler)
-	mux.Mount(frontend.BasePath, frontendHandler)
+	// The React frontend runs separately and calls these JSON API routes.
 
 	// Placeholder for '/'.
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {

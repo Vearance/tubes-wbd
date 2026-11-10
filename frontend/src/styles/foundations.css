@@ -1,0 +1,32 @@
+:root {
+  --canvas: #f8f4fa;
+  --surface: #fff;
+  --surface-alt: #f0eef8;
+  --text: #292929;
+  --muted: #77727e;
+  --line: #e4e1e8;
+  --line-strong: #c9c4cf;
+  --violet: #9256e8;
+  --violet-soft: #eee5fc;
+  --accent: #ef4f9b;
+  --accent-soft: #ffe7f2;
+  --green: #32b768;
+  --green-soft: #e6f7ec;
+  --amber: #b87817;
+  --amber-soft: #fff3d7;
+  --red: #df4657;
+  --red-soft: #fee9ec;
+  --shadow: 0 14px 36px rgba(42,32,56,.07);
+  --mono: "SFMono-Regular",Consolas,monospace;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+

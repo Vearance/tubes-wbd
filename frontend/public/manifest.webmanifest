@@ -1,0 +1,17 @@
+{
+  "name": "BScheme Database Workspace",
+  "short_name": "BScheme",
+  "description": "A private workspace for browsing PostgreSQL data, reviewing schemas, and managing database access.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f4fa",
+  "theme_color": "#f8f4fa",
+  "icons": [
+    {
+      "src": "/bibi.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
