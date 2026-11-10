@@ -1,4 +1,4 @@
-package auth
+package users
 
 import (
 	"context"
@@ -9,12 +9,12 @@ import (
 
 func BootstrapAdmin(
 	ctx context.Context,
-	users UserRepository,
+	repository IdentityRepository,
 	hasher PasswordHasher,
 	username string,
 	password string,
 ) error {
-	if users == nil {
+	if repository == nil {
 		return errors.New("user repository is nil")
 	}
 	if hasher == nil {
@@ -29,7 +29,7 @@ func BootstrapAdmin(
 		return errors.New("admin password is empty")
 	}
 
-	existingAdmin, err := users.FindAdmin(ctx)
+	existingAdmin, err := repository.FindAdmin(ctx)
 	if err == nil {
 		if existingAdmin == nil {
 			return errors.New("admin repository returned a nil user")
@@ -44,15 +44,9 @@ func BootstrapAdmin(
 	if err != nil {
 		return fmt.Errorf("hashing admin password: %w", err)
 	}
-
-	admin := &User{
-		Username:     username,
-		PasswordHash: passwordHash,
-		IsAdmin:      true,
-	}
-	if err := users.Create(ctx, admin); err != nil {
+	admin := &User{Username: username, PasswordHash: passwordHash, IsAdmin: true}
+	if err := repository.Create(ctx, admin); err != nil {
 		return fmt.Errorf("creating initial admin: %w", err)
 	}
-
 	return nil
 }

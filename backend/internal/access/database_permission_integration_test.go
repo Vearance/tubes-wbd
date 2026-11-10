@@ -15,6 +15,7 @@ import (
 	"tubes-wbd/internal/auth"
 	"tubes-wbd/internal/database/platformdb"
 	"tubes-wbd/internal/manageddb"
+	userdomain "tubes-wbd/internal/users"
 )
 
 func openPlatformDB(t *testing.T) *gorm.DB {
@@ -36,6 +37,7 @@ func openPlatformDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = platformdb.Close(db) })
 
+	require.NoError(t, userdomain.AutoMigrate(db))
 	require.NoError(t, auth.AutoMigrate(db))
 	require.NoError(t, manageddb.AutoMigrate(db))
 	require.NoError(t, access.AutoMigrate(db))
@@ -46,15 +48,15 @@ func TestIntegrationDatabasePermissionsDriveEffectivePermission(t *testing.T) {
 	db := openPlatformDB(t)
 	ctx := context.Background()
 
-	users := auth.NewGormUserRepository(db)
+	userRepository := userdomain.NewGormRepository(db)
 	repo := access.NewGormRepository(db)
-	groups, err := access.NewGroupService(users, repo)
+	groups, err := access.NewGroupService(userRepository, repo)
 	require.NoError(t, err)
-	authz, err := access.NewAuthorizationService(users, repo)
+	authz, err := access.NewAuthorizationService(userRepository, repo)
 	require.NoError(t, err)
 
-	user := &auth.User{Username: "jennifer", PasswordHash: "x"}
-	require.NoError(t, users.Create(ctx, user))
+	user := &userdomain.User{Username: "jennifer", PasswordHash: "x"}
+	require.NoError(t, userRepository.Create(ctx, user))
 	target := &manageddb.ManagedDatabase{
 		Name: "shop", Host: "db", Port: 5432, Username: "u",
 		EncryptedPassword: []byte("x"), DBName: "shop",
@@ -105,8 +107,8 @@ func TestIntegrationDatabasePermissionForUnknownDatabase(t *testing.T) {
 	db := openPlatformDB(t)
 	ctx := context.Background()
 
-	users := auth.NewGormUserRepository(db)
-	groups, err := access.NewGroupService(users, access.NewGormRepository(db))
+	userRepository := userdomain.NewGormRepository(db)
+	groups, err := access.NewGroupService(userRepository, access.NewGormRepository(db))
 	require.NoError(t, err)
 	group, err := groups.CreateGroup(ctx, "readers")
 	require.NoError(t, err)

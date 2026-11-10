@@ -14,12 +14,13 @@ import (
 	"tubes-wbd/internal/http/middleware"
 	"tubes-wbd/internal/manageddb"
 	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/users"
 	"tubes-wbd/internal/viewer"
 )
 
 type apiServer struct {
 	authService      *auth.AuthService
-	userManagement   *auth.UserManagementService
+	userManagement   *users.Service
 	groupService     *access.GroupService
 	authorization    *access.AuthorizationService
 	managedDatabases *manageddb.ManagedDBService
@@ -146,9 +147,9 @@ func (s apiServer) CreateAdminUser(
 	user, err := s.userManagement.CreateUser(r.Context(), request.Username, request.Password)
 	if err != nil {
 		switch {
-		case errors.Is(err, auth.ErrInvalidUserInput):
+		case errors.Is(err, users.ErrInvalidUserInput):
 			writeAPIError(w, http.StatusBadRequest, "username and password are required")
-		case errors.Is(err, auth.ErrUserAlreadyExists):
+		case errors.Is(err, users.ErrUserAlreadyExists):
 			writeAPIError(w, http.StatusConflict, "username already exists")
 		default:
 			log.Printf("creating admin user failed: %v", err)
@@ -183,7 +184,7 @@ func (s apiServer) UpdateAdminUser(
 	user, err := s.userManagement.SetDisabled(r.Context(), uint(userID), request.Disabled)
 	if err != nil {
 		switch {
-		case errors.Is(err, auth.ErrCannotDisableAdmin):
+		case errors.Is(err, users.ErrCannotDisableAdmin):
 			writeAPIError(w, http.StatusForbidden, "platform admin cannot be disabled")
 		case errors.Is(err, auth.ErrUserNotFound):
 			writeAPIError(w, http.StatusNotFound, "user not found")

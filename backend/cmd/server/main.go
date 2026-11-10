@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"tubes-wbd/frontend"
 	"tubes-wbd/internal/access"
 	"tubes-wbd/internal/auth"
 	"tubes-wbd/internal/database/platformdb"
@@ -19,8 +20,8 @@ import (
 	"tubes-wbd/internal/http/middleware"
 	"tubes-wbd/internal/manageddb"
 	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/users"
 	"tubes-wbd/internal/viewer"
-	"tubes-wbd/frontend"
 )
 
 func main() {
@@ -53,6 +54,9 @@ func run() error {
 	}()
 
 	// migrate schema
+	if err := users.AutoMigrate(db); err != nil {
+		return fmt.Errorf("migrating user schema: %w", err)
+	}
 	if err := auth.AutoMigrate(db); err != nil {
 		return fmt.Errorf("migrating authentication schema: %w", err)
 	}
@@ -66,10 +70,10 @@ func run() error {
 		return fmt.Errorf("migrating migration schema: %w", err)
 	}
 
-	userRepository := auth.NewGormUserRepository(db)
+	userRepository := users.NewGormRepository(db)
 	sessionRepository := auth.NewGormSessionRepository(db)
 	passwordHasher := auth.NewBcryptHasher(0)
-	if err := auth.BootstrapAdmin(
+	if err := users.BootstrapAdmin(
 		ctx,
 		userRepository,
 		passwordHasher,
@@ -100,7 +104,7 @@ func run() error {
 		return fmt.Errorf("creating authorization service: %w", err)
 	}
 
-	userManagementService, err := auth.NewUserManagementService(userRepository, sessionRepository, passwordHasher)
+	userManagementService, err := users.NewService(userRepository, sessionRepository, passwordHasher)
 	if err != nil {
 		return fmt.Errorf("creating user management service: %w", err)
 	}

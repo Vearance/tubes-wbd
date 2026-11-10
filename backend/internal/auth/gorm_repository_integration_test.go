@@ -14,6 +14,7 @@ import (
 
 	"tubes-wbd/internal/auth"
 	"tubes-wbd/internal/database/platformdb"
+	userdomain "tubes-wbd/internal/users"
 )
 
 func openPlatformDB(t *testing.T) *gorm.DB {
@@ -35,20 +36,49 @@ func openPlatformDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = platformdb.Close(db) })
 
+	require.NoError(t, userdomain.AutoMigrate(db))
 	require.NoError(t, auth.AutoMigrate(db))
 	return db
+}
+
+func TestIntegrationSessionUpdateCannotRestoreRevokedSession(t *testing.T) {
+	db := openPlatformDB(t)
+	ctx := context.Background()
+	userRepository := userdomain.NewGormRepository(db)
+	sessions := auth.NewGormSessionRepository(db)
+	user := &userdomain.User{Username: "alice", PasswordHash: "x"}
+	require.NoError(t, userRepository.Create(ctx, user))
+
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	session := &auth.Session{
+		UserID: user.ID, TokenHash: "original-token", CreatedAt: now,
+		LastActivityAt: now, LastRotatedAt: now, ExpiresAt: now.Add(time.Hour),
+		CSRFTokenHash: "csrf-token",
+	}
+	require.NoError(t, sessions.Create(ctx, session))
+	stale := *session
+	revokedAt := now.Add(time.Minute)
+	require.NoError(t, sessions.Revoke(ctx, session.ID, revokedAt))
+
+	stale.TokenHash = "rotated-token"
+	require.ErrorIs(t, sessions.Update(ctx, &stale), auth.ErrSessionRevoked)
+
+	stored, err := sessions.FindByID(ctx, session.ID)
+	require.NoError(t, err)
+	require.Equal(t, revokedAt, *stored.RevokedAt)
+	require.Equal(t, "original-token", stored.TokenHash)
 }
 
 func TestIntegrationRevokeAllByUserRevokesOnlyActiveSessionsOfThatUser(t *testing.T) {
 	db := openPlatformDB(t)
 	ctx := context.Background()
-	users := auth.NewGormUserRepository(db)
+	userRepository := userdomain.NewGormRepository(db)
 	sessions := auth.NewGormSessionRepository(db)
 
-	alice := &auth.User{Username: "alice", PasswordHash: "x"}
-	bob := &auth.User{Username: "bob", PasswordHash: "x"}
-	require.NoError(t, users.Create(ctx, alice))
-	require.NoError(t, users.Create(ctx, bob))
+	alice := &userdomain.User{Username: "alice", PasswordHash: "x"}
+	bob := &userdomain.User{Username: "bob", PasswordHash: "x"}
+	require.NoError(t, userRepository.Create(ctx, alice))
+	require.NoError(t, userRepository.Create(ctx, bob))
 
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	loggedOutAt := now.Add(-time.Hour)

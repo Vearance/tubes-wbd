@@ -17,6 +17,7 @@ import (
 	"tubes-wbd/internal/auth"
 	httpapi "tubes-wbd/internal/http"
 	"tubes-wbd/internal/http/middleware"
+	userdomain "tubes-wbd/internal/users"
 )
 
 type adminEndpointUsers struct {
@@ -459,7 +460,7 @@ func newAdminEndpointRouter(
 	)
 	require.NoError(t, err)
 
-	userManagement, err := auth.NewUserManagementService(users, sessions, handlerHasher{})
+	userManagement, err := userdomain.NewService(users, sessions, handlerHasher{})
 	require.NoError(t, err)
 	groups := &adminEndpointGroups{
 		groups:      map[uint]*access.Group{},
@@ -513,5 +514,5 @@ func performAdminRequest(
 	return response
 }
 
-var _ auth.UserManagementRepository = (*adminEndpointUsers)(nil)
+var _ userdomain.Repository = (*adminEndpointUsers)(nil)
 var _ access.GroupRepository = (*adminEndpointGroups)(nil)

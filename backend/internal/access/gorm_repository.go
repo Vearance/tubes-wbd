@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"tubes-wbd/internal/auth"
 	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/users"
 )
 
 const sqlstateForeignKeyViolation = "23503"
@@ -121,19 +121,19 @@ func (r *GormRepository) FindUserGroup(
 func (r *GormRepository) ListMembers(
 	ctx context.Context,
 	groupID uint,
-) ([]auth.User, error) {
-	var users []auth.User
+) ([]users.User, error) {
+	var members []users.User
 	if err := r.db.WithContext(ctx).
-		Model(&auth.User{}).
+		Model(&users.User{}).
 		Joins("JOIN user_groups ON user_groups.user_id = users.id").
 		Where("user_groups.group_id = ?", groupID).
 		Order("users.id ASC").
-		Find(&users).
+		Find(&members).
 		Error; err != nil {
 		return nil, fmt.Errorf("listing group members: %w", err)
 	}
 
-	return users, nil
+	return members, nil
 }
 
 func (r *GormRepository) DeleteUserGroup(

@@ -3,7 +3,7 @@ package access
 import (
 	"context"
 
-	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/users"
 )
 
 type Repository interface {
@@ -22,7 +22,7 @@ type GroupRepository interface {
 	FindGroupByName(ctx context.Context, name string) (*Group, error)
 	CreateUserGroup(ctx context.Context, membership *UserGroup) error
 	FindUserGroup(ctx context.Context, userID uint, groupID uint) (*UserGroup, error)
-	ListMembers(ctx context.Context, groupID uint) ([]auth.User, error)
+	ListMembers(ctx context.Context, groupID uint) ([]users.User, error)
 	DeleteUserGroup(ctx context.Context, userID uint, groupID uint) error
 	UpsertDatabasePermission(ctx context.Context, permission *GroupDatabasePermission) error
 	DeleteDatabasePermission(ctx context.Context, groupID uint, managedDatabaseID uint) error

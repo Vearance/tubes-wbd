@@ -1,10 +1,14 @@
 package auth
 
-import "errors"
+import (
+	"errors"
+
+	"tubes-wbd/internal/users"
+)
 
 var (
 	ErrInvalidCredentials   = errors.New("invalid credentials")
-	ErrUserNotFound         = errors.New("user not found")
+	ErrUserNotFound         = users.ErrUserNotFound
 	ErrUserDisabled         = errors.New("user disabled")
 	ErrInvalidCSRFToken     = errors.New("invalid csrf token")
 	ErrUnauthenticated      = errors.New("unauthenticated")
@@ -13,7 +17,4 @@ var (
 	ErrSessionRevoked       = errors.New("session revoked")
 	ErrStaleSessionToken    = errors.New("stale session token")
 	ErrInvalidServiceConfig = errors.New("invalid auth service config")
-	ErrInvalidUserInput     = errors.New("invalid user input")
-	ErrUserAlreadyExists    = errors.New("user already exists")
-	ErrCannotDisableAdmin   = errors.New("cannot disable platform admin")
 )

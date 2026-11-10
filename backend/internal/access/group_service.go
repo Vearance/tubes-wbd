@@ -7,16 +7,17 @@ import (
 	"strings"
 
 	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/users"
 )
 
 type GroupService struct {
-	users    auth.UserRepository
+	users    users.IdentityRepository
 	groups   GroupRepository
 	rotation auth.SessionRotationRequester
 }
 
 func NewGroupService(
-	users auth.UserRepository,
+	users users.IdentityRepository,
 	groups GroupRepository,
 	rotation ...auth.SessionRotationRequester,
 ) (*GroupService, error) {
@@ -71,7 +72,7 @@ func (s *GroupService) ListGroups(ctx context.Context) ([]Group, error) {
 func (s *GroupService) ListMembers(
 	ctx context.Context,
 	groupID uint,
-) ([]auth.User, error) {
+) ([]users.User, error) {
 	if _, err := s.groups.FindGroupByID(ctx, groupID); err != nil {
 		return nil, err
 	}
@@ -108,13 +109,6 @@ func (s *GroupService) AddMember(
 		return fmt.Errorf("checking group membership: %w", err)
 	}
 
-	if err := s.groups.CreateUserGroup(ctx, &UserGroup{
-		UserID:  userID,
-		GroupID: groupID,
-	}); err != nil {
-		return fmt.Errorf("creating group membership: %w", err)
-	}
-
 	permissions, err := s.groups.ListDatabasePermissions(ctx, groupID)
 	if err != nil {
 		return fmt.Errorf("checking group database permissions: %w", err)
@@ -123,6 +117,13 @@ func (s *GroupService) AddMember(
 		if err := s.rotation.RequireRotationByUser(ctx, userID); err != nil {
 			return fmt.Errorf("requiring session rotation after group membership change: %w", err)
 		}
+	}
+
+	if err := s.groups.CreateUserGroup(ctx, &UserGroup{
+		UserID:  userID,
+		GroupID: groupID,
+	}); err != nil {
+		return fmt.Errorf("creating group membership: %w", err)
 	}
 
 	return nil
