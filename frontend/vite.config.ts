@@ -1,20 +1,27 @@
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
-const backendProxy = {
-  target: 'http://localhost:8080',
-  changeOrigin: true,
-}
+const envDir = fileURLToPath(new URL('..', import.meta.url))
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      '/auth': backendProxy,
-      '/admin': backendProxy,
-      '/databases': backendProxy,
-      '/migrations': backendProxy,
-      '/health': backendProxy,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, envDir, '')
+  const backendProxy = {
+    target: `http://localhost:${env.APP_PORT || '8080'}`,
+    changeOrigin: true,
+  }
+
+  return {
+    envDir,
+    plugins: [react()],
+    server: {
+      proxy: {
+        '/auth': backendProxy,
+        '/admin': backendProxy,
+        '/databases': backendProxy,
+        '/migrations': backendProxy,
+        '/health': backendProxy,
+      },
     },
-  },
+  }
 })

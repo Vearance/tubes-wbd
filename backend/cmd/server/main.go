@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"tubes-wbd/frontend"
 	"tubes-wbd/internal/access"
 	"tubes-wbd/internal/auth"
 	"tubes-wbd/internal/database/platformdb"

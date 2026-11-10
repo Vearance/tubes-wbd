@@ -2,7 +2,6 @@
 
 ## description
 
-<img src="frontend/static/assets/bscheme-logo.png" alt="BScheme Logo" width="200">
 
 BScheme is a web-based PostgreSQL management system that helps teams explore schemas and data, manage database access, and review and execute migrations through a simple interface.
 
@@ -93,11 +92,17 @@ None < View Only < View + Edit
 - `GET /migrations/drafts/{draftId}/runs` lists execution runs.
 
 
-## server-rendered frontend
+## frontend
 
-The frontend uses the backend's real authentication, authorization, managed-database, viewer, and migration services. It is mounted at `/app` so the existing JSON API routes remain unchanged. The session cookie is shared with the backend and HTML mutation forms include the backend CSRF token.
+The frontend is a React application built with Vite. It runs separately from the Go backend and uses the backend JSON API. Start the backend first, then run the frontend in a separate terminal:
 
-The old `frontend/preview` command remains a mock-only visual preview and is not connected to Platform PostgreSQL.
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+Open `http://localhost:5173`. During development, Vite proxies API requests to the backend port set by `APP_PORT` in the repository-root `.env` file (default `8080`). The backend does not serve the frontend build.
 
 ## local test databases and development seed
 
