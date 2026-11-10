@@ -1,0 +1,173 @@
+.login-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(520px,1.05fr) minmax(520px,.95fr);
+  background: #fff;
+}
+
+.login-brand-panel {
+  min-height: 100dvh;
+  padding: 48px 64px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #f8eef7;
+}
+
+.login-brand-panel::before,
+.login-brand-panel::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+}
+
+.login-brand-panel::before {
+  width: 500px;
+  height: 500px;
+  right: -130px;
+  bottom: -120px;
+  background: #e7d8fb;
+}
+
+.login-brand-panel::after {
+  width: 280px;
+  height: 280px;
+  right: 250px;
+  bottom: -150px;
+  background: #ffd6e8;
+}
+
+.login-copy {
+  max-width: 580px;
+  margin-top: 9vh;
+  z-index: 1;
+}
+
+.login-copy h1 {
+  margin: 0 0 20px;
+  font-size: clamp(48px,4.1vw,64px);
+  line-height: .98;
+}
+
+.login-copy>p:last-child {
+  max-width: 470px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.login-bibi-stage {
+  width: min(560px,78%);
+  height: 400px;
+  margin: auto -22px -38px auto;
+  position: relative;
+  z-index: 1;
+}
+
+.login-bibi-stage::before {
+  content: "";
+  width: 370px;
+  height: 300px;
+  position: absolute;
+  right: 32px;
+  bottom: 34px;
+  border: 1px solid rgba(146,86,232,.22);
+  border-radius: 50%;
+  background: rgba(255,255,255,.35);
+}
+
+.login-bibi-stage img {
+  width: 440px;
+  height: 440px;
+  position: absolute;
+  right: 0;
+  bottom: -16px;
+  object-fit: contain;
+  filter: drop-shadow(0 26px 28px rgba(72,34,96,.16));
+}
+
+.bibi-name {
+  position: absolute;
+  left: -10px;
+  bottom: 66px;
+  color: rgba(146,86,232,.18);
+  font-size: 96px;
+  font-weight: 820;
+  line-height: 1;
+}
+
+.login-form-panel {
+  padding: 48px;
+  display: grid;
+  place-items: center;
+}
+
+.login-card {
+  width: min(100%,410px);
+}
+
+.login-card h2 {
+  margin: 8px 0;
+  font-size: 30px;
+}
+
+.login-card>p:first-of-type {
+  margin: 0 0 30px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-card>label {
+  display: block;
+  margin-top: 18px;
+}
+
+.login-card>label>span:first-child {
+  display: flex;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.login-card label b {
+  margin-left: auto;
+  color: #aaa4ad;
+  font-size: 9px;
+}
+
+.login-card input[type=text],.login-card input[type=password] {
+  width: 100%;
+  height: 48px;
+  margin-top: 8px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field button {
+  width: 40px;
+  height: 40px;
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  border: 0;
+  background: transparent;
+}
+
+.login-options {
+  margin: 14px 0 22px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.login-note {
+  text-align: center!important;
+  color: #aaa4ad!important;
+  font-size: 9px!important;
+}
+
