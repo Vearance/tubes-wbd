@@ -27,8 +27,13 @@ func TestLoadServerConfig(t *testing.T) {
 	t.Setenv("APP_VIEWER_MAX_PAGE_SIZE", "75")
 	t.Setenv("APP_SHUTDOWN_TIMEOUT", "15s")
 
+	t.Setenv("APP_RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+
 	cfg, err := loadServerConfig()
 	require.NoError(t, err)
+
+	require.Equal(t, "amqp://guest:guest@localhost:5672/", cfg.RabbitMQURL)
+	require.Equal(t, "migration.executions", cfg.RabbitMQQueue)
 	require.Equal(t, "9090", cfg.Port)
 	require.Equal(t, "postgres://user:password@localhost:5432/platform", cfg.PlatformDB.DSN)
 	require.Equal(t, "admin", cfg.AdminUsername)

@@ -51,6 +51,8 @@ func writeServiceError(w http.ResponseWriter, err error, operation string) {
 		writeAPIError(w, http.StatusNotFound, "table not found")
 	case errors.Is(err, migration.ErrDraftNotFound):
 		writeAPIError(w, http.StatusNotFound, "migration draft not found")
+	case errors.Is(err, migration.ErrExecutionNotFound):
+		writeAPIError(w, http.StatusNotFound, "migration execution not found")
 	case errors.Is(err, migration.ErrVersionNotFound):
 		writeAPIError(w, http.StatusNotFound, "migration version not found")
 
@@ -63,8 +65,15 @@ func writeServiceError(w http.ResponseWriter, err error, operation string) {
 
 	case errors.Is(err, manageddb.ErrDuplicateName):
 		writeAPIError(w, http.StatusConflict, "database name already exists")
+	case errors.Is(err, manageddb.ErrHasExecutions):
+		writeAPIError(w, http.StatusConflict, "database cannot be deleted while migration history exists")
 	case errors.Is(err, migration.ErrDraftNotEditable),
 		errors.Is(err, migration.ErrDraftNotExecutable),
+		errors.Is(err, migration.ErrDraftChangedDuringSubmission),
+		errors.Is(err, migration.ErrInvalidRollback),
+		errors.Is(err, migration.ErrInvalidForward),
+		errors.Is(err, migration.ErrExecutionNotApproved),
+		errors.Is(err, migration.ErrExecutionNotQueueable),
 		errors.Is(err, migration.ErrMigrationInProgress):
 		writeAPIError(w, http.StatusConflict, err.Error())
 

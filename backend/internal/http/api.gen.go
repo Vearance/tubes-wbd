@@ -22,10 +22,13 @@ import (
 
 // Defines values for MigrationDraftStatus.
 const (
-	MigrationDraftStatusApplied MigrationDraftStatus = "applied"
-	MigrationDraftStatusDraft   MigrationDraftStatus = "draft"
-	MigrationDraftStatusFailed  MigrationDraftStatus = "failed"
-	MigrationDraftStatusRunning MigrationDraftStatus = "running"
+	MigrationDraftStatusApplied       MigrationDraftStatus = "applied"
+	MigrationDraftStatusApproved      MigrationDraftStatus = "approved"
+	MigrationDraftStatusDraft         MigrationDraftStatus = "draft"
+	MigrationDraftStatusFailed        MigrationDraftStatus = "failed"
+	MigrationDraftStatusPendingReview MigrationDraftStatus = "pending_review"
+	MigrationDraftStatusQueued        MigrationDraftStatus = "queued"
+	MigrationDraftStatusRunning       MigrationDraftStatus = "running"
 )
 
 // Valid indicates whether the value is a known member of the MigrationDraftStatus enum.
@@ -33,11 +36,113 @@ func (e MigrationDraftStatus) Valid() bool {
 	switch e {
 	case MigrationDraftStatusApplied:
 		return true
+	case MigrationDraftStatusApproved:
+		return true
 	case MigrationDraftStatusDraft:
 		return true
 	case MigrationDraftStatusFailed:
 		return true
+	case MigrationDraftStatusPendingReview:
+		return true
+	case MigrationDraftStatusQueued:
+		return true
 	case MigrationDraftStatusRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationExecutionStatus.
+const (
+	MigrationExecutionStatusApproved      MigrationExecutionStatus = "approved"
+	MigrationExecutionStatusFailed        MigrationExecutionStatus = "failed"
+	MigrationExecutionStatusPartial       MigrationExecutionStatus = "partial"
+	MigrationExecutionStatusPendingReview MigrationExecutionStatus = "pending_review"
+	MigrationExecutionStatusQueued        MigrationExecutionStatus = "queued"
+	MigrationExecutionStatusRunning       MigrationExecutionStatus = "running"
+	MigrationExecutionStatusSuccess       MigrationExecutionStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the MigrationExecutionStatus enum.
+func (e MigrationExecutionStatus) Valid() bool {
+	switch e {
+	case MigrationExecutionStatusApproved:
+		return true
+	case MigrationExecutionStatusFailed:
+		return true
+	case MigrationExecutionStatusPartial:
+		return true
+	case MigrationExecutionStatusPendingReview:
+		return true
+	case MigrationExecutionStatusQueued:
+		return true
+	case MigrationExecutionStatusRunning:
+		return true
+	case MigrationExecutionStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationExecutionType.
+const (
+	MigrationExecutionTypeForward  MigrationExecutionType = "forward"
+	MigrationExecutionTypeRollback MigrationExecutionType = "rollback"
+	MigrationExecutionTypeUp       MigrationExecutionType = "up"
+)
+
+// Valid indicates whether the value is a known member of the MigrationExecutionType enum.
+func (e MigrationExecutionType) Valid() bool {
+	switch e {
+	case MigrationExecutionTypeForward:
+		return true
+	case MigrationExecutionTypeRollback:
+		return true
+	case MigrationExecutionTypeUp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationHistoryDetailExecutionType.
+const (
+	MigrationHistoryDetailExecutionTypeForward  MigrationHistoryDetailExecutionType = "forward"
+	MigrationHistoryDetailExecutionTypeRollback MigrationHistoryDetailExecutionType = "rollback"
+	MigrationHistoryDetailExecutionTypeUp       MigrationHistoryDetailExecutionType = "up"
+)
+
+// Valid indicates whether the value is a known member of the MigrationHistoryDetailExecutionType enum.
+func (e MigrationHistoryDetailExecutionType) Valid() bool {
+	switch e {
+	case MigrationHistoryDetailExecutionTypeForward:
+		return true
+	case MigrationHistoryDetailExecutionTypeRollback:
+		return true
+	case MigrationHistoryDetailExecutionTypeUp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MigrationHistoryEntryExecutionType.
+const (
+	MigrationHistoryEntryExecutionTypeForward  MigrationHistoryEntryExecutionType = "forward"
+	MigrationHistoryEntryExecutionTypeRollback MigrationHistoryEntryExecutionType = "rollback"
+	MigrationHistoryEntryExecutionTypeUp       MigrationHistoryEntryExecutionType = "up"
+)
+
+// Valid indicates whether the value is a known member of the MigrationHistoryEntryExecutionType enum.
+func (e MigrationHistoryEntryExecutionType) Valid() bool {
+	switch e {
+	case MigrationHistoryEntryExecutionTypeForward:
+		return true
+	case MigrationHistoryEntryExecutionTypeRollback:
+		return true
+	case MigrationHistoryEntryExecutionTypeUp:
 		return true
 	default:
 		return false
@@ -211,16 +316,19 @@ type ManagedDatabaseRequest struct {
 
 // MigrationDraft defines model for MigrationDraft.
 type MigrationDraft struct {
-	AppliedVersion *int64               `json:"applied_version,omitempty"`
-	CreatedAt      time.Time            `json:"created_at"`
-	CreatedBy      int64                `json:"created_by"`
-	DatabaseId     int64                `json:"database_id"`
-	Id             int64                `json:"id"`
-	Name           string               `json:"name"`
-	Sql            string               `json:"sql"`
-	Status         MigrationDraftStatus `json:"status"`
-	UpdatedAt      time.Time            `json:"updated_at"`
-	UpdatedBy      int64                `json:"updated_by"`
+	AppliedVersion     *int64               `json:"applied_version,omitempty"`
+	CreatedAt          time.Time            `json:"created_at"`
+	CreatedBy          int64                `json:"created_by"`
+	DatabaseId         int64                `json:"database_id"`
+	DownSql            *string              `json:"down_sql,omitempty"`
+	Id                 int64                `json:"id"`
+	Irreversible       *bool                `json:"irreversible,omitempty"`
+	IrreversibleReason *string              `json:"irreversible_reason,omitempty"`
+	Name               string               `json:"name"`
+	Sql                string               `json:"sql"`
+	Status             MigrationDraftStatus `json:"status"`
+	UpdatedAt          time.Time            `json:"updated_at"`
+	UpdatedBy          int64                `json:"updated_by"`
 }
 
 // MigrationDraftStatus defines model for MigrationDraft.Status.
@@ -228,9 +336,44 @@ type MigrationDraftStatus string
 
 // MigrationDraftRequest defines model for MigrationDraftRequest.
 type MigrationDraftRequest struct {
-	Name string `json:"name"`
-	Sql  string `json:"sql"`
+	DownSql            *string `json:"down_sql,omitempty"`
+	Irreversible       *bool   `json:"irreversible,omitempty"`
+	IrreversibleReason *string `json:"irreversible_reason,omitempty"`
+	Name               string  `json:"name"`
+	Sql                string  `json:"sql"`
 }
+
+// MigrationExecution defines model for MigrationExecution.
+type MigrationExecution struct {
+	Attempt            int                      `json:"attempt"`
+	AvailableAt        *time.Time               `json:"available_at,omitempty"`
+	CreatedAt          time.Time                `json:"created_at"`
+	DatabaseId         int64                    `json:"database_id"`
+	DownSql            *string                  `json:"down_sql,omitempty"`
+	DraftId            int64                    `json:"draft_id"`
+	ErrorCode          *string                  `json:"error_code,omitempty"`
+	ErrorMessage       *string                  `json:"error_message,omitempty"`
+	ExecutedBy         int64                    `json:"executed_by"`
+	FinishedAt         *time.Time               `json:"finished_at,omitempty"`
+	Id                 int64                    `json:"id"`
+	Irreversible       *bool                    `json:"irreversible,omitempty"`
+	IrreversibleReason *string                  `json:"irreversible_reason,omitempty"`
+	Name               string                   `json:"name"`
+	QueuedAt           *time.Time               `json:"queued_at,omitempty"`
+	Sql                string                   `json:"sql"`
+	StartedAt          *time.Time               `json:"started_at,omitempty"`
+	Status             MigrationExecutionStatus `json:"status"`
+	TargetExecutionId  *int64                   `json:"target_execution_id,omitempty"`
+	Type               MigrationExecutionType   `json:"type"`
+	UpdatedAt          time.Time                `json:"updated_at"`
+	Version            *int64                   `json:"version,omitempty"`
+}
+
+// MigrationExecutionStatus defines model for MigrationExecution.Status.
+type MigrationExecutionStatus string
+
+// MigrationExecutionType defines model for MigrationExecution.Type.
+type MigrationExecutionType string
 
 // MigrationExplainRequest defines model for MigrationExplainRequest.
 type MigrationExplainRequest struct {
@@ -251,22 +394,38 @@ type MigrationExplainStatement struct {
 
 // MigrationHistoryDetail defines model for MigrationHistoryDetail.
 type MigrationHistoryDetail struct {
-	DurationMs int64     `json:"duration_ms"`
-	ExecutedAt time.Time `json:"executed_at"`
-	ExecutedBy int64     `json:"executed_by"`
-	Name       string    `json:"name"`
-	Sql        string    `json:"sql"`
-	Version    int64     `json:"version"`
+	Active             *bool                                `json:"active,omitempty"`
+	DownSql            *string                              `json:"down_sql,omitempty"`
+	DurationMs         int64                                `json:"duration_ms"`
+	ExecutedAt         time.Time                            `json:"executed_at"`
+	ExecutedBy         int64                                `json:"executed_by"`
+	ExecutionId        *int64                               `json:"execution_id,omitempty"`
+	ExecutionType      *MigrationHistoryDetailExecutionType `json:"execution_type,omitempty"`
+	IrreversibleReason *string                              `json:"irreversible_reason,omitempty"`
+	Name               string                               `json:"name"`
+	Sql                string                               `json:"sql"`
+	TargetExecutionId  *int64                               `json:"target_execution_id,omitempty"`
+	Version            int64                                `json:"version"`
 }
+
+// MigrationHistoryDetailExecutionType defines model for MigrationHistoryDetail.ExecutionType.
+type MigrationHistoryDetailExecutionType string
 
 // MigrationHistoryEntry defines model for MigrationHistoryEntry.
 type MigrationHistoryEntry struct {
-	DurationMs int64     `json:"duration_ms"`
-	ExecutedAt time.Time `json:"executed_at"`
-	ExecutedBy int64     `json:"executed_by"`
-	Name       string    `json:"name"`
-	Version    int64     `json:"version"`
+	Active            *bool                               `json:"active,omitempty"`
+	DurationMs        int64                               `json:"duration_ms"`
+	ExecutedAt        time.Time                           `json:"executed_at"`
+	ExecutedBy        int64                               `json:"executed_by"`
+	ExecutionId       *int64                              `json:"execution_id,omitempty"`
+	ExecutionType     *MigrationHistoryEntryExecutionType `json:"execution_type,omitempty"`
+	Name              string                              `json:"name"`
+	TargetExecutionId *int64                              `json:"target_execution_id,omitempty"`
+	Version           int64                               `json:"version"`
 }
+
+// MigrationHistoryEntryExecutionType defines model for MigrationHistoryEntry.ExecutionType.
+type MigrationHistoryEntryExecutionType string
 
 // MigrationHistoryPage defines model for MigrationHistoryPage.
 type MigrationHistoryPage struct {
@@ -340,6 +499,9 @@ type DatabaseId = int64
 
 // DraftId defines model for DraftId.
 type DraftId = int64
+
+// ExecutionId defines model for ExecutionId.
+type ExecutionId = int64
 
 // GroupId defines model for GroupId.
 type GroupId = int64
@@ -452,6 +614,11 @@ type ExplainMigrationParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
 }
 
+// SubmitMigrationForwardParams defines parameters for SubmitMigrationForward.
+type SubmitMigrationForwardParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
 // ListMigrationHistoryParams defines parameters for ListMigrationHistory.
 type ListMigrationHistoryParams struct {
 	// Page 1-based page number; defaults to 1.
@@ -459,6 +626,11 @@ type ListMigrationHistoryParams struct {
 
 	// PageSize Rows per page; defaults to 50 and is capped at 100.
 	PageSize *PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
+}
+
+// SubmitMigrationRollbackParams defines parameters for SubmitMigrationRollback.
+type SubmitMigrationRollbackParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
 }
 
 // GetDatabaseTableRowsParams defines parameters for GetDatabaseTableRows.
@@ -604,15 +776,24 @@ type ServerInterface interface {
 	// CreateMigrationDraft Save a new migration draft
 	// (POST /databases/{databaseId}/migrations/drafts)
 	CreateMigrationDraft(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params CreateMigrationDraftParams)
+	// ListMigrationExecutions List migration executions for a database
+	// (GET /databases/{databaseId}/migrations/executions)
+	ListMigrationExecutions(w http.ResponseWriter, r *http.Request, databaseId DatabaseId)
 	// ExplainMigration Explain migration SQL without executing it
 	// (POST /databases/{databaseId}/migrations/explain)
 	ExplainMigration(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ExplainMigrationParams)
+	// SubmitMigrationForward Submit forward of the latest rolled-back migration for approval
+	// (POST /databases/{databaseId}/migrations/forward)
+	SubmitMigrationForward(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params SubmitMigrationForwardParams)
 	// ListMigrationHistory List applied migrations, newest first
 	// (GET /databases/{databaseId}/migrations/history)
 	ListMigrationHistory(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ListMigrationHistoryParams)
 	// GetMigrationHistoryEntry Get one applied migration with its SQL
 	// (GET /databases/{databaseId}/migrations/history/{version})
 	GetMigrationHistoryEntry(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, version int64)
+	// SubmitMigrationRollback Submit rollback of the active latest migration for approval
+	// (POST /databases/{databaseId}/migrations/rollback)
+	SubmitMigrationRollback(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params SubmitMigrationRollbackParams)
 	// ListDatabaseSchemas List schemas
 	// (GET /databases/{databaseId}/schemas)
 	ListDatabaseSchemas(w http.ResponseWriter, r *http.Request, databaseId DatabaseId)
@@ -634,12 +815,15 @@ type ServerInterface interface {
 	// UpdateMigrationDraft Edit a draft that is not running or applied
 	// (PATCH /migrations/drafts/{draftId})
 	UpdateMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params UpdateMigrationDraftParams)
-	// ExecuteMigrationDraft Run a draft on its database in one transaction
+	// ExecuteMigrationDraft Submit a draft for review and asynchronous execution
 	// (POST /migrations/drafts/{draftId}/execute)
 	ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params ExecuteMigrationDraftParams)
 	// ListMigrationRuns List the runs of a draft, oldest first
 	// (GET /migrations/drafts/{draftId}/runs)
 	ListMigrationRuns(w http.ResponseWriter, r *http.Request, draftId DraftId)
+	// GetMigrationExecution Get migration execution status
+	// (GET /migrations/executions/{executionId})
+	GetMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -790,9 +974,21 @@ func (_ Unimplemented) CreateMigrationDraft(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListMigrationExecutions List migration executions for a database
+// (GET /databases/{databaseId}/migrations/executions)
+func (_ Unimplemented) ListMigrationExecutions(w http.ResponseWriter, r *http.Request, databaseId DatabaseId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ExplainMigration Explain migration SQL without executing it
 // (POST /databases/{databaseId}/migrations/explain)
 func (_ Unimplemented) ExplainMigration(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ExplainMigrationParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SubmitMigrationForward Submit forward of the latest rolled-back migration for approval
+// (POST /databases/{databaseId}/migrations/forward)
+func (_ Unimplemented) SubmitMigrationForward(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params SubmitMigrationForwardParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -805,6 +1001,12 @@ func (_ Unimplemented) ListMigrationHistory(w http.ResponseWriter, r *http.Reque
 // GetMigrationHistoryEntry Get one applied migration with its SQL
 // (GET /databases/{databaseId}/migrations/history/{version})
 func (_ Unimplemented) GetMigrationHistoryEntry(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, version int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SubmitMigrationRollback Submit rollback of the active latest migration for approval
+// (POST /databases/{databaseId}/migrations/rollback)
+func (_ Unimplemented) SubmitMigrationRollback(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params SubmitMigrationRollbackParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -850,7 +1052,7 @@ func (_ Unimplemented) UpdateMigrationDraft(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ExecuteMigrationDraft Run a draft on its database in one transaction
+// ExecuteMigrationDraft Submit a draft for review and asynchronous execution
 // (POST /migrations/drafts/{draftId}/execute)
 func (_ Unimplemented) ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params ExecuteMigrationDraftParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -859,6 +1061,12 @@ func (_ Unimplemented) ExecuteMigrationDraft(w http.ResponseWriter, r *http.Requ
 // ListMigrationRuns List the runs of a draft, oldest first
 // (GET /migrations/drafts/{draftId}/runs)
 func (_ Unimplemented) ListMigrationRuns(w http.ResponseWriter, r *http.Request, draftId DraftId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMigrationExecution Get migration execution status
+// (GET /migrations/executions/{executionId})
+func (_ Unimplemented) GetMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1797,6 +2005,32 @@ func (siw *ServerInterfaceWrapper) CreateMigrationDraft(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListMigrationExecutions operation middleware
+func (siw *ServerInterfaceWrapper) ListMigrationExecutions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMigrationExecutions(w, r, databaseId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExplainMigration operation middleware
 func (siw *ServerInterfaceWrapper) ExplainMigration(w http.ResponseWriter, r *http.Request) {
 
@@ -1842,6 +2076,60 @@ func (siw *ServerInterfaceWrapper) ExplainMigration(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ExplainMigration(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubmitMigrationForward operation middleware
+func (siw *ServerInterfaceWrapper) SubmitMigrationForward(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SubmitMigrationForwardParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubmitMigrationForward(w, r, databaseId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1932,6 +2220,60 @@ func (siw *ServerInterfaceWrapper) GetMigrationHistoryEntry(w http.ResponseWrite
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMigrationHistoryEntry(w, r, databaseId, version)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubmitMigrationRollback operation middleware
+func (siw *ServerInterfaceWrapper) SubmitMigrationRollback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SubmitMigrationRollbackParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubmitMigrationRollback(w, r, databaseId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2319,6 +2661,32 @@ func (siw *ServerInterfaceWrapper) ListMigrationRuns(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// GetMigrationExecution operation middleware
+func (siw *ServerInterfaceWrapper) GetMigrationExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMigrationExecution(w, r, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2538,6 +2906,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/migrations/drafts/{draftId}/execute", wrapper.ExecuteMigrationDraft)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/databases/{databaseId}/migrations/rollback", wrapper.SubmitMigrationRollback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/databases/{databaseId}/migrations/forward", wrapper.SubmitMigrationForward)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/databases/{databaseId}/migrations/executions", wrapper.ListMigrationExecutions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/migrations/executions/{executionId}", wrapper.GetMigrationExecution)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/migrations/drafts/{draftId}/runs", wrapper.ListMigrationRuns)
 	})
 
@@ -2549,81 +2929,88 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"DwA=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

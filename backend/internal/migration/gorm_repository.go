@@ -64,7 +64,7 @@ func (r *GormRepository) UpdateDraft(ctx context.Context, d *Draft) error {
 	result := r.db.WithContext(ctx).
 		Model(&Draft{}).
 		Where("id = ? AND status IN ?", d.ID, []DraftStatus{DraftStatusDraft, DraftStatusFailed}).
-		Select("name", "sql", "status", "updated_by", "updated_at").
+		Select("name", "sql", "down_sql", "irreversible", "irreversible_reason", "status", "updated_by", "updated_at").
 		Updates(d)
 	if result.Error != nil {
 		return fmt.Errorf("updating migration draft: %w", result.Error)

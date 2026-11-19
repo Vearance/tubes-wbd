@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"net/http"
 
 	httpapi "tubes-wbd/internal/http"
@@ -34,13 +33,18 @@ func (s apiServer) ListMigrationHistory(
 		HasNext:  page.HasNext,
 	}
 	for _, e := range page.Entries {
-		response.Entries = append(response.Entries, httpapi.MigrationHistoryEntry{
-			Version:    e.Version,
-			Name:       e.Name,
-			ExecutedBy: int64(e.ExecutedBy),
-			ExecutedAt: e.ExecutedAt,
-			DurationMs: e.Duration.Milliseconds(),
-		})
+		entry := httpapi.MigrationHistoryEntry{
+			Version:           e.Version,
+			Name:              e.Name,
+			ExecutedBy:        int64(e.ExecutedBy),
+			ExecutedAt:        e.ExecutedAt,
+			DurationMs:        e.Duration.Milliseconds(),
+			Active:            new(e.Active),
+			ExecutionType:     historyExecutionType(e.Type),
+			ExecutionId:       uintPointerToInt64(e.ExecutionID),
+			TargetExecutionId: uintPointerToInt64(e.TargetExecutionID),
+		}
+		response.Entries = append(response.Entries, entry)
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -96,13 +100,20 @@ func (s apiServer) GetMigrationHistoryEntry(
 		return
 	}
 
+	executionType := httpapi.MigrationHistoryDetailExecutionType(entry.Type)
 	writeJSON(w, http.StatusOK, httpapi.MigrationHistoryDetail{
-		Version:    entry.Version,
-		Name:       entry.Name,
-		Sql:        entry.SQL,
-		ExecutedBy: int64(entry.ExecutedBy),
-		ExecutedAt: entry.ExecutedAt,
-		DurationMs: entry.Duration.Milliseconds(),
+		Version:            entry.Version,
+		Name:               entry.Name,
+		Sql:                entry.SQL,
+		DownSql:            optionalString(entry.DownSQL),
+		IrreversibleReason: optionalString(entry.IrreversibleReason),
+		ExecutedBy:         int64(entry.ExecutedBy),
+		ExecutedAt:         entry.ExecutedAt,
+		DurationMs:         entry.Duration.Milliseconds(),
+		Active:             new(entry.Active),
+		ExecutionId:        uintPointerToInt64(nonzeroUintPointer(entry.ExecutionID)),
+		ExecutionType:      &executionType,
+		TargetExecutionId:  uintPointerToInt64(entry.TargetExecutionID),
 	})
 }
 
@@ -141,7 +152,7 @@ func (s apiServer) CreateMigrationDraft(
 	}
 
 	draft, err := s.migrations.CreateDraft(r.Context(), userID, dbID,
-		migration.Migration{Name: request.Name, SQL: request.Sql})
+		migrationFromRequest(request))
 	if err != nil {
 		writeServiceError(w, err, "creating migration draft")
 		return
@@ -179,7 +190,7 @@ func (s apiServer) UpdateMigrationDraft(
 	}
 
 	draft, err := s.migrations.UpdateDraft(r.Context(), userID, id,
-		migration.Migration{Name: request.Name, SQL: request.Sql})
+		migrationFromRequest(request))
 	if err != nil {
 		writeServiceError(w, err, "updating migration draft")
 		return
@@ -198,15 +209,72 @@ func (s apiServer) ExecuteMigrationDraft(
 		return
 	}
 
-	run, err := s.migrations.ExecuteDraft(r.Context(), userID, id)
-	switch {
-	case err == nil:
-		writeJSON(w, http.StatusOK, runResponse(run))
-	case run != nil && (errors.Is(err, migration.ErrExecutionFailed) || errors.Is(err, migration.ErrTransactionControl)):
-		writeJSON(w, http.StatusUnprocessableEntity, runResponse(run))
-	default:
-		writeServiceError(w, err, "executing migration draft")
+	execution, err := s.migrations.SubmitDraftForReview(r.Context(), userID, id)
+	if err != nil {
+		writeServiceError(w, err, "submitting migration execution")
+		return
 	}
+	writeJSON(w, http.StatusAccepted, executionResponse(execution))
+}
+
+func (s apiServer) SubmitMigrationRollback(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId, _ httpapi.SubmitMigrationRollbackParams) {
+	userID, dbID, ok := viewerIDs(w, r, databaseID)
+	if !ok {
+		return
+	}
+	execution, err := s.migrations.SubmitRollbackForReview(r.Context(), userID, dbID)
+	if err != nil {
+		writeServiceError(w, err, "submitting migration rollback")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, executionResponse(execution))
+}
+
+func (s apiServer) SubmitMigrationForward(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId, _ httpapi.SubmitMigrationForwardParams) {
+	userID, dbID, ok := viewerIDs(w, r, databaseID)
+	if !ok {
+		return
+	}
+	execution, err := s.migrations.SubmitForwardForReview(r.Context(), userID, dbID)
+	if err != nil {
+		writeServiceError(w, err, "submitting migration forward")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, executionResponse(execution))
+}
+
+func (s apiServer) ListMigrationExecutions(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId) {
+	userID, dbID, ok := viewerIDs(w, r, databaseID)
+	if !ok {
+		return
+	}
+	executions, err := s.migrations.Executions(r.Context(), userID, dbID)
+	if err != nil {
+		writeServiceError(w, err, "listing migration executions")
+		return
+	}
+	response := make([]httpapi.MigrationExecution, 0, len(executions))
+	for i := range executions {
+		response = append(response, executionResponse(&executions[i]))
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (s apiServer) GetMigrationExecution(w http.ResponseWriter, r *http.Request, executionID httpapi.ExecutionId) {
+	userID, ok := currentUserID(w, r)
+	if !ok {
+		return
+	}
+	id, ok := positiveID(w, int64(executionID), "execution")
+	if !ok {
+		return
+	}
+	execution, err := s.migrations.Execution(r.Context(), userID, id)
+	if err != nil {
+		writeServiceError(w, err, "getting migration execution")
+		return
+	}
+	writeJSON(w, http.StatusOK, executionResponse(execution))
 }
 
 func (s apiServer) ListMigrationRuns(w http.ResponseWriter, r *http.Request, draftID httpapi.DraftId) {
@@ -237,19 +305,98 @@ func draftIDs(w http.ResponseWriter, r *http.Request, draftID httpapi.DraftId) (
 	return userID, id, ok
 }
 
+func migrationFromRequest(request httpapi.MigrationDraftRequest) migration.Migration {
+	m := migration.Migration{Name: request.Name, SQL: request.Sql}
+	if request.DownSql != nil {
+		m.DownSQL = *request.DownSql
+	}
+	if request.Irreversible != nil {
+		m.Irreversible = *request.Irreversible
+	}
+	if request.IrreversibleReason != nil {
+		m.IrreversibleReason = *request.IrreversibleReason
+	}
+	return m
+}
+
 func draftResponse(d *migration.Draft) httpapi.MigrationDraft {
 	return httpapi.MigrationDraft{
-		Id:             int64(d.ID),
-		DatabaseId:     int64(d.ManagedDatabaseID),
-		Name:           d.Name,
-		Sql:            d.SQL,
-		Status:         httpapi.MigrationDraftStatus(d.Status),
-		AppliedVersion: d.AppliedVersion,
-		CreatedBy:      int64(d.CreatedBy),
-		UpdatedBy:      int64(d.UpdatedBy),
-		CreatedAt:      d.CreatedAt,
-		UpdatedAt:      d.UpdatedAt,
+		Id:                 int64(d.ID),
+		DatabaseId:         int64(d.ManagedDatabaseID),
+		Name:               d.Name,
+		Sql:                d.SQL,
+		DownSql:            optionalString(d.DownSQL),
+		Irreversible:       new(d.Irreversible),
+		IrreversibleReason: optionalString(d.IrreversibleReason),
+		Status:             httpapi.MigrationDraftStatus(d.Status),
+		AppliedVersion:     d.AppliedVersion,
+		CreatedBy:          int64(d.CreatedBy),
+		UpdatedBy:          int64(d.UpdatedBy),
+		CreatedAt:          d.CreatedAt,
+		UpdatedAt:          d.UpdatedAt,
 	}
+}
+
+func executionResponse(execution *migration.Execution) httpapi.MigrationExecution {
+	response := httpapi.MigrationExecution{
+		Id:                 int64(execution.ID),
+		DatabaseId:         int64(execution.ManagedDatabaseID),
+		DraftId:            int64(execution.DraftID),
+		Type:               httpapi.MigrationExecutionType(execution.Type),
+		Status:             httpapi.MigrationExecutionStatus(execution.Status),
+		Name:               execution.Name,
+		Sql:                execution.SQL,
+		DownSql:            optionalString(execution.DownSQL),
+		Irreversible:       new(execution.Irreversible),
+		IrreversibleReason: optionalString(execution.IrreversibleReason),
+		ExecutedBy:         int64(execution.ExecutedBy),
+		Version:            execution.Version,
+		Attempt:            execution.Attempt,
+		QueuedAt:           execution.QueuedAt,
+		AvailableAt:        execution.AvailableAt,
+		StartedAt:          execution.StartedAt,
+		FinishedAt:         execution.FinishedAt,
+		CreatedAt:          execution.CreatedAt,
+		UpdatedAt:          execution.UpdatedAt,
+	}
+	if execution.TargetExecutionID != nil {
+		targetID := int64(*execution.TargetExecutionID)
+		response.TargetExecutionId = &targetID
+	}
+	if execution.ErrorCode != "" {
+		response.ErrorCode = &execution.ErrorCode
+	}
+	if execution.ErrorMessage != "" {
+		response.ErrorMessage = &execution.ErrorMessage
+	}
+	return response
+}
+
+func historyExecutionType(value migration.ExecutionType) *httpapi.MigrationHistoryEntryExecutionType {
+	mapped := httpapi.MigrationHistoryEntryExecutionType(value)
+	return &mapped
+}
+
+func nonzeroUintPointer(value uint) *uint {
+	if value == 0 {
+		return nil
+	}
+	return &value
+}
+
+func uintPointerToInt64(value *uint) *int64 {
+	if value == nil {
+		return nil
+	}
+	mapped := int64(*value)
+	return &mapped
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func runResponse(run *migration.Run) httpapi.MigrationRun {

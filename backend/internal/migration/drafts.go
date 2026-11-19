@@ -16,13 +16,20 @@ func (s *MigrationService) CreateDraft(ctx context.Context, userID, dbID uint, m
 		return nil, err
 	}
 
+	m, err = validateDefinition(m)
+	if err != nil {
+		return nil, err
+	}
 	d := &Draft{
-		ManagedDatabaseID: dbID,
-		Name:              m.Name,
-		SQL:               m.SQL,
-		Status:            DraftStatusDraft,
-		CreatedBy:         userID,
-		UpdatedBy:         userID,
+		ManagedDatabaseID:  dbID,
+		Name:               m.Name,
+		SQL:                m.SQL,
+		DownSQL:            m.DownSQL,
+		Irreversible:       m.Irreversible,
+		IrreversibleReason: m.IrreversibleReason,
+		Status:             DraftStatusDraft,
+		CreatedBy:          userID,
+		UpdatedBy:          userID,
 	}
 	if err := s.repo.CreateDraft(ctx, d); err != nil {
 		return nil, err
@@ -41,12 +48,14 @@ func (s *MigrationService) UpdateDraft(ctx context.Context, userID, draftID uint
 	if !d.Status.open() {
 		return nil, ErrDraftNotEditable
 	}
-	m, err = validate(m)
+	m, err = validateDefinition(m)
 	if err != nil {
 		return nil, err
 	}
 
-	d.Name, d.SQL, d.UpdatedBy = m.Name, m.SQL, userID
+	d.Name, d.SQL, d.DownSQL = m.Name, m.SQL, m.DownSQL
+	d.Irreversible, d.IrreversibleReason = m.Irreversible, m.IrreversibleReason
+	d.UpdatedBy = userID
 	if err := s.repo.UpdateDraft(ctx, d); err != nil {
 		return nil, err
 	}

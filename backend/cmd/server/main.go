@@ -21,6 +21,8 @@ import (
 	"tubes-wbd/internal/migration"
 	"tubes-wbd/internal/users"
 	"tubes-wbd/internal/viewer"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
@@ -145,6 +147,20 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating migration service: %w", err)
 	}
+	connection, err := amqp.Dial(cfg.RabbitMQURL)
+	if err != nil {
+		return fmt.Errorf("connecting to RabbitMQ: %w", err)
+	}
+	defer connection.Close()
+	channel, err := connection.Channel()
+	if err != nil {
+		return fmt.Errorf("opening RabbitMQ channel: %w", err)
+	}
+	defer channel.Close()
+	if err := migration.DeclareExecutionQueue(channel, cfg.RabbitMQQueue); err != nil {
+		return err
+	}
+
 	// Register HTTP routes and inject authentication dependencies.
 	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
 	api := apiServer{
@@ -180,6 +196,15 @@ func run() error {
 
 	// Start serving in the background so signals can be handled.
 	serverErrors := make(chan error, 1)
+	relay, err := migration.NewOutboxRelay(db, channel, cfg.RabbitMQQueue)
+	if err != nil {
+		return err
+	}
+	go func() {
+		if err := relay.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			serverErrors <- fmt.Errorf("running migration outbox relay: %w", err)
+		}
+	}()
 	go func() {
 		serverErrors <- server.ListenAndServe()
 	}()

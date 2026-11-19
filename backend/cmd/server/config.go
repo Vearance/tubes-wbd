@@ -22,6 +22,8 @@ const (
 )
 
 type serverConfig struct {
+	RabbitMQURL     string
+	RabbitMQQueue   string
 	Port            string
 	PlatformDB      platformdb.Config
 	Auth            auth.ServiceConfig
@@ -41,6 +43,15 @@ func loadServerConfig() (serverConfig, error) {
 		if err := godotenv.Load("../.env"); err != nil && !os.IsNotExist(err) {
 			return serverConfig{}, fmt.Errorf("loading ../.env: %w", err)
 		}
+	}
+
+	rabbitMQURL := strings.TrimSpace(os.Getenv("APP_RABBITMQ_URL"))
+	if rabbitMQURL == "" {
+		rabbitMQURL = "amqp://guest:guest@localhost:5672/"
+	}
+	rabbitMQQueue := strings.TrimSpace(os.Getenv("APP_RABBITMQ_QUEUE"))
+	if rabbitMQQueue == "" {
+		rabbitMQQueue = "migration.executions"
 	}
 
 	port := os.Getenv("APP_PORT")
@@ -147,7 +158,9 @@ func loadServerConfig() (serverConfig, error) {
 	}
 
 	return serverConfig{
-		Port: port,
+		RabbitMQURL:   rabbitMQURL,
+		RabbitMQQueue: rabbitMQQueue,
+		Port:          port,
 		PlatformDB: platformdb.Config{
 			DSN:             dsn,
 			MaxOpenConns:    maxOpenConns,
