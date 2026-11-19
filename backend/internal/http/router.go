@@ -80,6 +80,9 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Get("/databases/{databaseId}/table-structure", protectedWrapper.GetDatabaseTableStructure)
 	router.Get("/databases/{databaseId}/table-rows", protectedWrapper.GetDatabaseTableRows)
 	router.Get("/databases/{databaseId}/migrations/history", protectedWrapper.ListMigrationHistory)
+	router.Post("/databases/{databaseId}/migrations/rollback", protectedWrapper.SubmitMigrationRollback)
+	router.Post("/databases/{databaseId}/migrations/forward", protectedWrapper.SubmitMigrationForward)
+	router.Get("/databases/{databaseId}/migrations/executions", protectedWrapper.ListMigrationExecutions)
 	router.Post("/databases/{databaseId}/migrations/explain", protectedWrapper.ExplainMigration)
 	router.Get("/databases/{databaseId}/migrations/history/{version}", protectedWrapper.GetMigrationHistoryEntry)
 	router.Get("/databases/{databaseId}/migrations/drafts", protectedWrapper.ListMigrationDrafts)
@@ -87,6 +90,7 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Get("/migrations/drafts/{draftId}", protectedWrapper.GetMigrationDraft)
 	router.Patch("/migrations/drafts/{draftId}", protectedWrapper.UpdateMigrationDraft)
 	router.Post("/migrations/drafts/{draftId}/execute", protectedWrapper.ExecuteMigrationDraft)
+	router.Get("/migrations/executions/{executionId}", protectedWrapper.GetMigrationExecution)
 	router.Get("/migrations/drafts/{draftId}/runs", protectedWrapper.ListMigrationRuns)
 
 	return router

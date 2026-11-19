@@ -9,6 +9,8 @@ services:
     environment:
       APP_PORT: ${APP_PORT:-8080}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
+      APP_RABBITMQ_URL: ${APP_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      APP_RABBITMQ_QUEUE: ${APP_RABBITMQ_QUEUE:-migration.executions}
       APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD}
       APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-false}
@@ -30,6 +32,26 @@ services:
     depends_on:
       platform-db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: worker
+    entrypoint: ["/worker"]
+    restart: unless-stopped
+    environment:
+      APP_DATABASE_URL: ${APP_DATABASE_URL}
+      APP_RABBITMQ_URL: ${APP_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      APP_RABBITMQ_QUEUE: ${APP_RABBITMQ_QUEUE:-migration.executions}
+      TARGET_DB_ENCRYPTION_KEY: ${TARGET_DB_ENCRYPTION_KEY}
+    depends_on:
+      platform-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   frontend:
     build:
@@ -43,6 +65,21 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     depends_on:
       - internal
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   platform-db:
     image: postgres:17-alpine
@@ -80,5 +117,6 @@ services:
       retries: 5
 
 volumes:
+  rabbitmq-data:
   platform-db-data:
   test-db-data:

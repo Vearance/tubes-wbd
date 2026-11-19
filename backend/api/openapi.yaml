@@ -1096,8 +1096,8 @@ paths:
       - $ref: '#/components/parameters/DraftId'
     post:
       operationId: executeMigrationDraft
-      summary: Run a draft on its database in one transaction
-      description: Requires View + Edit. On success the migration is committed and added to the history; if the database rejects the SQL everything is rolled back and the failed run is returned with status 422.
+      summary: Submit a draft for review and asynchronous execution
+      description: Requires View + Edit. Creates an immutable execution snapshot in pending_review; the migration workflow queues it only after required approvals. Returns immediately without running SQL.
       tags:
         - migrations
       security:
@@ -1105,12 +1105,12 @@ paths:
       parameters:
         - $ref: '#/components/parameters/CSRFToken'
       responses:
-        '200':
-          description: The migration was committed.
+        '202':
+          description: Execution submitted for review.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MigrationRun'
+                $ref: '#/components/schemas/MigrationExecution'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1119,14 +1119,105 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          description: The database rejected the SQL; nothing was changed.
+
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/migrations/rollback:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    post:
+      operationId: submitMigrationRollback
+      summary: Submit rollback of the active latest migration for approval
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '202':
+          description: Rollback submitted for review.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MigrationRun'
-        '502':
-          $ref: '#/components/responses/TargetUnavailable'
+                $ref: '#/components/schemas/MigrationExecution'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /databases/{databaseId}/migrations/forward:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    post:
+      operationId: submitMigrationForward
+      summary: Submit forward of the latest rolled-back migration for approval
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '202':
+          description: Forward submitted for review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExecution'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /databases/{databaseId}/migrations/executions:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    get:
+      operationId: listMigrationExecutions
+      summary: List migration executions for a database
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Migration executions, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationExecution'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /migrations/executions/{executionId}:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    get:
+      operationId: getMigrationExecution
+      summary: Get migration execution status
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Migration execution status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExecution'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /migrations/drafts/{draftId}/runs:
     parameters:
       - $ref: '#/components/parameters/DraftId'
@@ -1212,6 +1303,13 @@ components:
         format: int64
     GroupId:
       name: groupId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ExecutionId:
+      name: executionId
       in: path
       required: true
       schema:
@@ -1596,6 +1694,19 @@ components:
         version:
           type: integer
           format: int64
+        execution_id:
+          type: integer
+          format: int64
+          nullable: true
+        execution_type:
+          type: string
+          enum: [up, rollback, forward]
+        target_execution_id:
+          type: integer
+          format: int64
+          nullable: true
+        active:
+          type: boolean
         name:
           type: string
         executed_by:
@@ -1615,6 +1726,10 @@ components:
             - sql
           properties:
             sql:
+              type: string
+            down_sql:
+              type: string
+            irreversible_reason:
               type: string
     MigrationHistoryPage:
       type: object
@@ -1674,6 +1789,13 @@ components:
           type: string
         sql:
           type: string
+        down_sql:
+          type: string
+        irreversible:
+          type: boolean
+          default: false
+        irreversible_reason:
+          type: string
     MigrationDraft:
       type: object
       required:
@@ -1697,10 +1819,19 @@ components:
           type: string
         sql:
           type: string
+        down_sql:
+          type: string
+        irreversible:
+          type: boolean
+        irreversible_reason:
+          type: string
         status:
           type: string
           enum:
             - draft
+            - pending_review
+            - approved
+            - queued
             - running
             - applied
             - failed
@@ -1714,6 +1845,85 @@ components:
         updated_by:
           type: integer
           format: int64
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    MigrationExecution:
+      type: object
+      required:
+        - id
+        - database_id
+        - draft_id
+        - type
+        - status
+        - name
+        - sql
+        - executed_by
+        - attempt
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        database_id:
+          type: integer
+          format: int64
+        draft_id:
+          type: integer
+          format: int64
+        type:
+          type: string
+          enum: [up, rollback, forward]
+        status:
+          type: string
+          enum: [pending_review, approved, queued, running, success, failed, partial]
+        name:
+          type: string
+        sql:
+          type: string
+        down_sql:
+          type: string
+        irreversible:
+          type: boolean
+        irreversible_reason:
+          type: string
+        executed_by:
+          type: integer
+          format: int64
+        target_execution_id:
+          type: integer
+          format: int64
+          nullable: true
+        version:
+          type: integer
+          format: int64
+          nullable: true
+        attempt:
+          type: integer
+        queued_at:
+          type: string
+          format: date-time
+          nullable: true
+        available_at:
+          type: string
+          format: date-time
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_code:
+          type: string
+        error_message:
+          type: string
         created_at:
           type: string
           format: date-time

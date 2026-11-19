@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
-const sqlstateUniqueViolation = "23505"
+const (
+	sqlstateUniqueViolation     = "23505"
+	sqlstateForeignKeyViolation = "23503"
+)
 
 type GormRepository struct {
 	db *gorm.DB
@@ -88,6 +92,9 @@ func (r *GormRepository) Update(ctx context.Context, d *ManagedDatabase) error {
 func (r *GormRepository) Delete(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&ManagedDatabase{}, id)
 	if result.Error != nil {
+		if isForeignKeyViolation(result.Error) {
+			return ErrHasExecutions
+		}
 		return fmt.Errorf("deleting managed database: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
@@ -100,4 +107,9 @@ func (r *GormRepository) Delete(ctx context.Context, id uint) error {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == sqlstateUniqueViolation
+}
+
+func isForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == sqlstateForeignKeyViolation
 }

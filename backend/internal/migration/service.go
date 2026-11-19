@@ -100,6 +100,37 @@ func (s *MigrationService) run(ctx context.Context, userID, dbID uint, m Migrati
 	return apply(ctx, pool, m, userID, s.opts)
 }
 
+func (s *MigrationService) runExecution(ctx context.Context, execution *Execution) (*HistoryEntry, error) {
+	pool, err := s.pools.Pool(ctx, execution.ManagedDatabaseID)
+	if err != nil {
+		return nil, err
+	}
+	if execution.ID > 0 {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("migration: begin execution reconciliation: %w", err)
+		}
+		exists, err := historyExists(ctx, tx)
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return nil, err
+		}
+		if exists {
+			entry, lookupErr := getExecutionHistoryByID(ctx, tx, execution.ID)
+			if lookupErr == nil {
+				_ = tx.Rollback(ctx)
+				return entry, nil
+			}
+			if !errors.Is(lookupErr, ErrVersionNotFound) {
+				_ = tx.Rollback(ctx)
+				return nil, lookupErr
+			}
+		}
+		_ = tx.Rollback(ctx)
+	}
+	return applyExecution(ctx, pool, execution, s.opts)
+}
+
 func (s *MigrationService) History(ctx context.Context, userID, dbID uint, page, pageSize int) (*HistoryPage, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
@@ -170,6 +201,32 @@ func normalizePage(page, pageSize int) (int, int, error) {
 		pageSize = MaxPageSize
 	}
 	return page, pageSize, nil
+}
+
+func validateDefinition(m Migration) (Migration, error) {
+	m, err := validate(m)
+	if err != nil {
+		return m, err
+	}
+	m.DownSQL = strings.TrimSpace(m.DownSQL)
+	switch {
+	case m.Irreversible && m.DownSQL != "":
+		return m, fmt.Errorf("%w: provide down SQL or mark the migration irreversible, not both", ErrInvalidInput)
+	case m.Irreversible && strings.TrimSpace(m.IrreversibleReason) == "":
+		return m, fmt.Errorf("%w: irreversible migrations require a reason", ErrInvalidInput)
+	case !m.Irreversible && m.DownSQL == "":
+		// Existing M1-style drafts do not contain down SQL. Treat them as
+		// irreversible until the author supplies an explicit down migration.
+		m.Irreversible = true
+		m.IrreversibleReason = "No down SQL was provided."
+	case m.DownSQL != "":
+		down, err := validate(Migration{Name: m.Name, SQL: m.DownSQL})
+		if err != nil {
+			return m, fmt.Errorf("invalid down SQL: %w", err)
+		}
+		m.DownSQL = down.SQL
+	}
+	return m, nil
 }
 
 func validate(m Migration) (Migration, error) {
