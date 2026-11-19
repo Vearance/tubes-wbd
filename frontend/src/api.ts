@@ -291,11 +291,20 @@ export const api = {
 		),
 	drafts: (id: number) =>
 		request<MigrationDraft[]>(`/databases/${id}/migrations/drafts`),
-	createDraft: (id: number, input: MigrationDraftInput) =>
-		request<MigrationDraft>(`/databases/${id}/migrations/drafts`, {
+	createDraft: (
+		id: number,
+		input: MigrationDraftInput | string,
+		maybeSql?: string,
+	) => {
+		const body =
+			typeof input === "string"
+				? { name: input, sql: maybeSql ?? "" }
+				: input;
+		return request<MigrationDraft>(`/databases/${id}/migrations/drafts`, {
 			method: "POST",
-			body: input,
-		}),
+			body,
+		});
+	},
 	updateDraft: (id: number, input: MigrationDraftInput) =>
 		request<MigrationDraft>(`/migrations/drafts/${id}`, {
 			method: "PATCH",
