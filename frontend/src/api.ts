@@ -134,6 +134,10 @@ export type MigrationExecution = {
 };
 export type MigrationHistoryEntry = {
 	version: number;
+	attempt_number: number;
+	status: "success" | "failed";
+	error_code?: string;
+	error_message?: string;
 	execution_id?: number | null;
 	execution_type?: MigrationExecutionType;
 	target_execution_id?: number | null;

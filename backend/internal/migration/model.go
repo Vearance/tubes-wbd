@@ -13,6 +13,10 @@ type Migration struct {
 type HistoryEntry struct {
 	Version            int64
 	ExecutionID        uint
+	AttemptNumber      int
+	Status             RunStatus
+	ErrorCode          string
+	ErrorMessage       string
 	Type               ExecutionType
 	TargetExecutionID  *uint
 	Active             bool
@@ -28,6 +32,10 @@ type HistoryEntry struct {
 type HistorySummary struct {
 	Version           int64
 	ExecutionID       *uint
+	AttemptNumber     int
+	Status            RunStatus
+	ErrorCode         string
+	ErrorMessage      string
 	Type              ExecutionType
 	TargetExecutionID *uint
 	Active            bool

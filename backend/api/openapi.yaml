@@ -1686,6 +1686,8 @@ components:
       type: object
       required:
         - version
+        - attempt_number
+        - status
         - name
         - executed_by
         - executed_at
@@ -1694,6 +1696,15 @@ components:
         version:
           type: integer
           format: int64
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [success, failed]
+        error_code:
+          type: string
+        error_message:
+          type: string
         execution_id:
           type: integer
           format: int64

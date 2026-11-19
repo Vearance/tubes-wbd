@@ -105,6 +105,9 @@ func (s *MigrationService) runExecution(ctx context.Context, execution *Executio
 	if err != nil {
 		return nil, err
 	}
+	if err := ensureHistorySchema(ctx, pool, false); err != nil {
+		return nil, err
+	}
 	if execution.ID > 0 {
 		tx, err := pool.Begin(ctx)
 		if err != nil {
@@ -167,6 +170,9 @@ func (s *MigrationService) HistoryEntry(ctx context.Context, userID, dbID uint, 
 func (s *MigrationService) readOnly(ctx context.Context, dbID uint, fn func(pgx.Tx) error) error {
 	pool, err := s.pools.Pool(ctx, dbID)
 	if err != nil {
+		return err
+	}
+	if err := ensureHistorySchema(ctx, pool, false); err != nil {
 		return err
 	}
 

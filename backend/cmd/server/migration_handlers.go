@@ -35,6 +35,10 @@ func (s apiServer) ListMigrationHistory(
 	for _, e := range page.Entries {
 		entry := httpapi.MigrationHistoryEntry{
 			Version:           e.Version,
+			AttemptNumber:     e.AttemptNumber,
+			Status:            httpapi.MigrationHistoryEntryStatus(e.Status),
+			ErrorCode:         optionalString(e.ErrorCode),
+			ErrorMessage:      optionalString(e.ErrorMessage),
 			Name:              e.Name,
 			ExecutedBy:        int64(e.ExecutedBy),
 			ExecutedAt:        e.ExecutedAt,
@@ -103,6 +107,10 @@ func (s apiServer) GetMigrationHistoryEntry(
 	executionType := httpapi.MigrationHistoryDetailExecutionType(entry.Type)
 	writeJSON(w, http.StatusOK, httpapi.MigrationHistoryDetail{
 		Version:            entry.Version,
+		AttemptNumber:      entry.AttemptNumber,
+		Status:             httpapi.MigrationHistoryDetailStatus(entry.Status),
+		ErrorCode:          optionalString(entry.ErrorCode),
+		ErrorMessage:       optionalString(entry.ErrorMessage),
 		Name:               entry.Name,
 		Sql:                entry.SQL,
 		DownSql:            optionalString(entry.DownSQL),

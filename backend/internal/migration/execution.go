@@ -589,6 +589,9 @@ func (w *ExecutionWorker) RecoverStale(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		if err := ensureHistorySchema(ctx, pool, false); err != nil {
+			return err
+		}
 		tx, err := pool.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin stale execution recovery: %w", err)
