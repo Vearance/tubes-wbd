@@ -1,12 +1,21 @@
 import {
   ArrowDownAZ,
+  ArrowUpAZ,
   Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Code2,
   Columns3,
+  Copy,
   Database,
+  Eye,
+  EyeOff,
   GitCompareArrows,
+  KeyRound,
   LayoutGrid,
+  Link2,
   ListFilter,
   LogOut,
   Network,
@@ -18,13 +27,14 @@ import {
   ScrollText,
   Search,
   Table2,
+  Trash2,
   UserRoundPlus,
   Users,
   X,
   type LucideIcon,
 } from 'lucide-react'
 
-type IconName =
+export type IconName =
   | 'grid'
   | 'database'
   | 'table'
@@ -37,16 +47,27 @@ type IconName =
   | 'search'
   | 'filter'
   | 'sort'
+  | 'sort-asc'
+  | 'sort-desc'
   | 'plus'
   | 'play'
   | 'save'
   | 'logout'
   | 'chevron'
+  | 'chevron-left'
+  | 'chevron-down'
   | 'edit'
   | 'check'
+  | 'check-check'
+  | 'copy'
   | 'columns'
   | 'refresh'
   | 'close'
+  | 'eye'
+  | 'eye-off'
+  | 'trash'
+  | 'key'
+  | 'link'
 
 const icons: Record<IconName, LucideIcon> = {
   grid: LayoutGrid,
@@ -61,19 +82,43 @@ const icons: Record<IconName, LucideIcon> = {
   search: Search,
   filter: ListFilter,
   sort: ArrowDownAZ,
+  'sort-asc': ArrowUpAZ,
+  'sort-desc': ArrowDownAZ,
   plus: Plus,
   play: Play,
   save: Save,
   logout: LogOut,
   chevron: ChevronRight,
+  'chevron-left': ChevronLeft,
+  'chevron-down': ChevronDown,
   edit: Pencil,
   check: Check,
+  'check-check': CheckCheck,
+  copy: Copy,
   columns: Columns3,
   refresh: RefreshCw,
   close: X,
+  eye: Eye,
+  'eye-off': EyeOff,
+  trash: Trash2,
+  key: KeyRound,
+  link: Link2,
 }
 
-export function Icon({ name }: { name: IconName }) {
+export function Icon({
+  name,
+  className,
+}: {
+  name: IconName
+  className?: string
+}) {
   const LucideIconComponent = icons[name]
-  return <LucideIconComponent className="icon" aria-hidden="true" strokeWidth={1.75} />
+  if (!LucideIconComponent) return null
+  return (
+    <LucideIconComponent
+      className={className ?? 'icon size-[18px] shrink-0'}
+      aria-hidden="true"
+      strokeWidth={1.75}
+    />
+  )
 }
