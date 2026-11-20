@@ -23,7 +23,6 @@ type executionRepository interface {
 	SubmitExecution(context.Context, *Execution) error
 	CreateExecution(context.Context, *Execution) error
 	GetExecution(context.Context, uint) (*Execution, error)
-	ApproveExecution(context.Context, uint) error
 	EnqueueApprovedExecution(context.Context, uint) error
 	ClaimExecution(context.Context, uint) (*Execution, error)
 	FinishExecution(context.Context, uint, ExecutionStatus, *int64, string, string) error
@@ -154,26 +153,6 @@ func (s *MigrationService) createActionExecution(ctx context.Context, userID, db
 	return execution, nil
 }
 
-// ApproveExecution records the result of the external workflow's approval
-// checks. This method does not decide who is allowed to approve an execution.
-func (s *MigrationService) ApproveExecution(ctx context.Context, executionID uint) error {
-	repo, ok := s.repo.(executionRepository)
-	if !ok {
-		return errors.New("migration: repository does not support asynchronous executions")
-	}
-	return repo.ApproveExecution(ctx, executionID)
-}
-
-// EnqueueApprovedExecution is the integration point for the workflow owner.
-// Call it only after every required group leader has approved the execution.
-func (s *MigrationService) EnqueueApprovedExecution(ctx context.Context, executionID uint) error {
-	repo, ok := s.repo.(executionRepository)
-	if !ok {
-		return errors.New("migration: repository does not support asynchronous executions")
-	}
-	return repo.EnqueueApprovedExecution(ctx, executionID)
-}
-
 func (s *MigrationService) Execution(ctx context.Context, userID, executionID uint) (*Execution, error) {
 	repo, ok := s.repo.(executionRepository)
 	if !ok {
@@ -222,15 +201,17 @@ func (r *GormRepository) SubmitExecution(ctx context.Context, e *Execution) erro
 		if err := tx.Create(e).Error; err != nil {
 			return fmt.Errorf("creating migration execution: %w", err)
 		}
-		return nil
+		return createApprovals(tx, e)
 	})
 }
 
 func (r *GormRepository) CreateExecution(ctx context.Context, e *Execution) error {
-	if err := r.db.WithContext(ctx).Create(e).Error; err != nil {
-		return fmt.Errorf("creating migration execution: %w", err)
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(e).Error; err != nil {
+			return fmt.Errorf("creating migration execution: %w", err)
+		}
+		return createApprovals(tx, e)
+	})
 }
 
 func (r *GormRepository) GetExecution(ctx context.Context, id uint) (*Execution, error) {
@@ -245,34 +226,12 @@ func (r *GormRepository) GetExecution(ctx context.Context, id uint) (*Execution,
 	return &execution, nil
 }
 
-func (r *GormRepository) ApproveExecution(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var execution Execution
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&execution, id).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrExecutionNotFound
-			}
-			return fmt.Errorf("loading migration execution for approval: %w", err)
-		}
-		if execution.Status != ExecutionStatusPendingReview {
-			return ErrExecutionNotQueueable
-		}
-		if err := tx.Model(&execution).Update("status", ExecutionStatusApproved).Error; err != nil {
-			return fmt.Errorf("approving migration execution: %w", err)
-		}
-		if execution.Type == ExecutionTypeUp {
-			if err := tx.Model(&Draft{}).Where("id = ? AND status = ?", execution.DraftID, DraftStatusPendingReview).
-				Update("status", DraftStatusApproved).Error; err != nil {
-				return fmt.Errorf("approving migration draft: %w", err)
-			}
-		}
-		return nil
-	})
-}
-
+// EnqueueApprovedExecution returns ErrApprovalsOutdated after committing new
+// pending approvals when a group gained access since submission.
 func (r *GormRepository) EnqueueApprovedExecution(ctx context.Context, id uint) error {
 	now := time.Now()
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	outdated := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var execution Execution
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&execution, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -282,6 +241,23 @@ func (r *GormRepository) EnqueueApprovedExecution(ctx context.Context, id uint) 
 		}
 		if execution.Status != ExecutionStatusApproved {
 			return ErrExecutionNotApproved
+		}
+		var undecided int64
+		if err := tx.Model(&ExecutionApproval{}).
+			Where("execution_id = ? AND decision <> ?", id, ApprovalDecisionApproved).
+			Count(&undecided).Error; err != nil {
+			return fmt.Errorf("checking migration approvals: %w", err)
+		}
+		if undecided > 0 {
+			return ErrExecutionNotApproved
+		}
+		added, err := addMissingApprovals(tx, &execution)
+		if err != nil {
+			return err
+		}
+		if added {
+			outdated = true
+			return reopenReview(tx, &execution, now)
 		}
 		if err := tx.Model(&execution).Updates(map[string]any{
 			"status": ExecutionStatusQueued, "queued_at": now, "available_at": now, "updated_at": now,
@@ -303,6 +279,13 @@ func (r *GormRepository) EnqueueApprovedExecution(ctx context.Context, id uint) 
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if outdated {
+		return ErrApprovalsOutdated
+	}
+	return nil
 }
 
 func (r *GormRepository) ClaimExecution(ctx context.Context, id uint) (*Execution, error) {

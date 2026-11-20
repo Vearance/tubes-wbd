@@ -20,10 +20,10 @@ type ExecutionApproval struct {
 	GroupName   string           `gorm:"not null" json:"group_name"`
 	Decision    ApprovalDecision `gorm:"type:text;not null;default:pending;index;check:chk_execution_approval_decision,decision IN ('pending', 'approved', 'rejected')" json:"decision"`
 	DecidedBy   *uint            `json:"decided_by,omitempty"`
-	DecidedAt *time.Time `gorm:"check:chk_execution_approval_decided,(decision = 'pending') = (decided_by IS NULL AND decided_at IS NULL)" json:"decided_at,omitempty"`
-	Note      string     `gorm:"type:text;not null;default:''" json:"note,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	DecidedAt   *time.Time       `gorm:"check:chk_execution_approval_decided,(decision = 'pending') = (decided_by IS NULL AND decided_at IS NULL)" json:"decided_at,omitempty"`
+	Note        string           `gorm:"type:text;not null;default:''" json:"note,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
 
 	Execution *Execution    `gorm:"constraint:OnDelete:CASCADE" json:"-"`
 	Group     *access.Group `gorm:"constraint:OnDelete:RESTRICT" json:"-"`
