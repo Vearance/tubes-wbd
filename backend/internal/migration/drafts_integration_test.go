@@ -35,6 +35,7 @@ func newDraftEnv(t *testing.T, targetSetup string) *draftEnv {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = platformdb.Close(platform) })
 	require.NoError(t, manageddb.AutoMigrate(platform))
+	require.NoError(t, access.AutoMigrate(platform))
 	require.NoError(t, AutoMigrate(platform))
 
 	targetCfg, targetPool := newTarget(t, targetSetup)
