@@ -483,6 +483,92 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The user is the group leader. Assign another leader or clear the leader first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /admin/groups/{groupId}/leader:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    put:
+      operationId: setAdminGroupLeader
+      summary: Assign the group leader
+      description: >-
+        The leader must be an enabled member of the group. Replacing a leader does not change
+        decisions already recorded; pending approvals for this group become decidable by the new
+        leader.
+      tags:
+        - authentication
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetGroupLeaderRequest'
+      responses:
+        '200':
+          description: The leader was assigned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The user is not a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: The group or user was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The user is not a member of the group or is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: clearAdminGroupLeader
+      summary: Clear the group leader
+      description: >-
+        Leaves the group without a leader. New submissions on databases this group can access are
+        rejected until a leader is assigned again.
+      tags:
+        - authentication
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: The leader was cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The user is not a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: The group was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /admin/databases:
     get:
       operationId: listAdminDatabases
@@ -1096,8 +1182,14 @@ paths:
       - $ref: '#/components/parameters/DraftId'
     post:
       operationId: executeMigrationDraft
-      summary: Submit a draft for review and asynchronous execution
-      description: Requires View + Edit. Creates an immutable execution snapshot in pending_review; the migration workflow queues it only after required approvals. Returns immediately without running SQL.
+      summary: Submit a draft for leader review
+      description: >-
+        Requires View + Edit. Despite the operation name, this does not run SQL. It creates an
+        immutable execution snapshot in pending_review and records one pending approval for every
+        group that has View Only or View + Edit access to the database at submission time. Once
+        every group has approved, a View + Edit user queues it with
+        POST /migrations/executions/{executionId}/enqueue. Returns 409 when a group with access
+        has no leader assigned.
       tags:
         - migrations
       security:
@@ -1218,6 +1310,183 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /migrations/executions/{executionId}/approvals:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    get:
+      operationId: getMigrationExecutionApprovals
+      summary: Get the approval state of an execution
+      description: Requires View Only or View + Edit on the execution's database.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Approval state for every required group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationApprovalSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /migrations/executions/{executionId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      operationId: approveMigrationExecution
+      summary: Approve an execution as a group leader
+      description: >-
+        The caller must be the current leader of at least one group whose approval is still
+        pending. One call approves every pending group the caller leads. Self-approval is allowed.
+        When the last pending group approves, the execution moves to approved; it is not queued
+        until someone calls the enqueue endpoint.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveMigrationRequest'
+      responses:
+        '200':
+          description: The approval was recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationApprovalSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The caller does not lead any group with a pending approval on this execution, or the CSRF token is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The execution is not in pending_review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /migrations/executions/{executionId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      operationId: rejectMigrationExecution
+      summary: Reject an execution as a group leader
+      description: >-
+        The caller must be the current leader of at least one group whose approval is still
+        pending. The execution moves to rejected and can no longer be queued. For an up execution,
+        the draft becomes editable again; fixing it and submitting creates a new execution with a
+        fresh approval round.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectMigrationRequest'
+      responses:
+        '200':
+          description: The rejection was recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationApprovalSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The caller does not lead any group with a pending approval on this execution, or the CSRF token is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The execution is not in pending_review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /migrations/executions/{executionId}/enqueue:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      operationId: enqueueMigrationExecution
+      summary: Queue an approved execution for the worker
+      description: >-
+        Requires View + Edit on the execution's database, checked again at this point. The
+        execution must be approved by every required group. Returns immediately with the queued
+        execution; poll GET /migrations/executions/{executionId} for progress.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '202':
+          description: The execution was queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExecution'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The execution is not approved, or was already queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /migrations/approvals/pending:
+    get:
+      operationId: listPendingMigrationApprovals
+      summary: List executions awaiting the current user's decision
+      description: >-
+        Returns executions in pending_review that have at least one pending group led by the
+        current user, oldest first.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Executions awaiting the current user's decision.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MigrationExecution'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /migrations/drafts/{draftId}/runs:
     parameters:
       - $ref: '#/components/parameters/DraftId'
@@ -1448,6 +1717,22 @@ components:
           format: int64
         name:
           type: string
+        leader_user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: The group leader, or null when no leader is assigned.
+        leader_username:
+          type: string
+          nullable: true
+    SetGroupLeaderRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+          format: int64
     CreateGroupRequest:
       type: object
       required:
@@ -1851,6 +2136,86 @@ components:
         updated_at:
           type: string
           format: date-time
+    MigrationExecutionStatus:
+      type: string
+      enum: [pending_review, rejected, approved, queued, running, success, failed, partial]
+    MigrationApprovalDecision:
+      type: string
+      enum: [pending, approved, rejected]
+    MigrationApproval:
+      type: object
+      description: >-
+        The approval required from one group. The set of groups is fixed when the execution is
+        submitted.
+      required:
+        - group_id
+        - group_name
+        - decision
+      properties:
+        group_id:
+          type: integer
+          format: int64
+        group_name:
+          type: string
+        leader_user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: The group's current leader, who can decide while the approval is pending.
+        leader_username:
+          type: string
+          nullable: true
+        decision:
+          $ref: '#/components/schemas/MigrationApprovalDecision'
+        decided_by:
+          type: integer
+          format: int64
+          nullable: true
+        decided_by_username:
+          type: string
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+        note:
+          type: string
+    MigrationApprovalSummary:
+      type: object
+      required:
+        - execution_id
+        - execution_status
+        - can_decide
+        - approvals
+      properties:
+        execution_id:
+          type: integer
+          format: int64
+        execution_status:
+          $ref: '#/components/schemas/MigrationExecutionStatus'
+        can_decide:
+          type: boolean
+          description: True when the current user leads at least one group whose approval is still pending.
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/MigrationApproval'
+    ApproveMigrationRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+    RejectMigrationRequest:
+      type: object
+      required:
+        - note
+      properties:
+        note:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Why the change was rejected.
     MigrationExecution:
       type: object
       required:
@@ -1879,8 +2244,7 @@ components:
           type: string
           enum: [up, rollback, forward]
         status:
-          type: string
-          enum: [pending_review, approved, queued, running, success, failed, partial]
+          $ref: '#/components/schemas/MigrationExecutionStatus'
         name:
           type: string
         sql:
