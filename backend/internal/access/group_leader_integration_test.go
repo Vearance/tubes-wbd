@@ -3,6 +3,7 @@
 package access_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -76,4 +77,35 @@ func TestIntegrationGroupLeaderIsScopedToItsGroup(t *testing.T) {
 func TestIntegrationAccessAutoMigrateIsRepeatable(t *testing.T) {
 	db := openPlatformDB(t)
 	require.NoError(t, access.AutoMigrate(db))
+}
+
+func TestIntegrationGroupLeaderThroughRepository(t *testing.T) {
+	db := openPlatformDB(t)
+	ctx := context.Background()
+	repo := access.NewGormRepository(db)
+	group, user := createLeaderFixture(t, db)
+
+	require.ErrorIs(t, repo.SetGroupLeader(ctx, group.ID, &user.ID), access.ErrLeaderNotMember)
+	require.ErrorIs(t, repo.SetGroupLeader(ctx, group.ID+100, nil), access.ErrGroupNotFound)
+
+	require.NoError(t, repo.CreateUserGroup(ctx, &access.UserGroup{UserID: user.ID, GroupID: group.ID}))
+	require.NoError(t, repo.SetGroupLeader(ctx, group.ID, &user.ID))
+
+	stored, err := repo.FindGroupByID(ctx, group.ID)
+	require.NoError(t, err)
+	require.Equal(t, user.ID, *stored.LeaderUserID)
+	require.Equal(t, "leader", *stored.LeaderUsername)
+
+	plain := access.Group{Name: "No Leader"}
+	require.NoError(t, repo.CreateGroup(ctx, &plain))
+	listed, err := repo.ListGroups(ctx)
+	require.NoError(t, err)
+	require.Len(t, listed, 2)
+	require.Equal(t, "leader", *listed[0].LeaderUsername)
+	require.Nil(t, listed[1].LeaderUserID)
+	require.Nil(t, listed[1].LeaderUsername)
+
+	require.ErrorIs(t, repo.DeleteUserGroup(ctx, user.ID, group.ID), access.ErrMemberIsLeader)
+	require.NoError(t, repo.SetGroupLeader(ctx, group.ID, nil))
+	require.NoError(t, repo.DeleteUserGroup(ctx, user.ID, group.ID))
 }

@@ -33,6 +33,7 @@ func newApprovalFixture(t *testing.T) approvalFixture {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})
 	ctx := context.Background()
+	env.addApproverGroup(t, "Approvers", "rudolf", access.PermissionViewEdit)
 
 	draft, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{Name: "approval schema", SQL: "SELECT 1"})
 	require.NoError(t, err)

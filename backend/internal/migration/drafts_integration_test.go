@@ -17,6 +17,7 @@ import (
 	"tubes-wbd/internal/database/platformdb"
 	"tubes-wbd/internal/database/targetdb"
 	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/users"
 )
 
 type draftEnv struct {
@@ -34,6 +35,7 @@ func newDraftEnv(t *testing.T, targetSetup string) *draftEnv {
 	platform, err := platformdb.Open(ctx, platformdb.Config{DSN: dsn(newPlatformDB(t))})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = platformdb.Close(platform) })
+	require.NoError(t, users.AutoMigrate(platform))
 	require.NoError(t, manageddb.AutoMigrate(platform))
 	require.NoError(t, access.AutoMigrate(platform))
 	require.NoError(t, AutoMigrate(platform))

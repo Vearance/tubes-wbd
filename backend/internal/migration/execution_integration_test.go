@@ -8,12 +8,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"tubes-wbd/internal/access"
 	"tubes-wbd/internal/manageddb"
 )
 
 func TestIntegrationTargetCannotBeDeletedWithExecutionHistory(t *testing.T) {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})
+	env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
 	draft, err := svc.CreateDraft(context.Background(), 42, env.dbID, Migration{
 		Name: "retained history",
 		SQL:  "SELECT 1",
@@ -30,6 +32,7 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})
 	ctx := context.Background()
+	leader := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
 
 	draft, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{
 		Name:    "create projects",
@@ -42,8 +45,7 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ExecutionStatusPendingReview, up.Status)
 	require.False(t, tableExists(t, env.target, "projects"))
-	require.NoError(t, svc.ApproveExecution(ctx, up.ID))
-	require.NoError(t, svc.EnqueueApprovedExecution(ctx, up.ID))
+	approveAndQueue(t, svc, leader, up.ID)
 
 	worker, err := NewExecutionWorker(svc, env.repo)
 	require.NoError(t, err)
@@ -59,8 +61,7 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	require.Equal(t, ExecutionTypeRollback, rollback.Type)
 	require.Equal(t, up.ID, *rollback.TargetExecutionID)
 	require.Equal(t, "DROP TABLE projects", rollback.SQL)
-	require.NoError(t, svc.ApproveExecution(ctx, rollback.ID))
-	require.NoError(t, svc.EnqueueApprovedExecution(ctx, rollback.ID))
+	approveAndQueue(t, svc, leader, rollback.ID)
 	err = worker.RunExecution(ctx, rollback.ID)
 	require.NoError(t, err)
 	require.False(t, tableExists(t, env.target, "projects"))
@@ -70,8 +71,7 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	require.Equal(t, ExecutionTypeForward, forward.Type)
 	require.Equal(t, up.ID, *forward.TargetExecutionID)
 	require.Equal(t, "CREATE TABLE projects (id bigint PRIMARY KEY)", forward.SQL)
-	require.NoError(t, svc.ApproveExecution(ctx, forward.ID))
-	require.NoError(t, svc.EnqueueApprovedExecution(ctx, forward.ID))
+	approveAndQueue(t, svc, leader, forward.ID)
 	err = worker.RunExecution(ctx, forward.ID)
 	require.NoError(t, err)
 	require.True(t, tableExists(t, env.target, "projects"))
