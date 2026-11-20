@@ -6,11 +6,13 @@ import (
 )
 
 type Group struct {
-	ID   uint   `gorm:"primaryKey" json:"id"`
-	Name string `gorm:"uniqueIndex;not null" json:"name"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Name         string    `gorm:"uniqueIndex;not null" json:"name"`
 	LeaderUserID *uint     `gorm:"index" json:"leader_user_id"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+
+	LeaderUsername *string `gorm:"->;-:migration" json:"leader_username,omitempty"`
 }
 
 type UserGroup struct {

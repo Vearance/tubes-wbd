@@ -37,10 +37,17 @@ func (r *GormRepository) CreateGroup(ctx context.Context, group *Group) error {
 	return nil
 }
 
+func (r *GormRepository) groupsWithLeader(ctx context.Context) *gorm.DB {
+	return r.db.WithContext(ctx).
+		Model(&Group{}).
+		Select("groups.*, users.username AS leader_username").
+		Joins("LEFT JOIN users ON users.id = groups.leader_user_id")
+}
+
 func (r *GormRepository) ListGroups(ctx context.Context) ([]Group, error) {
 	var groups []Group
-	if err := r.db.WithContext(ctx).
-		Order("id ASC").
+	if err := r.groupsWithLeader(ctx).
+		Order("groups.id ASC").
 		Find(&groups).
 		Error; err != nil {
 		return nil, fmt.Errorf("listing groups: %w", err)
@@ -49,13 +56,35 @@ func (r *GormRepository) ListGroups(ctx context.Context) ([]Group, error) {
 	return groups, nil
 }
 
+func (r *GormRepository) SetGroupLeader(
+	ctx context.Context,
+	groupID uint,
+	leaderUserID *uint,
+) error {
+	result := r.db.WithContext(ctx).
+		Model(&Group{}).
+		Where("id = ?", groupID).
+		Update("leader_user_id", leaderUserID)
+	if result.Error != nil {
+		if isConstraintViolation(result.Error, sqlstateForeignKeyViolation, GroupLeaderMembershipConstraint) {
+			return ErrLeaderNotMember
+		}
+		return fmt.Errorf("setting group leader: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrGroupNotFound
+	}
+
+	return nil
+}
+
 func (r *GormRepository) FindGroupByID(
 	ctx context.Context,
 	groupID uint,
 ) (*Group, error) {
 	var group Group
-	result := r.db.WithContext(ctx).
-		Where("id = ?", groupID).
+	result := r.groupsWithLeader(ctx).
+		Where("groups.id = ?", groupID).
 		Limit(1).
 		Find(&group)
 	if result.Error != nil {
@@ -145,6 +174,9 @@ func (r *GormRepository) DeleteUserGroup(
 		Where("user_id = ? AND group_id = ?", userID, groupID).
 		Delete(&UserGroup{})
 	if result.Error != nil {
+		if isConstraintViolation(result.Error, sqlstateForeignKeyViolation, GroupLeaderMembershipConstraint) {
+			return ErrMemberIsLeader
+		}
 		return fmt.Errorf("deleting group membership: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
@@ -249,4 +281,9 @@ func (r *GormRepository) ListDatabasePermissions(
 func isForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == sqlstateForeignKeyViolation
+}
+
+func isConstraintViolation(err error, code, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == code && pgErr.ConstraintName == constraint
 }
