@@ -62,6 +62,8 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Get("/admin/groups/{groupId}/members", adminReadWrapper.ListAdminGroupMembers)
 	router.Post("/admin/groups/{groupId}/members", adminMutationWrapper.AddAdminGroupMember)
 	router.Delete("/admin/groups/{groupId}/members/{userId}", adminMutationWrapper.RemoveAdminGroupMember)
+	router.Put("/admin/groups/{groupId}/leader", adminMutationWrapper.SetAdminGroupLeader)
+	router.Delete("/admin/groups/{groupId}/leader", adminMutationWrapper.ClearAdminGroupLeader)
 	router.Get("/admin/groups/{groupId}/databases", adminReadWrapper.ListAdminGroupDatabases)
 	router.Put("/admin/groups/{groupId}/databases/{databaseId}", adminMutationWrapper.SetAdminGroupDatabase)
 	router.Delete("/admin/groups/{groupId}/databases/{databaseId}", adminMutationWrapper.RemoveAdminGroupDatabase)
@@ -91,6 +93,11 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Patch("/migrations/drafts/{draftId}", protectedWrapper.UpdateMigrationDraft)
 	router.Post("/migrations/drafts/{draftId}/execute", protectedWrapper.ExecuteMigrationDraft)
 	router.Get("/migrations/executions/{executionId}", protectedWrapper.GetMigrationExecution)
+	router.Get("/migrations/executions/{executionId}/approvals", protectedWrapper.GetMigrationExecutionApprovals)
+	router.Post("/migrations/executions/{executionId}/approve", protectedWrapper.ApproveMigrationExecution)
+	router.Post("/migrations/executions/{executionId}/reject", protectedWrapper.RejectMigrationExecution)
+	router.Post("/migrations/executions/{executionId}/enqueue", protectedWrapper.EnqueueMigrationExecution)
+	router.Get("/migrations/approvals/pending", protectedWrapper.ListPendingMigrationApprovals)
 	router.Get("/migrations/drafts/{draftId}/runs", protectedWrapper.ListMigrationRuns)
 
 	return router

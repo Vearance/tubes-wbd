@@ -37,6 +37,8 @@ func writeServiceError(w http.ResponseWriter, err error, operation string) {
 	switch {
 	case errors.Is(err, access.ErrInsufficientPermission):
 		writeAPIError(w, http.StatusForbidden, "insufficient permission on this database")
+	case errors.Is(err, migration.ErrNotApprover):
+		writeAPIError(w, http.StatusForbidden, err.Error())
 
 	case errors.Is(err, manageddb.ErrNotFound),
 		errors.Is(err, targetdb.ErrUnknownDatabase):
@@ -74,7 +76,11 @@ func writeServiceError(w http.ResponseWriter, err error, operation string) {
 		errors.Is(err, migration.ErrInvalidForward),
 		errors.Is(err, migration.ErrExecutionNotApproved),
 		errors.Is(err, migration.ErrExecutionNotQueueable),
-		errors.Is(err, migration.ErrMigrationInProgress):
+		errors.Is(err, migration.ErrMigrationInProgress),
+		errors.Is(err, migration.ErrNoApprovers),
+		errors.Is(err, migration.ErrGroupLeaderMissing),
+		errors.Is(err, migration.ErrExecutionNotPendingReview),
+		errors.Is(err, migration.ErrApprovalsOutdated):
 		writeAPIError(w, http.StatusConflict, err.Error())
 
 	case errors.Is(err, migration.ErrExecutionFailed):
