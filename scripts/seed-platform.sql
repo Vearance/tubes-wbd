@@ -48,4 +48,17 @@ JOIN users ON users.username = seed.username
 JOIN "groups" AS platform_group ON platform_group.name = seed.group_name
 ON CONFLICT (user_id, group_id) DO NOTHING;
 
+UPDATE "groups" AS platform_group
+SET
+    leader_user_id = users.id,
+    updated_at = NOW()
+FROM (
+    VALUES
+        ('Student Council', 'rudolf'),
+        ('Team Spica', 'goldship')
+) AS seed(group_name, username)
+JOIN users ON users.username = seed.username
+WHERE platform_group.name = seed.group_name
+    AND platform_group.leader_user_id IS NULL;
+
 COMMIT;
