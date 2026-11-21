@@ -6,10 +6,13 @@ import (
 )
 
 type Group struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"uniqueIndex;not null" json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Name         string    `gorm:"uniqueIndex;not null" json:"name"`
+	LeaderUserID *uint     `gorm:"index" json:"leader_user_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	LeaderUsername *string `gorm:"->;-:migration" json:"leader_username,omitempty"`
 }
 
 type UserGroup struct {
@@ -32,11 +35,11 @@ func (p PermissionLevel) Valid() bool {
 }
 
 type GroupDatabasePermission struct {
-	ID                uint            `gorm:"primaryKey" json:"id"`
-	GroupID           uint            `gorm:"not null;uniqueIndex:idx_group_database" json:"group_id"`
-	ManagedDatabaseID uint            `gorm:"not null;uniqueIndex:idx_group_database;index" json:"managed_database_id"`
-	Permission        PermissionLevel `gorm:"not null" json:"permission"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
-	ManagedDatabase *manageddb.ManagedDatabase `gorm:"constraint:OnDelete:CASCADE" json:"-"`
+	ID                uint                       `gorm:"primaryKey" json:"id"`
+	GroupID           uint                       `gorm:"not null;uniqueIndex:idx_group_database" json:"group_id"`
+	ManagedDatabaseID uint                       `gorm:"not null;uniqueIndex:idx_group_database;index" json:"managed_database_id"`
+	Permission        PermissionLevel            `gorm:"not null" json:"permission"`
+	CreatedAt         time.Time                  `json:"created_at"`
+	UpdatedAt         time.Time                  `json:"updated_at"`
+	ManagedDatabase   *manageddb.ManagedDatabase `gorm:"constraint:OnDelete:CASCADE" json:"-"`
 }

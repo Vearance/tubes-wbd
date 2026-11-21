@@ -149,6 +149,24 @@ func (r *adminEndpointGroups) FindGroupByName(
 	return nil, access.ErrGroupNotFound
 }
 
+func (r *adminEndpointGroups) SetGroupLeader(
+	_ context.Context,
+	groupID uint,
+	leaderUserID *uint,
+) error {
+	group, ok := r.groups[groupID]
+	if !ok {
+		return access.ErrGroupNotFound
+	}
+	if leaderUserID != nil {
+		if _, ok := r.memberships[[2]uint{*leaderUserID, groupID}]; !ok {
+			return access.ErrLeaderNotMember
+		}
+	}
+	group.LeaderUserID = leaderUserID
+	return nil
+}
+
 func (r *adminEndpointGroups) CreateUserGroup(
 	_ context.Context,
 	membership *access.UserGroup,

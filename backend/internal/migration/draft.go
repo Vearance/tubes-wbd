@@ -40,6 +40,7 @@ type ExecutionStatus string
 
 const (
 	ExecutionStatusPendingReview ExecutionStatus = "pending_review"
+	ExecutionStatusRejected      ExecutionStatus = "rejected"
 	ExecutionStatusApproved      ExecutionStatus = "approved"
 	ExecutionStatusQueued        ExecutionStatus = "queued"
 	ExecutionStatusRunning       ExecutionStatus = "running"
