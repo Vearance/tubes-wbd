@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { AnimatePresence, m } from 'motion/react'
 import { api } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
 import { AnimatedTabs } from '../../components/aceternity/AnimatedTabs'
 import { useWorkspaceContext } from '../../components/workspaceContext'
 import { Icon } from '../../components/Icon'
 import {
+  baseButtonClasses,
   Button,
+  buttonSizes,
+  buttonVariants,
   EmptyState,
   ErrorNotice,
   Loading,
@@ -269,9 +273,10 @@ export function TablePage() {
     [id, schema, selected, page],
   )
 
-  if (tables.loading || structure.loading || rows.loading) {
-    return <Loading page label="Reading table data and schema…" />
-  }
+  const isLoading =
+    (tables.loading && !tables.data) ||
+    (structure.loading && !structure.data) ||
+    (rows.loading && !rows.data)
 
   const error = tables.error || structure.error || rows.error
 
@@ -348,13 +353,66 @@ export function TablePage() {
         }
         title={selected || 'Tables'}
         status={
-          rows.data
-            ? `${rows.data.rows.length} rows on page ${page}`
-            : undefined
+          isLoading
+            ? 'Reading table data and schema…'
+            : rows.data
+              ? `${rows.data.rows.length} rows on page ${page}`
+              : undefined
+        }
+        actions={
+          selected ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to={`/databases/${id}/${schema}/query?table=${encodeURIComponent(selected)}`}
+                className={cn(
+                  baseButtonClasses,
+                  buttonVariants.outline,
+                  buttonSizes.sm,
+                  'no-underline',
+                )}
+              >
+                <Icon name="code" className="size-3.5" />
+                Query Table
+              </Link>
+              <Link
+                to={`/databases/${id}/${schema}/${encodeURIComponent(selected)}/edit`}
+                className={cn(
+                  baseButtonClasses,
+                  buttonVariants.dark,
+                  buttonSizes.sm,
+                  'no-underline',
+                )}
+              >
+                <Icon name="edit" className="size-3.5" />
+                DDL Blueprint
+              </Link>
+            </div>
+          ) : undefined
         }
       />
 
-      {error && <ErrorNotice message={error} />}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <m.div
+            key="table-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="py-16"
+          >
+            <Loading label="Reading table data and schema…" />
+          </m.div>
+        ) : (
+          <m.div
+            key={`table-content-${selected ?? 'none'}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="space-y-4"
+          >
+            {error && <ErrorNotice message={error} />}
 
       <AnimatedTabs
         tabs={['data', 'columns', 'constraints', 'indexes'].map((name) => ({
@@ -365,9 +423,10 @@ export function TablePage() {
         onValueChange={(value) =>
           setParams({ tab: value, page: String(page) })
         }
+        className="mb-4"
       />
 
-      <section className="min-w-0 max-w-full overflow-hidden rounded-b-[14px] border border-line bg-white shadow-xs">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-[18px] border border-line/80 bg-white shadow-2xs">
         {tab === 'data' && (
           <div className="flex min-h-[54px] max-w-full flex-wrap items-center gap-2.5 border-b border-line px-3 py-2">
             <div className="shrink-0 max-[600px]:w-full">
@@ -490,6 +549,9 @@ export function TablePage() {
           </footer>
         )}
       </section>
+          </m.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
