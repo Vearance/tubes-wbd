@@ -6,6 +6,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { AnimatePresence, m } from 'motion/react'
 import { api, type TableInfo, type TableStructure } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
 import { useWorkspaceContext } from '../../components/workspaceContext'
@@ -245,13 +246,17 @@ function ConnectedSchemaDiagram({
   )
 
   return (
-    <div className="relative overflow-hidden rounded-[14px] border border-line bg-[#faf8fc] shadow-xs">
-      <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-lg border border-line bg-white/90 px-3 py-1.5 text-xs text-muted backdrop-blur-xs shadow-2xs">
-        <span className="size-2 rounded-full bg-violet animate-pulse" />
-        <span>Connected Entity-Relationship Diagram</span>
-        {loading && <span className="text-[10px] text-violet">· Reading schema…</span>}
-        <span className="text-[10px] text-muted/60">· Drag cards to rearrange</span>
-      </div>
+    <div className="relative overflow-hidden rounded-[18px] border border-line bg-[#faf8fc] shadow-xs">
+      {Object.keys(customPositions).length > 0 && (
+        <button
+          type="button"
+          onClick={() => setCustomPositions({})}
+          className="absolute top-3 left-3 z-20 inline-flex items-center gap-1 rounded-lg border border-line/80 bg-white/90 px-2.5 py-1 text-xs font-semibold text-ink shadow-2xs hover:border-violet hover:text-violet transition-colors cursor-pointer backdrop-blur-xs"
+        >
+          <Icon name="refresh" className="size-3" />
+          Reset layout
+        </button>
+      )}
 
       {hoveredRel && (
         <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg border border-violet/30 bg-violet-soft px-3 py-1.5 text-xs font-semibold text-violet shadow-xs">
@@ -395,7 +400,7 @@ function ConnectedSchemaDiagram({
                 <Link
                   to={`/databases/${databaseId}/${schema}/${table.name}`}
                   className="rounded p-1 text-muted hover:bg-canvas hover:text-ink transition-colors"
-                  title="Browse table data"
+                  title="Open table"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Icon name="chevron" className="size-3.5" />
@@ -450,12 +455,20 @@ function ConnectedSchemaDiagram({
                 <span>
                   {data?.structure?.columns.length ?? 0} columns
                 </span>
-                <Link
-                  to={`/databases/${databaseId}/${schema}/${table.name}`}
-                  className="text-violet hover:underline font-medium"
-                >
-                  View data
-                </Link>
+                <div className="flex items-center gap-2.5">
+                  <Link
+                    to={`/databases/${databaseId}/${schema}/${encodeURIComponent(table.name)}/edit`}
+                    className="text-muted hover:text-violet font-medium no-underline"
+                  >
+                    DDL Blueprint
+                  </Link>
+                  <Link
+                    to={`/databases/${databaseId}/${schema}/${encodeURIComponent(table.name)}`}
+                    className="text-violet hover:underline font-semibold"
+                  >
+                    View data
+                  </Link>
+                </div>
               </div>
             </div>
           )
@@ -492,9 +505,7 @@ export function SchemaPage() {
     return results.filter((r): r is TableStructure => r !== null)
   }, [id, schema, tables.data])
 
-  if (schemas.loading || tables.loading) {
-    return <Loading page label="Inspecting database schema and relations…" />
-  }
+  const isLoading = (schemas.loading && !schemas.data) || (tables.loading && !tables.data)
 
   const filteredTables =
     tables.data?.filter((t) =>
@@ -539,7 +550,11 @@ export function SchemaPage() {
           </span>
         }
         title="Schema"
-        status={`${tables.data?.length ?? 0} tables · ${relationships.length} relations`}
+        status={
+          isLoading
+            ? 'Loading schema…'
+            : `${tables.data?.length ?? 0} tables · ${relationships.length} relations`
+        }
         actions={
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs">
@@ -582,131 +597,176 @@ export function SchemaPage() {
         }
       />
 
-      {(schemas.error || tables.error || structures.error) && (
-        <ErrorNotice
-          message={schemas.error || tables.error || structures.error}
-        />
-      )}
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <m.div
+            key="page-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="py-16"
+          >
+            <Loading label="Inspecting database schema and relations…" />
+          </m.div>
+        ) : (
+          <m.div
+            key="page-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="space-y-4"
+          >
+            {(schemas.error || tables.error || structures.error) && (
+              <ErrorNotice
+                message={schemas.error || tables.error || structures.error}
+              />
+            )}
 
-      {viewMode === 'diagram' ? (
-        <ConnectedSchemaDiagram
-          databaseId={id}
-          schema={schema}
-          tables={filteredTables}
-          tableMap={tableMap}
-          relationships={relationships}
-          loading={structures.loading}
-        />
-      ) : (
-        <div className="grid min-h-[500px] min-w-0 max-w-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-4">
-          <section className="min-w-0 rounded-[14px] border border-line bg-[#fdfcfe] p-5 shadow-xs">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
-              {filteredTables.map((table) => {
-                const data = tableMap[table.name]
-                const colCount = data?.structure?.columns.length ?? 0
-                return (
-                  <Link
-                    key={table.name}
-                    to={`/databases/${id}/${table.schema}/${table.name}`}
-                    className="group flex flex-col justify-between rounded-[14px] border border-line bg-white p-4 shadow-2xs transition-all hover:border-violet hover:shadow-sm no-underline"
-                  >
+            {viewMode === 'diagram' ? (
+              <ConnectedSchemaDiagram
+                databaseId={id}
+                schema={schema}
+                tables={filteredTables}
+                tableMap={tableMap}
+                relationships={relationships}
+                loading={structures.loading}
+              />
+            ) : (
+              <div className="grid min-h-[500px] min-w-0 max-w-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-5">
+                <section className="min-w-0 rounded-[18px] border border-line bg-[#fdfcfe] p-5 shadow-xs">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
+                    {filteredTables.map((table) => {
+                      const data = tableMap[table.name]
+                      const colCount = data?.structure?.columns.length ?? 0
+                      return (
+                        <m.article
+                          key={table.name}
+                          whileHover={{ y: -2 }}
+                          whileTap={{ scale: 0.98 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                          className="group flex flex-col justify-between rounded-[18px] border border-line/80 bg-white p-4 shadow-2xs transition-[border-color,box-shadow] duration-150 hover:border-violet/50 hover:shadow-surface"
+                        >
+                          <div>
+                            <Link
+                              to={`/databases/${id}/${table.schema}/${encodeURIComponent(table.name)}`}
+                              className="flex items-center gap-2 pb-2.5 border-b border-line no-underline"
+                            >
+                              <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet group-hover:scale-105 transition-transform">
+                                <Icon name="table" className="size-4" />
+                              </span>
+                              <strong className="truncate text-sm font-bold text-ink flex-1 group-hover:text-violet transition-colors">
+                                {table.name}
+                              </strong>
+                              {table.kind === 'view' && (
+                                <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[9px] font-bold text-accent uppercase">
+                                  View
+                                </span>
+                              )}
+                            </Link>
+                            <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                              <span>{colCount > 0 ? `${colCount} columns` : 'View definition'}</span>
+                              <div className="flex items-center gap-2.5">
+                                <Link
+                                  to={`/databases/${id}/${table.schema}/${encodeURIComponent(table.name)}/edit`}
+                                  className="text-[11px] font-medium text-muted hover:text-violet no-underline"
+                                >
+                                  DDL Blueprint
+                                </Link>
+                                <Link
+                                  to={`/databases/${id}/${table.schema}/${encodeURIComponent(table.name)}`}
+                                  className="text-violet font-medium no-underline hover:underline"
+                                >
+                                  View table →
+                                </Link>
+                              </div>
+                            </div>
+                          </div>
+                        </m.article>
+                      )
+                    })}
+                  </div>
+
+                  {filteredTables.length === 0 && (
+                    <EmptyState
+                      icon={search ? 'search' : 'table'}
+                      title={search ? 'No tables match query' : 'No tables in schema'}
+                      action={
+                        search ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSearch('')}
+                          >
+                            Clear search filter
+                          </Button>
+                        ) : undefined
+                      }
+                    >
+                      {search
+                        ? `No database objects in schema "${schema}" matched "${search}".`
+                        : `The schema "${schema}" contains no tables or views.`}
+                    </EmptyState>
+                  )}
+                </section>
+
+                <aside className="h-fit rounded-[20px] border border-line/80 bg-white p-6 shadow-2xs space-y-6 text-xs">
+                  <div className="pb-3 border-b border-line/60">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-violet">
+                      Active Schema
+                    </span>
+                    <h2 className="text-2xl font-black text-ink mt-1 mb-0 tracking-tight">
+                      {schema}
+                    </h2>
+                  </div>
+
+                  <div className="space-y-5">
                     <div>
-                      <div className="flex items-center gap-2 pb-2.5 border-b border-line">
-                        <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet group-hover:scale-105 transition-transform">
-                          <Icon name="table" className="size-4" />
-                        </span>
-                        <strong className="truncate text-sm font-bold text-ink flex-1">
-                          {table.name}
-                        </strong>
-                        {table.kind === 'view' && (
-                          <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[9px] font-bold text-accent uppercase">
-                            View
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-muted">
-                        <span>{colCount > 0 ? `${colCount} columns` : 'View definition'}</span>
-                        <span className="text-violet font-medium group-hover:underline">
-                          Browse data →
-                        </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-1.5">
+                        Database
+                      </span>
+                      <span className="font-semibold text-sm text-ink">{databaseName}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-2">
+                        Available Schemas
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {schemas.data?.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => navigate(`/databases/${id}/${s}/schema`)}
+                            className={cn(
+                              'rounded-full px-3 py-1 font-mono text-xs border transition-colors cursor-pointer',
+                              s === schema
+                                ? 'border-violet/30 bg-violet-soft text-violet font-bold shadow-2xs'
+                                : 'border-line bg-canvas text-muted hover:border-line-strong hover:text-ink',
+                            )}
+                          >
+                            {s}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  </Link>
-                )
-              })}
-            </div>
 
-            {filteredTables.length === 0 && (
-              <EmptyState
-                icon={search ? 'search' : 'table'}
-                title={search ? 'No tables match query' : 'No tables in schema'}
-                action={
-                  search ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSearch('')}
-                    >
-                      Clear search filter
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {search
-                  ? `No database objects in schema "${schema}" matched "${search}".`
-                  : `The schema "${schema}" contains no tables or views.`}
-              </EmptyState>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-1.5">
+                        Objects
+                      </span>
+                      <span className="font-semibold text-sm text-ink">
+                        {tables.data?.length ?? 0} tables
+                      </span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
             )}
-          </section>
-
-          <aside className="h-fit rounded-[14px] border border-line bg-white p-5 shadow-xs space-y-4 text-xs">
-            <div>
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-violet">
-                Active Schema
-              </span>
-              <h2 className="text-xl font-bold text-ink mt-0.5 mb-0">{schema}</h2>
-            </div>
-            <div className="space-y-3 divide-y divide-line pt-1">
-              <div className="pt-2">
-                <span className="text-[10px] font-bold uppercase text-muted block mb-1">
-                  Database
-                </span>
-                <span className="font-semibold text-ink">{databaseName}</span>
-              </div>
-              <div className="pt-3">
-                <span className="text-[10px] font-bold uppercase text-muted block mb-1">
-                  Available Schemas
-                </span>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {schemas.data?.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => navigate(`/databases/${id}/${s}/schema`)}
-                      className={cn(
-                        'rounded-md px-2 py-0.5 font-mono text-[11px] border transition-colors cursor-pointer',
-                        s === schema
-                          ? 'border-violet bg-violet-soft text-violet font-bold'
-                          : 'border-line bg-canvas text-muted hover:border-line-strong',
-                      )}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="pt-3">
-                <span className="text-[10px] font-bold uppercase text-muted block mb-1">
-                  Objects
-                </span>
-                <span className="font-semibold text-ink">
-                  {tables.data?.length ?? 0} tables
-                </span>
-              </div>
-            </div>
-          </aside>
-        </div>
-      )}
+          </m.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
