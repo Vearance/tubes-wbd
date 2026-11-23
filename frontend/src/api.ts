@@ -16,7 +16,12 @@ export type AdminUser = {
 	is_admin: boolean;
 	disabled: boolean;
 };
-export type Group = { id: number; name: string };
+export type Group = {
+	id: number;
+	name: string;
+	leader_user_id?: number | null;
+	leader_username?: string | null;
+};
 export type ManagedDatabase = {
 	id: number;
 	name: string;
@@ -101,12 +106,31 @@ export type MigrationDraftInput = {
 };
 export type MigrationExecutionStatus =
 	| "pending_review"
+	| "rejected"
 	| "approved"
 	| "queued"
 	| "running"
 	| "success"
 	| "failed"
 	| "partial";
+export type MigrationApprovalDecision = "pending" | "approved" | "rejected";
+export type MigrationApproval = {
+	group_id: number;
+	group_name: string;
+	leader_user_id?: number | null;
+	leader_username?: string | null;
+	decision: MigrationApprovalDecision;
+	decided_by?: number | null;
+	decided_by_username?: string | null;
+	decided_at?: string | null;
+	note?: string;
+};
+export type MigrationApprovalSummary = {
+	execution_id: number;
+	execution_status: MigrationExecutionStatus;
+	can_decide: boolean;
+	approvals: MigrationApproval[];
+};
 export type MigrationExecutionType = "up" | "rollback" | "forward";
 export type MigrationExecution = {
 	id: number;
@@ -289,8 +313,16 @@ export const api = {
 		request<MigrationHistoryPage>(
 			`/databases/${id}/migrations/history${qs({ page, page_size: 50 })}`,
 		),
+	historyEntry: (id: number, version: number) =>
+		request<MigrationHistoryDetail>(
+			`/databases/${id}/migrations/history/${version}`,
+		),
 	drafts: (id: number) =>
 		request<MigrationDraft[]>(`/databases/${id}/migrations/drafts`),
+	draft: (draftId: number) =>
+		request<MigrationDraft>(`/migrations/drafts/${draftId}`),
+	draftRuns: (draftId: number) =>
+		request<MigrationRun[]>(`/migrations/drafts/${draftId}/runs`),
 	createDraft: (
 		id: number,
 		input: MigrationDraftInput | string,
@@ -318,6 +350,34 @@ export const api = {
 		request<MigrationExecution[]>(`/databases/${id}/migrations/executions`),
 	execution: (id: number) =>
 		request<MigrationExecution>(`/migrations/executions/${id}`),
+	executionApprovals: (executionId: number) =>
+		request<MigrationApprovalSummary>(
+			`/migrations/executions/${executionId}/approvals`,
+		),
+	approveExecution: (executionId: number, note?: string) =>
+		request<MigrationApprovalSummary>(
+			`/migrations/executions/${executionId}/approve`,
+			{ method: "POST", body: note?.trim() ? { note: note.trim() } : {} },
+		),
+	rejectExecution: (executionId: number, note: string) =>
+		request<MigrationApprovalSummary>(
+			`/migrations/executions/${executionId}/reject`,
+			{ method: "POST", body: { note: note.trim() } },
+		),
+	enqueueExecution: (executionId: number) =>
+		request<MigrationExecution>(
+			`/migrations/executions/${executionId}/enqueue`,
+			{ method: "POST" },
+		),
+	pendingApprovals: async () => {
+		try {
+			return await request<MigrationExecution[]>(
+				"/migrations/approvals/pending",
+			);
+		} catch {
+			return [];
+		}
+	},
 	rollback: (id: number) =>
 		request<MigrationExecution>(`/databases/${id}/migrations/rollback`, {
 			method: "POST",
@@ -349,6 +409,15 @@ export const api = {
 		}),
 	removeGroupMember: (groupId: number, userId: number) =>
 		request<void>(`/admin/groups/${groupId}/members/${userId}`, {
+			method: "DELETE",
+		}),
+	setGroupLeader: (groupId: number, userId: number) =>
+		request<Group>(`/admin/groups/${groupId}/leader`, {
+			method: "PUT",
+			body: { user_id: userId },
+		}),
+	clearGroupLeader: (groupId: number) =>
+		request<void>(`/admin/groups/${groupId}/leader`, {
 			method: "DELETE",
 		}),
 	adminDatabases: () => request<ManagedDatabase[]>("/admin/databases"),

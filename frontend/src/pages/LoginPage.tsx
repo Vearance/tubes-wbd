@@ -6,9 +6,7 @@ import { Button, ErrorNotice } from '../components/ui'
 import { cn } from '../lib/utils'
 
 const brandClasses =
-  'inline-flex min-h-11 items-center gap-[11px] text-lg font-extrabold no-underline text-ink'
-const brandMarkClasses =
-  'grid size-[38px] place-items-center overflow-hidden rounded-xl border border-[#ef4f9b2e] bg-accent-soft [&_img]:size-[46px] [&_img]:object-contain shadow-xs'
+  'inline-flex min-h-11 items-center gap-2.5 text-lg font-black tracking-tight text-ink no-underline'
 const inputClasses =
   'mt-2 h-12 w-full rounded-[11px] border border-line-strong bg-white px-3.5 text-sm text-ink outline-none transition-colors focus:border-violet focus:ring-2 focus:ring-violet/20'
 
@@ -51,9 +49,11 @@ export function LoginPage() {
     <main className="grid min-h-dvh grid-cols-[minmax(520px,1.05fr)_minmax(520px,.95fr)] bg-white max-[900px]:grid-cols-[minmax(0,1fr)]">
       <section className="relative flex min-h-dvh flex-col overflow-hidden bg-[#f8eef7] px-16 py-12 before:absolute before:right-[-130px] before:bottom-[-120px] before:size-[500px] before:rounded-full before:bg-[#e7d8fb] before:content-[''] after:absolute after:right-[250px] after:bottom-[-150px] after:size-[280px] after:rounded-full after:bg-[#ffd6e8] after:content-[''] max-[900px]:hidden">
         <a className={brandClasses} href="/login">
-          <span className={brandMarkClasses}>
-            <img src="/bibi.png" alt="" />
-          </span>
+          <img
+            src="/bibi.png"
+            alt="BScheme mascot"
+            className="size-8 object-contain"
+          />
           BScheme
         </a>
         <div className="z-[1] mt-[9vh] max-w-[580px]">
@@ -87,11 +87,8 @@ export function LoginPage() {
           onSubmit={submit}
         >
           <div className="mb-2">
-            <span className="inline-block rounded-full bg-violet-soft px-3 py-1 text-[11px] font-bold text-violet mb-3">
-              PostgreSQL Management
-            </span>
             <h2 className="my-1 text-[32px] font-extrabold tracking-tight text-ink">
-              Welcome back
+              Welcome!
             </h2>
             <p className="mt-1 mb-6 text-sm text-muted">
               Please enter your account details to sign in.
