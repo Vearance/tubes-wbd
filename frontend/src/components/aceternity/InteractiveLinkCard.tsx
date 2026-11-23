@@ -1,28 +1,65 @@
+import type { ButtonHTMLAttributes } from 'react'
 import { m, useReducedMotion } from 'motion/react'
 import { Link, type LinkProps } from 'react-router'
 import { cn } from '../../lib/utils'
 
+export const baseInteractiveCardClass =
+  'relative isolate h-full rounded-[18px] border border-line/80 bg-white shadow-2xs transition-[border-color,box-shadow] duration-150 ease-out hover:border-violet/50 hover:shadow-surface focus-visible:ring-2 focus-visible:ring-violet/30'
+
 type InteractiveLinkCardProps = LinkProps & {
   className?: string
+  wrapperClassName?: string
 }
 
-export function InteractiveLinkCard({ className, children, ...props }: InteractiveLinkCardProps) {
+export function InteractiveLinkCard({
+  className,
+  wrapperClassName,
+  children,
+  ...props
+}: InteractiveLinkCardProps) {
   const reduceMotion = useReducedMotion()
 
-  return <m.div
-    className="h-full min-w-0 rounded-[14px]"
-    whileHover={reduceMotion ? undefined : { y: -2 }}
-    whileTap={reduceMotion ? undefined : { scale: .97 }}
-    transition={{ duration: .15, ease: 'easeOut' }}
-  >
-    <Link
-      className={cn(
-        'relative isolate h-full rounded-[14px] border border-line bg-white shadow-none transition-[border-color,box-shadow] duration-150 ease-out hover:border-violet hover:shadow-surface focus-visible:ring-2 focus-visible:ring-violet/30',
-        className,
-      )}
-      {...props}
+  return (
+    <m.div
+      className={cn('h-full min-w-0 rounded-[18px]', wrapperClassName)}
+      whileHover={reduceMotion ? undefined : { y: -2 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
     >
-      {children}
-    </Link>
-  </m.div>
+      <Link className={cn(baseInteractiveCardClass, className)} {...props}>
+        {children}
+      </Link>
+    </m.div>
+  )
+}
+
+type InteractiveButtonCardProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  className?: string
+  wrapperClassName?: string
+}
+
+export function InteractiveButtonCard({
+  className,
+  wrapperClassName,
+  children,
+  ...props
+}: InteractiveButtonCardProps) {
+  const reduceMotion = useReducedMotion()
+
+  return (
+    <m.div
+      className={cn('h-full min-w-0 rounded-[18px]', wrapperClassName)}
+      whileHover={reduceMotion ? undefined : { y: -2 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+    >
+      <button
+        type="button"
+        className={cn(baseInteractiveCardClass, 'w-full cursor-pointer', className)}
+        {...props}
+      >
+        {children}
+      </button>
+    </m.div>
+  )
 }
