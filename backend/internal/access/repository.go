@@ -20,6 +20,7 @@ type GroupRepository interface {
 	ListGroups(ctx context.Context) ([]Group, error)
 	FindGroupByID(ctx context.Context, groupID uint) (*Group, error)
 	FindGroupByName(ctx context.Context, name string) (*Group, error)
+	SetGroupLeader(ctx context.Context, groupID uint, leaderUserID *uint) error
 	CreateUserGroup(ctx context.Context, membership *UserGroup) error
 	FindUserGroup(ctx context.Context, userID uint, groupID uint) (*UserGroup, error)
 	ListMembers(ctx context.Context, groupID uint) ([]users.User, error)

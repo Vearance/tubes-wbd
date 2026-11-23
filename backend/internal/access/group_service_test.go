@@ -82,6 +82,24 @@ func (r *fakeGroupRepository) FindGroupByName(
 	return nil, ErrGroupNotFound
 }
 
+func (r *fakeGroupRepository) SetGroupLeader(
+	_ context.Context,
+	groupID uint,
+	leaderUserID *uint,
+) error {
+	group, ok := r.groups[groupID]
+	if !ok {
+		return ErrGroupNotFound
+	}
+	if leaderUserID != nil {
+		if _, ok := r.memberships[[2]uint{*leaderUserID, groupID}]; !ok {
+			return ErrLeaderNotMember
+		}
+	}
+	group.LeaderUserID = leaderUserID
+	return nil
+}
+
 func (r *fakeGroupRepository) CreateUserGroup(
 	_ context.Context,
 	membership *UserGroup,

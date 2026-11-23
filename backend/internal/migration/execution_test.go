@@ -9,6 +9,7 @@ import (
 
 func TestSubmitDraftForReviewSnapshotsAndLocksDraft(t *testing.T) {
 	svc, _, _, repo := newTestServiceWithRepo(t)
+	repo.addGroup(1, "Student Council", new(uint(1)), 9)
 	draft := createTestDraft(t, svc, 9)
 
 	execution, err := svc.SubmitDraftForReview(context.Background(), 1, draft.ID)
@@ -24,23 +25,25 @@ func TestSubmitDraftForReviewSnapshotsAndLocksDraft(t *testing.T) {
 
 func TestExecutionMustBeApprovedBeforeEnqueue(t *testing.T) {
 	svc, _, _, repo := newTestServiceWithRepo(t)
+	repo.addGroup(1, "Student Council", new(uint(1)), 9)
 	draft := createTestDraft(t, svc, 9)
 	execution, err := svc.SubmitDraftForReview(context.Background(), 1, draft.ID)
 	require.NoError(t, err)
 
-	err = svc.EnqueueApprovedExecution(context.Background(), execution.ID)
+	_, err = svc.EnqueueExecution(context.Background(), 1, execution.ID)
 	require.ErrorIs(t, err, ErrExecutionNotApproved)
 
-	require.NoError(t, svc.ApproveExecution(context.Background(), execution.ID))
-	require.NoError(t, svc.EnqueueApprovedExecution(context.Background(), execution.ID))
-	stored, err := repo.GetExecution(context.Background(), execution.ID)
+	_, err = svc.ApproveExecution(context.Background(), 1, execution.ID, "")
 	require.NoError(t, err)
-	require.Equal(t, ExecutionStatusQueued, stored.Status)
+	queued, err := svc.EnqueueExecution(context.Background(), 1, execution.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusQueued, queued.Status)
 	require.Equal(t, DraftStatusQueued, repo.status(draft.ID))
 }
 
 func TestSubmitDraftForReviewDoesNotQueueOrExecute(t *testing.T) {
 	svc, _, pools, repo := newTestServiceWithRepo(t)
+	repo.addGroup(1, "Student Council", new(uint(1)), 9)
 	draft := createTestDraft(t, svc, 9)
 
 	execution, err := svc.SubmitDraftForReview(context.Background(), 1, draft.ID)
