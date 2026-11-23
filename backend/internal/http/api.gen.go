@@ -20,6 +20,27 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for MigrationApprovalDecision.
+const (
+	MigrationApprovalDecisionApproved MigrationApprovalDecision = "approved"
+	MigrationApprovalDecisionPending  MigrationApprovalDecision = "pending"
+	MigrationApprovalDecisionRejected MigrationApprovalDecision = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the MigrationApprovalDecision enum.
+func (e MigrationApprovalDecision) Valid() bool {
+	switch e {
+	case MigrationApprovalDecisionApproved:
+		return true
+	case MigrationApprovalDecisionPending:
+		return true
+	case MigrationApprovalDecisionRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MigrationDraftStatus.
 const (
 	MigrationDraftStatusApplied       MigrationDraftStatus = "applied"
@@ -53,6 +74,27 @@ func (e MigrationDraftStatus) Valid() bool {
 	}
 }
 
+// Defines values for MigrationExecutionType.
+const (
+	MigrationExecutionTypeForward  MigrationExecutionType = "forward"
+	MigrationExecutionTypeRollback MigrationExecutionType = "rollback"
+	MigrationExecutionTypeUp       MigrationExecutionType = "up"
+)
+
+// Valid indicates whether the value is a known member of the MigrationExecutionType enum.
+func (e MigrationExecutionType) Valid() bool {
+	switch e {
+	case MigrationExecutionTypeForward:
+		return true
+	case MigrationExecutionTypeRollback:
+		return true
+	case MigrationExecutionTypeUp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MigrationExecutionStatus.
 const (
 	MigrationExecutionStatusApproved      MigrationExecutionStatus = "approved"
@@ -60,6 +102,7 @@ const (
 	MigrationExecutionStatusPartial       MigrationExecutionStatus = "partial"
 	MigrationExecutionStatusPendingReview MigrationExecutionStatus = "pending_review"
 	MigrationExecutionStatusQueued        MigrationExecutionStatus = "queued"
+	MigrationExecutionStatusRejected      MigrationExecutionStatus = "rejected"
 	MigrationExecutionStatusRunning       MigrationExecutionStatus = "running"
 	MigrationExecutionStatusSuccess       MigrationExecutionStatus = "success"
 )
@@ -77,30 +120,11 @@ func (e MigrationExecutionStatus) Valid() bool {
 		return true
 	case MigrationExecutionStatusQueued:
 		return true
+	case MigrationExecutionStatusRejected:
+		return true
 	case MigrationExecutionStatusRunning:
 		return true
 	case MigrationExecutionStatusSuccess:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for MigrationExecutionType.
-const (
-	MigrationExecutionTypeForward  MigrationExecutionType = "forward"
-	MigrationExecutionTypeRollback MigrationExecutionType = "rollback"
-	MigrationExecutionTypeUp       MigrationExecutionType = "up"
-)
-
-// Valid indicates whether the value is a known member of the MigrationExecutionType enum.
-func (e MigrationExecutionType) Valid() bool {
-	switch e {
-	case MigrationExecutionTypeForward:
-		return true
-	case MigrationExecutionTypeRollback:
-		return true
-	case MigrationExecutionTypeUp:
 		return true
 	default:
 		return false
@@ -241,6 +265,11 @@ type AdminUser struct {
 	Username string `json:"username"`
 }
 
+// ApproveMigrationRequest defines model for ApproveMigrationRequest.
+type ApproveMigrationRequest struct {
+	Note *string `json:"note,omitempty"`
+}
+
 // AuthUser defines model for AuthUser.
 type AuthUser struct {
 	Id       int64  `json:"id"`
@@ -290,8 +319,12 @@ type ErrorResponse struct {
 
 // Group defines model for Group.
 type Group struct {
-	Id   int64  `json:"id"`
-	Name string `json:"name"`
+	Id int64 `json:"id"`
+
+	// LeaderUserId The group leader, or null when no leader is assigned.
+	LeaderUserId   *int64  `json:"leader_user_id,omitempty"`
+	LeaderUsername *string `json:"leader_username,omitempty"`
+	Name           string  `json:"name"`
 }
 
 // HealthResponse defines model for HealthResponse.
@@ -350,6 +383,34 @@ type ManagedDatabaseRequest struct {
 	Username string  `json:"username"`
 }
 
+// MigrationApproval The approval required from one group. The set of groups is fixed when the execution is submitted.
+type MigrationApproval struct {
+	DecidedAt         *time.Time                `json:"decided_at,omitempty"`
+	DecidedBy         *int64                    `json:"decided_by,omitempty"`
+	DecidedByUsername *string                   `json:"decided_by_username,omitempty"`
+	Decision          MigrationApprovalDecision `json:"decision"`
+	GroupId           int64                     `json:"group_id"`
+	GroupName         string                    `json:"group_name"`
+
+	// LeaderUserId The group's current leader, who can decide while the approval is pending.
+	LeaderUserId   *int64  `json:"leader_user_id,omitempty"`
+	LeaderUsername *string `json:"leader_username,omitempty"`
+	Note           *string `json:"note,omitempty"`
+}
+
+// MigrationApprovalDecision defines model for MigrationApprovalDecision.
+type MigrationApprovalDecision string
+
+// MigrationApprovalSummary defines model for MigrationApprovalSummary.
+type MigrationApprovalSummary struct {
+	Approvals []MigrationApproval `json:"approvals"`
+
+	// CanDecide True when the current user leads at least one group whose approval is still pending.
+	CanDecide       bool                     `json:"can_decide"`
+	ExecutionId     int64                    `json:"execution_id"`
+	ExecutionStatus MigrationExecutionStatus `json:"execution_status"`
+}
+
 // MigrationDraft defines model for MigrationDraft.
 type MigrationDraft struct {
 	AppliedVersion     *int64               `json:"applied_version,omitempty"`
@@ -405,11 +466,11 @@ type MigrationExecution struct {
 	Version            *int64                   `json:"version,omitempty"`
 }
 
-// MigrationExecutionStatus defines model for MigrationExecution.Status.
-type MigrationExecutionStatus string
-
 // MigrationExecutionType defines model for MigrationExecution.Type.
 type MigrationExecutionType string
+
+// MigrationExecutionStatus defines model for MigrationExecutionStatus.
+type MigrationExecutionStatus string
 
 // MigrationExplainRequest defines model for MigrationExplainRequest.
 type MigrationExplainRequest struct {
@@ -506,9 +567,20 @@ type MigrationRunStatus string
 // PermissionLevel defines model for PermissionLevel.
 type PermissionLevel string
 
+// RejectMigrationRequest defines model for RejectMigrationRequest.
+type RejectMigrationRequest struct {
+	// Note Why the change was rejected.
+	Note string `json:"note"`
+}
+
 // SetDatabasePermissionRequest defines model for SetDatabasePermissionRequest.
 type SetDatabasePermissionRequest struct {
 	Permission PermissionLevel `json:"permission"`
+}
+
+// SetGroupLeaderRequest defines model for SetGroupLeaderRequest.
+type SetGroupLeaderRequest struct {
+	UserId int64 `json:"user_id"`
 }
 
 // Table defines model for Table.
@@ -629,6 +701,16 @@ type SetAdminGroupDatabaseParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
 }
 
+// ClearAdminGroupLeaderParams defines parameters for ClearAdminGroupLeader.
+type ClearAdminGroupLeaderParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// SetAdminGroupLeaderParams defines parameters for SetAdminGroupLeader.
+type SetAdminGroupLeaderParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
 // AddAdminGroupMemberParams defines parameters for AddAdminGroupMember.
 type AddAdminGroupMemberParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
@@ -716,6 +798,21 @@ type ExecuteMigrationDraftParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
 }
 
+// ApproveMigrationExecutionParams defines parameters for ApproveMigrationExecution.
+type ApproveMigrationExecutionParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// EnqueueMigrationExecutionParams defines parameters for EnqueueMigrationExecution.
+type EnqueueMigrationExecutionParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
+// RejectMigrationExecutionParams defines parameters for RejectMigrationExecution.
+type RejectMigrationExecutionParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
 // CreateAdminDatabaseJSONRequestBody defines body for CreateAdminDatabase for application/json ContentType.
 type CreateAdminDatabaseJSONRequestBody = ManagedDatabaseRequest
 
@@ -730,6 +827,9 @@ type CreateAdminGroupJSONRequestBody = CreateGroupRequest
 
 // SetAdminGroupDatabaseJSONRequestBody defines body for SetAdminGroupDatabase for application/json ContentType.
 type SetAdminGroupDatabaseJSONRequestBody = SetDatabasePermissionRequest
+
+// SetAdminGroupLeaderJSONRequestBody defines body for SetAdminGroupLeader for application/json ContentType.
+type SetAdminGroupLeaderJSONRequestBody = SetGroupLeaderRequest
 
 // AddAdminGroupMemberJSONRequestBody defines body for AddAdminGroupMember for application/json ContentType.
 type AddAdminGroupMemberJSONRequestBody = AddGroupMemberRequest
@@ -751,6 +851,12 @@ type ExplainMigrationJSONRequestBody = MigrationExplainRequest
 
 // UpdateMigrationDraftJSONRequestBody defines body for UpdateMigrationDraft for application/json ContentType.
 type UpdateMigrationDraftJSONRequestBody = MigrationDraftRequest
+
+// ApproveMigrationExecutionJSONRequestBody defines body for ApproveMigrationExecution for application/json ContentType.
+type ApproveMigrationExecutionJSONRequestBody = ApproveMigrationRequest
+
+// RejectMigrationExecutionJSONRequestBody defines body for RejectMigrationExecution for application/json ContentType.
+type RejectMigrationExecutionJSONRequestBody = RejectMigrationRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -790,6 +896,12 @@ type ServerInterface interface {
 	// SetAdminGroupDatabase Grant a group access to a database
 	// (PUT /admin/groups/{groupId}/databases/{databaseId})
 	SetAdminGroupDatabase(w http.ResponseWriter, r *http.Request, groupId GroupId, databaseId DatabaseId, params SetAdminGroupDatabaseParams)
+	// ClearAdminGroupLeader Clear the group leader
+	// (DELETE /admin/groups/{groupId}/leader)
+	ClearAdminGroupLeader(w http.ResponseWriter, r *http.Request, groupId GroupId, params ClearAdminGroupLeaderParams)
+	// SetAdminGroupLeader Assign the group leader
+	// (PUT /admin/groups/{groupId}/leader)
+	SetAdminGroupLeader(w http.ResponseWriter, r *http.Request, groupId GroupId, params SetAdminGroupLeaderParams)
 	// ListAdminGroupMembers List users in a group
 	// (GET /admin/groups/{groupId}/members)
 	ListAdminGroupMembers(w http.ResponseWriter, r *http.Request, groupId int64)
@@ -859,13 +971,16 @@ type ServerInterface interface {
 	// GetHealth Check application health
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// ListPendingMigrationApprovals List executions awaiting the current user's decision
+	// (GET /migrations/approvals/pending)
+	ListPendingMigrationApprovals(w http.ResponseWriter, r *http.Request)
 	// GetMigrationDraft Get a migration draft
 	// (GET /migrations/drafts/{draftId})
 	GetMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId)
 	// UpdateMigrationDraft Edit a draft that is not running or applied
 	// (PATCH /migrations/drafts/{draftId})
 	UpdateMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params UpdateMigrationDraftParams)
-	// ExecuteMigrationDraft Submit a draft for review and asynchronous execution
+	// ExecuteMigrationDraft Submit a draft for leader review
 	// (POST /migrations/drafts/{draftId}/execute)
 	ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params ExecuteMigrationDraftParams)
 	// ListMigrationRuns List the runs of a draft, oldest first
@@ -874,6 +989,18 @@ type ServerInterface interface {
 	// GetMigrationExecution Get migration execution status
 	// (GET /migrations/executions/{executionId})
 	GetMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId)
+	// GetMigrationExecutionApprovals Get the approval state of an execution
+	// (GET /migrations/executions/{executionId}/approvals)
+	GetMigrationExecutionApprovals(w http.ResponseWriter, r *http.Request, executionId ExecutionId)
+	// ApproveMigrationExecution Approve an execution as a group leader
+	// (POST /migrations/executions/{executionId}/approve)
+	ApproveMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params ApproveMigrationExecutionParams)
+	// EnqueueMigrationExecution Queue an approved execution for the worker
+	// (POST /migrations/executions/{executionId}/enqueue)
+	EnqueueMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params EnqueueMigrationExecutionParams)
+	// RejectMigrationExecution Reject an execution as a group leader
+	// (POST /migrations/executions/{executionId}/reject)
+	RejectMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params RejectMigrationExecutionParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -949,6 +1076,18 @@ func (_ Unimplemented) RemoveAdminGroupDatabase(w http.ResponseWriter, r *http.R
 // SetAdminGroupDatabase Grant a group access to a database
 // (PUT /admin/groups/{groupId}/databases/{databaseId})
 func (_ Unimplemented) SetAdminGroupDatabase(w http.ResponseWriter, r *http.Request, groupId GroupId, databaseId DatabaseId, params SetAdminGroupDatabaseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ClearAdminGroupLeader Clear the group leader
+// (DELETE /admin/groups/{groupId}/leader)
+func (_ Unimplemented) ClearAdminGroupLeader(w http.ResponseWriter, r *http.Request, groupId GroupId, params ClearAdminGroupLeaderParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetAdminGroupLeader Assign the group leader
+// (PUT /admin/groups/{groupId}/leader)
+func (_ Unimplemented) SetAdminGroupLeader(w http.ResponseWriter, r *http.Request, groupId GroupId, params SetAdminGroupLeaderParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1090,6 +1229,12 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListPendingMigrationApprovals List executions awaiting the current user's decision
+// (GET /migrations/approvals/pending)
+func (_ Unimplemented) ListPendingMigrationApprovals(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetMigrationDraft Get a migration draft
 // (GET /migrations/drafts/{draftId})
 func (_ Unimplemented) GetMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId) {
@@ -1102,7 +1247,7 @@ func (_ Unimplemented) UpdateMigrationDraft(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ExecuteMigrationDraft Submit a draft for review and asynchronous execution
+// ExecuteMigrationDraft Submit a draft for leader review
 // (POST /migrations/drafts/{draftId}/execute)
 func (_ Unimplemented) ExecuteMigrationDraft(w http.ResponseWriter, r *http.Request, draftId DraftId, params ExecuteMigrationDraftParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1117,6 +1262,30 @@ func (_ Unimplemented) ListMigrationRuns(w http.ResponseWriter, r *http.Request,
 // GetMigrationExecution Get migration execution status
 // (GET /migrations/executions/{executionId})
 func (_ Unimplemented) GetMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMigrationExecutionApprovals Get the approval state of an execution
+// (GET /migrations/executions/{executionId}/approvals)
+func (_ Unimplemented) GetMigrationExecutionApprovals(w http.ResponseWriter, r *http.Request, executionId ExecutionId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ApproveMigrationExecution Approve an execution as a group leader
+// (POST /migrations/executions/{executionId}/approve)
+func (_ Unimplemented) ApproveMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params ApproveMigrationExecutionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// EnqueueMigrationExecution Queue an approved execution for the worker
+// (POST /migrations/executions/{executionId}/enqueue)
+func (_ Unimplemented) EnqueueMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params EnqueueMigrationExecutionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RejectMigrationExecution Reject an execution as a group leader
+// (POST /migrations/executions/{executionId}/reject)
+func (_ Unimplemented) RejectMigrationExecution(w http.ResponseWriter, r *http.Request, executionId ExecutionId, params RejectMigrationExecutionParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1623,6 +1792,114 @@ func (siw *ServerInterfaceWrapper) SetAdminGroupDatabase(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetAdminGroupDatabase(w, r, groupId, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearAdminGroupLeader operation middleware
+func (siw *ServerInterfaceWrapper) ClearAdminGroupLeader(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ClearAdminGroupLeaderParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearAdminGroupLeader(w, r, groupId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAdminGroupLeader operation middleware
+func (siw *ServerInterfaceWrapper) SetAdminGroupLeader(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId GroupId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", chi.URLParam(r, "groupId"), &groupId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAdminGroupLeaderParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAdminGroupLeader(w, r, groupId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2551,6 +2828,20 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListPendingMigrationApprovals operation middleware
+func (siw *ServerInterfaceWrapper) ListPendingMigrationApprovals(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPendingMigrationApprovals(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMigrationDraft operation middleware
 func (siw *ServerInterfaceWrapper) GetMigrationDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -2737,6 +3028,194 @@ func (siw *ServerInterfaceWrapper) GetMigrationExecution(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// GetMigrationExecutionApprovals operation middleware
+func (siw *ServerInterfaceWrapper) GetMigrationExecutionApprovals(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMigrationExecutionApprovals(w, r, executionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveMigrationExecution operation middleware
+func (siw *ServerInterfaceWrapper) ApproveMigrationExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApproveMigrationExecutionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveMigrationExecution(w, r, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EnqueueMigrationExecution operation middleware
+func (siw *ServerInterfaceWrapper) EnqueueMigrationExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnqueueMigrationExecutionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnqueueMigrationExecution(w, r, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectMigrationExecution operation middleware
+func (siw *ServerInterfaceWrapper) RejectMigrationExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "executionId" -------------
+	var executionId ExecutionId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "executionId", chi.URLParam(r, "executionId"), &executionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "executionId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RejectMigrationExecutionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectMigrationExecution(w, r, executionId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2887,6 +3366,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/admin/groups/{groupId}/members/{userId}", wrapper.RemoveAdminGroupMember)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/admin/groups/{groupId}/leader", wrapper.ClearAdminGroupLeader)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/admin/groups/{groupId}/leader", wrapper.SetAdminGroupLeader)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/admin/databases", wrapper.ListAdminDatabases)
 	})
 	r.Group(func(r chi.Router) {
@@ -2966,6 +3451,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/migrations/executions/{executionId}", wrapper.GetMigrationExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/migrations/executions/{executionId}/approvals", wrapper.GetMigrationExecutionApprovals)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/migrations/executions/{executionId}/approve", wrapper.ApproveMigrationExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/migrations/executions/{executionId}/reject", wrapper.RejectMigrationExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/migrations/executions/{executionId}/enqueue", wrapper.EnqueueMigrationExecution)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/migrations/approvals/pending", wrapper.ListPendingMigrationApprovals)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/migrations/drafts/{draftId}/runs", wrapper.ListMigrationRuns)
@@ -3061,6 +3561,110 @@ var swaggerSpec = []string{
 	"Cy5AdtEwituscyoi79Db1+bJTtd4taaxV9PKzZ6nAA+TmHEl94rjUvOTDgS6bjHq3vauk6t77fZNc5iL",
 	"Wl5b8WaEzF8juV5qaaxf888naRYPbc5zlieSFpVI6zl1hq01TvhdaQYbA2gO+7lx86FYexzHZkTo4rzV",
 	"2cpUKjHFw9XD/w8A",
+	"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",
+	"AA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

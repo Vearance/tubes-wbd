@@ -1,23 +1,202 @@
-import { useEffect, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, type ReactNode } from 'react'
 import { LazyMotion, MotionConfig } from 'motion/react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router'
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from 'react-router'
 import { session } from './api'
 import { AppShell } from './components/AppShell'
-import { LoginPage } from './pages/LoginPage'
-import { DatabaseListPage, TablePage } from './pages/DatabasePages'
-import { EditPage, MigrationPage, QueryPage, SchemaPage } from './pages/ToolPages'
-import { AdminDatabasesPage, AdminGroupsPage, AdminLogsPage, AdminUsersPage } from './pages/AdminPages'
-import './App.css'
+import { Loading } from './components/ui'
 
-const loadMotionFeatures=()=>import('./motionFeatures').then(module=>module.default)
+// Lazy-loaded routes for optimal bundle chunking and performance
+const LoginPage = lazy(() =>
+  import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })),
+)
+const DatabaseListPage = lazy(() =>
+  import('./pages/database/DatabaseListPage').then((m) => ({
+    default: m.DatabaseListPage,
+  })),
+)
+const TablePage = lazy(() =>
+  import('./pages/database/TablePage').then((m) => ({
+    default: m.TablePage,
+  })),
+)
+const EditPage = lazy(() =>
+  import('./pages/tools/EditPage').then((m) => ({ default: m.EditPage })),
+)
+const QueryPage = lazy(() =>
+  import('./pages/tools/QueryPage').then((m) => ({ default: m.QueryPage })),
+)
+const SchemaPage = lazy(() =>
+  import('./pages/tools/SchemaPage').then((m) => ({ default: m.SchemaPage })),
+)
+const MigrationPage = lazy(() =>
+  import('./pages/tools/MigrationPage').then((m) => ({
+    default: m.MigrationPage,
+  })),
+)
 
-function RequireAuth({children,admin=false,regular=false}:{children:ReactNode;admin?:boolean;regular?:boolean}){const user=session.user();if(!user)return <Navigate to="/login" replace/>;if(admin&&!user.is_admin)return <Navigate to="/databases" replace/>;if(regular&&user.is_admin)return <Navigate to="/admin/users" replace/>;return children}
-function ShellRoute(){const params=useParams();return <AppShell databaseId={params.databaseId} schema={params.schema}/>}
-function Home(){const user=session.user();return <Navigate to={user?.is_admin?'/admin/users':user?'/databases':'/login'} replace/>}
-function RouteMetadata(){
-  const {pathname}=useLocation()
-  const section=pathname==='/login'?'Sign in':pathname.startsWith('/admin/users')?'Admin users':pathname.startsWith('/admin/groups')?'Admin groups':pathname.startsWith('/admin/databases')?'Admin databases':pathname.startsWith('/admin/logs')?'Audit logs':pathname.endsWith('/edit')?'Table changes':pathname.includes('/query')?'SQL editor':pathname.includes('/schema')?'Schema':pathname.includes('/migrations')?'Migrations':pathname==='/databases'?'Databases':'Table workspace'
-  useEffect(()=>{document.title=`${section} — BScheme`},[section])
+const AdminUsersPage = lazy(() =>
+  import('./pages/admin/AdminUsersPage').then((m) => ({
+    default: m.AdminUsersPage,
+  })),
+)
+const AdminGroupsPage = lazy(() =>
+  import('./pages/admin/AdminGroupsPage').then((m) => ({
+    default: m.AdminGroupsPage,
+  })),
+)
+const AdminDatabasesPage = lazy(() =>
+  import('./pages/admin/AdminDatabasesPage').then((m) => ({
+    default: m.AdminDatabasesPage,
+  })),
+)
+const AdminLogsPage = lazy(() =>
+  import('./pages/admin/AdminLogsPage').then((m) => ({
+    default: m.AdminLogsPage,
+  })),
+)
+
+const loadMotionFeatures = () =>
+  import('./motionFeatures').then((module) => module.default)
+
+type RequireAuthProps = {
+  children: ReactNode
+  admin?: boolean
+  regular?: boolean
+}
+
+function RequireAuth({
+  children,
+  admin = false,
+  regular = false,
+}: RequireAuthProps) {
+  const user = session.user()
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (admin && !user.is_admin) {
+    return <Navigate to="/databases" replace />
+  }
+
+  if (regular && user.is_admin) {
+    return <Navigate to="/admin/users" replace />
+  }
+
+  return children
+}
+
+function ShellRoute() {
+  const { databaseId, schema } = useParams()
+  return <AppShell databaseId={databaseId} schema={schema} />
+}
+
+function Home() {
+  const user = session.user()
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <Navigate to={user.is_admin ? '/admin/users' : '/databases'} replace />
+}
+
+function getPageSection(pathname: string) {
+  if (pathname === '/login') return 'Sign in'
+  if (pathname.startsWith('/admin/users')) return 'Admin users'
+  if (pathname.startsWith('/admin/groups')) return 'Admin groups'
+  if (pathname.startsWith('/admin/databases')) return 'Admin databases'
+  if (pathname.startsWith('/admin/logs')) return 'Governance'
+  if (pathname.endsWith('/edit')) return 'Table changes'
+  if (pathname.includes('/query')) return 'SQL editor'
+  if (pathname.includes('/schema')) return 'Schema'
+  if (pathname.includes('/migrations')) return 'Migrations'
+  if (pathname === '/databases') return 'Databases'
+  return 'Table workspace'
+}
+
+function RouteMetadata() {
+  const { pathname } = useLocation()
+  const section = getPageSection(pathname)
+
+  useEffect(() => {
+    document.title = `${section} — BScheme`
+  }, [section])
+
   return null
 }
-export default function App(){return <MotionConfig reducedMotion="user"><LazyMotion features={loadMotionFeatures} strict><BrowserRouter><RouteMetadata/><Routes><Route path="/login" element={<LoginPage/>}/><Route element={<RequireAuth regular><ShellRoute/></RequireAuth>}><Route path="/databases" element={<DatabaseListPage/>}/><Route path="/databases/:databaseId/:schema/:table" element={<TablePage/>}/><Route path="/databases/:databaseId/:schema/:table/edit" element={<EditPage/>}/><Route path="/databases/:databaseId/:schema/query" element={<QueryPage/>}/><Route path="/databases/:databaseId/:schema/schema" element={<SchemaPage/>}/><Route path="/databases/:databaseId/migrations" element={<MigrationPage/>}/></Route><Route element={<RequireAuth admin><ShellRoute/></RequireAuth>}><Route path="/admin/users" element={<AdminUsersPage/>}/><Route path="/admin/users/:userId" element={<AdminUsersPage/>}/><Route path="/admin/groups" element={<AdminGroupsPage/>}/><Route path="/admin/groups/:groupId" element={<AdminGroupsPage/>}/><Route path="/admin/databases" element={<AdminDatabasesPage/>}/><Route path="/admin/databases/:databaseId" element={<AdminDatabasesPage/>}/><Route path="/admin/logs" element={<AdminLogsPage/>}/></Route><Route path="*" element={<Home/>}/></Routes></BrowserRouter></LazyMotion></MotionConfig>}
+
+export default function App() {
+  return (
+    <MotionConfig reducedMotion="user">
+      <LazyMotion features={loadMotionFeatures} strict>
+        <BrowserRouter>
+          <RouteMetadata />
+          <Suspense fallback={<Loading page />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+
+              <Route
+                element={
+                  <RequireAuth regular>
+                    <ShellRoute />
+                  </RequireAuth>
+                }
+              >
+                <Route path="/databases" element={<DatabaseListPage />} />
+                <Route
+                  path="/databases/:databaseId/:schema/:table"
+                  element={<TablePage />}
+                />
+                <Route
+                  path="/databases/:databaseId/:schema/:table/edit"
+                  element={<EditPage />}
+                />
+                <Route
+                  path="/databases/:databaseId/:schema/query"
+                  element={<QueryPage />}
+                />
+                <Route
+                  path="/databases/:databaseId/:schema/schema"
+                  element={<SchemaPage />}
+                />
+                <Route
+                  path="/databases/:databaseId/migrations"
+                  element={<MigrationPage />}
+                />
+              </Route>
+
+              <Route
+                element={
+                  <RequireAuth admin>
+                    <ShellRoute />
+                  </RequireAuth>
+                }
+              >
+                <Route path="/admin/users" element={<AdminUsersPage />} />
+                <Route path="/admin/users/:userId" element={<AdminUsersPage />} />
+                <Route path="/admin/groups" element={<AdminGroupsPage />} />
+                <Route path="/admin/groups/:groupId" element={<AdminGroupsPage />} />
+                <Route path="/admin/databases" element={<AdminDatabasesPage />} />
+                <Route
+                  path="/admin/databases/:databaseId"
+                  element={<AdminDatabasesPage />}
+                />
+                <Route path="/admin/logs" element={<AdminLogsPage />} />
+              </Route>
+
+              <Route path="*" element={<Home />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </LazyMotion>
+    </MotionConfig>
+  )
+}

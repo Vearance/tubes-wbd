@@ -47,11 +47,13 @@ also require the `X-CSRF-Token` returned by login:
 - `GET /admin/users` lists users.
 - `POST /admin/users` creates a regular user.
 - `PATCH /admin/users/{userId}` enables or disables a user.
-- `GET /admin/groups` lists groups.
+- `GET /admin/groups` lists groups with their leader.
 - `POST /admin/groups` creates a group.
 - `GET /admin/groups/{groupId}/members` lists group members.
 - `POST /admin/groups/{groupId}/members` adds a user to a group.
-- `DELETE /admin/groups/{groupId}/members/{userId}` removes a user from a group.
+- `DELETE /admin/groups/{groupId}/members/{userId}` removes a user from a group. The group leader cannot be removed (`409`); assign another leader or clear the leader first.
+- `PUT /admin/groups/{groupId}/leader` assigns the group leader. The leader must be an enabled member of the group.
+- `DELETE /admin/groups/{groupId}/leader` clears the group leader.
 - `GET /admin/groups/{groupId}/databases` lists group database permissions.
 - `PUT /admin/groups/{groupId}/databases/{databaseId}` sets View Only or View + Edit permission.
 - `DELETE /admin/groups/{groupId}/databases/{databaseId}` removes a group database permission.
@@ -88,8 +90,39 @@ None < View Only < View + Edit
 - `POST /databases/{databaseId}/migrations/drafts` creates a draft.
 - `GET /migrations/drafts/{draftId}` gets a draft.
 - `PATCH /migrations/drafts/{draftId}` updates a draft.
-- `POST /migrations/drafts/{draftId}/execute` executes a draft.
+- `POST /migrations/drafts/{draftId}/execute` submits a draft for leader review. It does not run SQL; see [migration approval workflow](#migration-approval-workflow).
+- `POST /databases/{databaseId}/migrations/rollback` submits a rollback of the latest active migration for review.
+- `POST /databases/{databaseId}/migrations/forward` submits a forward of the latest rolled-back migration for review.
+- `GET /databases/{databaseId}/migrations/executions` lists executions, newest first.
+- `GET /migrations/executions/{executionId}` gets an execution and its status.
+- `GET /migrations/executions/{executionId}/approvals` lists the approval of every required group and whether the current user can decide.
+- `POST /migrations/executions/{executionId}/approve` approves as a group leader. The body `{"note": "..."}` is optional.
+- `POST /migrations/executions/{executionId}/reject` rejects as a group leader. The body `{"note": "..."}` is required.
+- `POST /migrations/executions/{executionId}/enqueue` queues an approved execution for the worker. Requires View + Edit.
+- `GET /migrations/approvals/pending` lists executions waiting for the current user's decision.
 - `GET /migrations/drafts/{draftId}/runs` lists execution runs.
+
+## migration approval workflow
+
+Every change, including rollback and forward, needs approval from the leader of each group with access to the database.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> pending_review: submit
+    pending_review --> approved: every group approved
+    pending_review --> rejected: a leader rejects
+    approved --> pending_review: a new group gained access
+    approved --> queued: enqueue (View + Edit)
+    queued --> running
+    running --> success
+    running --> failed
+    rejected --> [*]: draft becomes editable
+```
+
+- Groups to approve are fixed at submit; every one of them needs a leader.
+- One approval covers every group the leader leads, including their own submission.
+- Rejecting needs a reason. Worker retries do not need approval again.
 
 
 ## frontend
@@ -133,11 +166,13 @@ docker compose exec -T platform-db psql -U platform -d platform < scripts/seed-p
 The seed creates these users, all with the password `password`:
 
 ```text
-Group            Members                  Suggested permission on targetdb
-Student Council  rudolf, airgroove        View + Edit
-Team Spica       specialweek, goldship    View Only
-(no group)       tachyon                  none
+Group            Members                  Leader     Suggested permission on targetdb
+Student Council  rudolf, airgroove        rudolf     View + Edit
+Team Spica       specialweek, goldship    goldship   View Only
+(no group)       tachyon                  -          none
 ```
+
+With both permissions assigned, a migration on `targetdb` needs approval from rudolf and goldship before anyone with View + Edit can queue it. The seed only sets a leader on groups that have none, so a leader changed by the admin is kept.
 
 The groups receive no database permission from the seed, because a permission needs a registered managed database and its password is encrypted with `TARGET_DB_ENCRYPTION_KEY`. Sign in as the Platform Admin, register `targetdb` with the connection above, then assign it to `Student Council` with View + Edit and to `Team Spica` with View Only. The platform admin manages these assignments but does not receive target-database access automatically.
 

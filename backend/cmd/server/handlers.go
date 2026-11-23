@@ -345,8 +345,11 @@ func (s apiServer) RemoveAdminGroupMember(
 	err := s.groupService.RemoveMember(r.Context(), uint(groupID), uint(userID))
 	if err != nil {
 		switch {
-		case errors.Is(err, access.ErrMembershipNotFound):
+		case errors.Is(err, access.ErrMembershipNotFound),
+			errors.Is(err, access.ErrGroupNotFound):
 			writeAPIError(w, http.StatusNotFound, "membership not found")
+		case errors.Is(err, access.ErrMemberIsLeader):
+			writeAPIError(w, http.StatusConflict, access.ErrMemberIsLeader.Error())
 		default:
 			log.Printf("removing group member failed: %v", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
@@ -368,8 +371,10 @@ func adminUserResponse(user *auth.User) httpapi.AdminUser {
 
 func groupResponse(group *access.Group) httpapi.Group {
 	return httpapi.Group{
-		Id:   int64(group.ID),
-		Name: group.Name,
+		Id:             int64(group.ID),
+		Name:           group.Name,
+		LeaderUserId:   uintPointerToInt64(group.LeaderUserID),
+		LeaderUsername: group.LeaderUsername,
 	}
 }
 

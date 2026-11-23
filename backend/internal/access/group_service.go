@@ -134,9 +134,48 @@ func (s *GroupService) RemoveMember(
 	groupID uint,
 	userID uint,
 ) error {
+	group, err := s.groups.FindGroupByID(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	if group.LeaderUserID != nil && *group.LeaderUserID == userID {
+		return ErrMemberIsLeader
+	}
 	if err := s.groups.DeleteUserGroup(ctx, userID, groupID); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *GroupService) SetLeader(
+	ctx context.Context,
+	groupID uint,
+	userID uint,
+) (*Group, error) {
+	if _, err := s.groups.FindGroupByID(ctx, groupID); err != nil {
+		return nil, err
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("finding user for group leader: %w", err)
+	}
+	if user.DisabledAt != nil {
+		return nil, ErrLeaderDisabled
+	}
+	if _, err := s.groups.FindUserGroup(ctx, userID, groupID); err != nil {
+		if errors.Is(err, ErrMembershipNotFound) {
+			return nil, ErrLeaderNotMember
+		}
+		return nil, fmt.Errorf("checking group leader membership: %w", err)
+	}
+
+	if err := s.groups.SetGroupLeader(ctx, groupID, &userID); err != nil {
+		return nil, err
+	}
+	return s.groups.FindGroupByID(ctx, groupID)
+}
+
+func (s *GroupService) ClearLeader(ctx context.Context, groupID uint) error {
+	return s.groups.SetGroupLeader(ctx, groupID, nil)
 }
