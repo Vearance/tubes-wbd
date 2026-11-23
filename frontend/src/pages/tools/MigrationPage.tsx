@@ -1,72 +1,122 @@
-import { useState, type FormEvent } from 'react'
-import { useParams } from 'react-router'
-import { api, type MigrationDraft } from '../../api'
+import { useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router'
+import { AnimatePresence, m } from 'motion/react'
+import { api } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
-import { useWorkspaceContext } from '../../components/workspaceContext'
+import { AnimatedTabs } from '../../components/aceternity/AnimatedTabs'
 import { Icon } from '../../components/Icon'
-import {
-  Button,
-  ConfirmAction,
-  EmptyState,
-  ErrorNotice,
-  Loading,
-  Status,
-} from '../../components/ui'
+import { useWorkspaceContext } from '../../components/workspaceContext'
+import { Button, ErrorNotice, Loading } from '../../components/ui'
 import { useResource } from '../../hooks'
+import {
+  ConsensusAirlock,
+  type AirlockFilter,
+} from './migration/ConsensusAirlock'
+import {
+  DraftWorkbench,
+  type InitialDraftSeed,
+} from './migration/DraftWorkbench'
+import { HeadLedger } from './migration/HeadLedger'
+
+type MigrationTab = 'workbench' | 'airlock' | 'ledger'
 
 export function MigrationPage() {
   const { databaseId = '0' } = useParams()
   const id = Number(databaseId)
-  const { databases } = useWorkspaceContext()
-  const databaseName =
-    databases.find((database) => database.id === id)?.name ?? `Database #${id}`
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { databases, reloadPendingApprovals } = useWorkspaceContext()
+
+  const activeDb = databases.find((database) => database.id === id)
+  const databaseName = activeDb?.name ?? `Database #${id}`
+  const canEdit = activeDb?.permission === 'view_edit'
 
   const history = useResource(() => api.history(id), [id])
   const drafts = useResource(() => api.drafts(id), [id])
+  const executions = useResource(() => api.executions(id), [id])
+  const { reload: reloadHistory } = history
+  const { reload: reloadDrafts } = drafts
+  const { reload: reloadExecutions } = executions
 
-  const [showNewDraft, setShowNewDraft] = useState(false)
-  const [draftName, setDraftName] = useState('')
-  const [draftSql, setDraftSql] = useState('')
-  const [draftError, setDraftError] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [actionSuccess, setActionSuccess] = useState('')
+  const tabParam = searchParams.get('tab')
+  const executionParam = searchParams.get('executionId')
+  const newDraftParam = searchParams.get('newDraft') === '1'
 
-  if (history.loading || drafts.loading) {
-    return <Loading page label="Loading migration history and drafts…" />
-  }
+  const initialTab: MigrationTab =
+    tabParam === 'airlock' || tabParam === 'ledger' || tabParam === 'workbench'
+      ? tabParam
+      : executionParam
+        ? 'airlock'
+        : 'workbench'
 
-  async function handleCreateDraft(e: FormEvent) {
-    e.preventDefault()
-    setCreating(true)
-    setDraftError('')
-    try {
-      await api.createDraft(id, draftName, draftSql)
-      setDraftName('')
-      setDraftSql('')
-      setShowNewDraft(false)
-      setActionSuccess('Migration draft created successfully.')
-      await drafts.reload()
-      setTimeout(() => setActionSuccess(''), 4000)
-    } catch (err) {
-      setDraftError(
-        err instanceof Error ? err.message : 'Unable to create migration draft',
-      )
-    } finally {
-      setCreating(false)
+  const [activeTab, setActiveTab] = useState<MigrationTab>(initialTab)
+  const [airlockFilter, setAirlockFilter] = useState<AirlockFilter>('all')
+  const [focusedExecutionId, setFocusedExecutionId] = useState<number | null>(
+    executionParam ? Number(executionParam) : null,
+  )
+  const [showComposer, setShowComposer] = useState(newDraftParam)
+  const [bannerSuccess, setBannerSuccess] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  const initialSeed: InitialDraftSeed | null = newDraftParam
+    ? {
+        name: searchParams.get('name') ?? '',
+        sql: searchParams.get('sql') ?? '',
+        downSql: searchParams.get('downSql') ?? '',
+        irreversibleReason: searchParams.get('irreversibleReason') ?? undefined,
+      }
+    : null
+
+  const draftList = drafts.data ?? []
+  const executionList = executions.data ?? []
+  const historyList = history.data?.entries ?? []
+
+  const hasLiveQueueOrRunning = executionList.some(
+    (e) => e.status === 'queued' || e.status === 'running',
+  )
+
+  useEffect(() => {
+    if (!hasLiveQueueOrRunning) return
+    const timer = window.setInterval(() => {
+      reloadExecutions()
+      reloadDrafts()
+      reloadHistory()
+    }, 2500)
+    return () => window.clearInterval(timer)
+  }, [hasLiveQueueOrRunning, reloadExecutions, reloadDrafts, reloadHistory])
+
+  const isLoading = history.loading && drafts.loading && executions.loading
+
+  const pendingReviewCount = executionList.filter(
+    (e) => e.status === 'pending_review',
+  ).length
+
+  async function reloadAll(message?: string) {
+    setActionError('')
+    await Promise.all([drafts.reload(), executions.reload(), history.reload()])
+    reloadPendingApprovals()
+    if (message) {
+      setBannerSuccess(message)
+      window.setTimeout(() => setBannerSuccess(''), 5000)
     }
   }
 
-  async function handleExecuteDraft(draft: MigrationDraft) {
-    try {
-      await api.executeDraft(draft.id)
-      setActionSuccess(`Migration #${draft.id} executed successfully.`)
-      await Promise.all([drafts.reload(), history.reload()])
-      setTimeout(() => setActionSuccess(''), 4000)
-    } catch (err) {
-      setDraftError(
-        err instanceof Error ? err.message : 'Migration execution failed',
-      )
+  function clearSeedParams() {
+    if (newDraftParam) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('newDraft')
+      next.delete('name')
+      next.delete('sql')
+      next.delete('downSql')
+      next.delete('irreversibleReason')
+      setSearchParams(next, { replace: true })
     }
+  }
+
+  function trackDraftInAirlock(draftId: number) {
+    const match = executionList.find((e) => e.draft_id === draftId)
+    setFocusedExecutionId(match?.id ?? null)
+    setAirlockFilter('all')
+    setActiveTab('airlock')
   }
 
   return (
@@ -74,227 +124,193 @@ export function MigrationPage() {
       <UtilityHeader
         backTo="/databases"
         path={databaseName}
-        title="Migration history"
-        status={`${history.data?.entries.length ?? 0} applied · ${drafts.data?.length ?? 0} drafts`}
+        title="Migrations"
+        status={
+          isLoading
+            ? 'Loading migrations…'
+            : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} applied`
+        }
         actions={
-          <Button
-            variant="dark"
-            size="sm"
-            onClick={() => setShowNewDraft((prev) => !prev)}
-          >
-            <Icon name="plus" className="size-3.5" />
-            {showNewDraft ? 'Close' : 'New draft'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasLiveQueueOrRunning && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-soft px-2.5 py-1 text-[11px] font-bold text-violet">
+                <span className="size-2 rounded-full bg-violet animate-ping" />
+                Live polling worker…
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+              onClick={() => void reloadAll()}
+            >
+              <Icon name="refresh" className="size-3.5" />
+              Refresh
+            </Button>
+          </div>
         }
       />
 
-      {actionSuccess && (
-        <div className="my-2.5 rounded-[10px] bg-success-soft border border-success/20 px-3.5 py-3 text-xs font-semibold text-success flex items-center justify-between">
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <m.div
+            key="page-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="py-16"
+          >
+            <Loading label="Loading migration pipeline and ledger…" />
+          </m.div>
+        ) : (
+          <m.div
+            key="page-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="space-y-4"
+          >
+
+      {bannerSuccess && (
+        <div className="my-2.5 flex items-center justify-between rounded-[10px] border border-success/25 bg-success-soft px-3.5 py-3 text-xs font-semibold text-success">
           <span className="flex items-center gap-2">
-            <Icon name="check" className="size-4" /> {actionSuccess}
+            <Icon name="check" className="size-4" />
+            {bannerSuccess}
           </span>
           <button
             type="button"
-            onClick={() => setActionSuccess('')}
+            onClick={() => setBannerSuccess('')}
             className="hover:opacity-75"
+            aria-label="Dismiss notification"
           >
-            <Icon name="close" className="size-3" />
+            <Icon name="close" className="size-3.5" />
           </button>
         </div>
       )}
 
-      {(history.error || drafts.error || draftError) && (
+      {(history.error || drafts.error || executions.error || actionError) && (
         <ErrorNotice
-          message={history.error || drafts.error || draftError}
-          onDismiss={() => setDraftError('')}
+          message={
+            history.error || drafts.error || executions.error || actionError
+          }
+          onDismiss={() => setActionError('')}
         />
       )}
 
-      {showNewDraft && (
-        <form
-          onSubmit={handleCreateDraft}
-          className="mb-6 rounded-[14px] border border-line bg-white p-5 shadow-xs space-y-4"
-        >
-          <div className="flex items-center justify-between border-b border-line pb-3">
-            <h3 className="text-base font-bold text-ink m-0">
-              Create Migration Draft
-            </h3>
-            <span className="text-xs text-muted">
-              Database: <b>{databaseName}</b>
-            </span>
-          </div>
+      <AnimatedTabs
+        tabs={[
+          {
+            value: 'workbench',
+            label: `Schema Workbench (${draftList.length})`,
+          },
+          {
+            value: 'airlock',
+            label: `Consensus Airlock (${executionList.length})`,
+          },
+          {
+            value: 'ledger',
+            label: `Live HEAD Ledger (${historyList.length})`,
+          },
+        ]}
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as MigrationTab)}
+        className="mb-4"
+      />
 
-          <label className="block">
-            <span className="text-xs font-bold text-ink block mb-1">
-              Migration Name
-            </span>
-            <input
-              type="text"
-              required
-              placeholder="e.g. 001_create_posts_table"
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-              className="h-10 w-full rounded-lg border border-line bg-white px-3 text-xs font-mono outline-none focus:border-violet"
+      <AnimatePresence mode="wait">
+        {activeTab === 'workbench' && (
+          <m.div
+            key="workbench"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+          >
+            <DraftWorkbench
+              key={`${id}-${initialSeed?.sql ?? ''}`}
+              databaseId={id}
+              databaseName={databaseName}
+              canEdit={canEdit}
+              drafts={draftList}
+              initialSeed={initialSeed}
+              showComposer={showComposer}
+              onToggleComposer={setShowComposer}
+              onClearSeed={clearSeedParams}
+              onSaved={async (msg) => {
+                await reloadAll(msg)
+              }}
+              onSubmitted={async (executionId) => {
+                setFocusedExecutionId(executionId)
+                setAirlockFilter('pending_review')
+                setActiveTab('airlock')
+                await reloadAll(
+                  `Execution #${executionId} submitted to the Consensus Airlock for team leader review.`,
+                )
+              }}
+              onTrackExecution={trackDraftInAirlock}
             />
-          </label>
+          </m.div>
+        )}
 
-          <label className="block">
-            <span className="text-xs font-bold text-ink block mb-1">
-              SQL Statements
-            </span>
-            <textarea
-              required
-              rows={5}
-              placeholder="CREATE TABLE posts (id serial PRIMARY KEY, title text NOT NULL);"
-              value={draftSql}
-              onChange={(e) => setDraftSql(e.target.value)}
-              className="w-full rounded-lg border border-line bg-white p-3 font-mono text-xs outline-none focus:border-violet resize-y"
+        {activeTab === 'airlock' && (
+          <m.div
+            key="airlock"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+          >
+            <ConsensusAirlock
+              executions={executionList}
+              canEdit={canEdit}
+              filter={airlockFilter}
+              onFilterChange={setAirlockFilter}
+              focusedExecutionId={focusedExecutionId}
+              onMutated={async (msg) => {
+                await reloadAll(msg)
+              }}
             />
-          </label>
+          </m.div>
+        )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowNewDraft(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="dark" size="sm" type="submit" loading={creating}>
-              <Icon name="save" className="size-3.5" />
-              Save draft
-            </Button>
-          </div>
-        </form>
-      )}
-
-      <div className="mx-auto my-5 grid w-full max-w-[1100px] min-w-0 gap-8">
-        <section className="grid min-w-0 gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-ink m-0">Pending Drafts</h2>
-            <span className="text-xs text-muted">
-              {drafts.data?.length ?? 0} available
-            </span>
-          </div>
-
-          {drafts.data?.map((draft) => (
-            <article
-              className="grid grid-cols-[160px_minmax(0,1fr)_auto] gap-5 rounded-[14px] border border-accent/30 bg-white p-5 shadow-xs max-[600px]:grid-cols-[minmax(0,1fr)] max-[600px]:gap-3"
-              key={draft.id}
-            >
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
-                  Draft ID
-                </span>
-                <strong className="mt-1 block font-mono text-xs font-bold text-violet">
-                  #{draft.id}
-                </strong>
-                <span className="mt-2 block text-[10px] text-muted">
-                  Created {new Date(draft.created_at).toLocaleDateString()}
-                </span>
-              </div>
-
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="m-0 text-sm font-bold text-ink">{draft.name}</h3>
-                  <Status tone={draft.status === 'failed' ? 'red' : 'amber'}>
-                    {draft.status}
-                  </Status>
-                </div>
-                <pre className="mt-2 mb-0 overflow-auto rounded-lg bg-canvas p-3 font-mono text-xs text-muted leading-relaxed max-h-36">
-                  {draft.sql}
-                </pre>
-              </div>
-
-              <div className="flex flex-col justify-center items-end gap-2">
-                <ConfirmAction
-                  title={`Execute migration #${draft.id}?`}
-                  description={`This will run the migration "${draft.name}" against target database "${databaseName}". This action alters database schema.`}
-                  confirmLabel="Execute Migration"
-                  onConfirm={() => handleExecuteDraft(draft)}
-                  tone="primary"
-                  trigger={
-                    <Button variant="dark" size="sm">
-                      <Icon name="play" className="size-3.5" />
-                      Execute
-                    </Button>
-                  }
-                />
-              </div>
-            </article>
-          ))}
-
-          {!drafts.data?.length && (
-            <EmptyState
-              icon="migration"
-              title="No migration drafts"
-              action={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowNewDraft(true)}
-                >
-                  <Icon name="plus" className="size-3.5" />
-                  Create first draft
-                </Button>
-              }
-            >
-              Drafts allow you to review and stage DDL schema changes before
-              executing them against the database.
-            </EmptyState>
-          )}
-        </section>
-
-        <section className="grid min-w-0 gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-ink m-0">Applied Versions</h2>
-            <span className="text-xs text-muted">
-              {history.data?.entries.length ?? 0} applied
-            </span>
-          </div>
-
-          <div className="overflow-hidden rounded-[14px] border border-line bg-white shadow-xs divide-y divide-line">
-            {history.data?.entries.map((entry) => (
-              <article
-                className="grid grid-cols-[160px_minmax(0,1fr)_auto] items-center gap-5 p-4.5 max-[600px]:grid-cols-[minmax(0,1fr)] max-[600px]:gap-2"
-                key={entry.version}
-              >
-                <div>
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
-                    Version
-                  </span>
-                  <strong className="mt-0.5 block font-mono text-xs font-bold text-violet">
-                    v{entry.version}
-                  </strong>
-                </div>
-
-                <div className="min-w-0">
-                  <h3 className="m-0 text-sm font-bold text-ink">{entry.name}</h3>
-                  <p className="mt-1 mb-0 text-[11px] text-muted">
-                    Executed by user #{entry.executed_by} ·{' '}
-                    {new Date(entry.executed_at).toLocaleString()}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-canvas border border-line px-2 py-1 font-mono text-[10px] text-muted">
-                    {entry.duration_ms} ms
-                  </span>
-                  <Status tone="green">Applied</Status>
-                </div>
-              </article>
-            ))}
-
-            {!history.data?.entries.length && (
-              <div className="py-8">
-                <EmptyState icon="migration" title="No applied migrations">
-                  No migrations have been recorded for this database yet.
-                </EmptyState>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
+        {activeTab === 'ledger' && (
+          <m.div
+            key="ledger"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+          >
+            <HeadLedger
+              databaseId={id}
+              databaseName={databaseName}
+              canEdit={canEdit}
+              entries={historyList}
+              onRollbackProposed={async (executionId) => {
+                setFocusedExecutionId(executionId)
+                setAirlockFilter('pending_review')
+                setActiveTab('airlock')
+                await reloadAll(
+                  `Rollback execution #${executionId} submitted to Consensus Airlock for team leader sign-off.`,
+                )
+              }}
+              onForwardProposed={async (executionId) => {
+                setFocusedExecutionId(executionId)
+                setAirlockFilter('pending_review')
+                setActiveTab('airlock')
+                await reloadAll(
+                  `Forward execution #${executionId} submitted to Consensus Airlock for team leader sign-off.`,
+                )
+              }}
+            />
+          </m.div>
+        )}
+      </AnimatePresence>
+          </m.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
