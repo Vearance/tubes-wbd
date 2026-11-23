@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import { AnimatePresence, m } from "motion/react";
-import { useNavigate, useParams } from "react-router";
 import {
   api,
   type AdminUser,
@@ -123,17 +123,22 @@ function UserAccessDetail({
 
   return (
     <>
-      <header className="flex min-h-[94px] items-center gap-3 border-b border-line p-4">
-        <span className={avatarClass}>
+      <header className="flex min-h-[84px] items-center gap-3.5 border-b border-line p-5">
+        <span className={cn(avatarClass, "size-11 text-sm")}>
           {user.username.slice(0, 2).toUpperCase()}
         </span>
-        <span className="flex-1">
-          <small className="text-[8px] text-muted">
-            {user.is_admin ? "Administrator" : "Database user"}
+        <span className="flex-1 min-w-0">
+          <small className="block text-[11px] font-bold uppercase tracking-wider text-muted">
+            {user.is_admin ? "Administrator" : `User #${user.id}`}
           </small>
-          <h2 className="mt-1 text-[17px] font-bold">{user.username}</h2>
+          <h2 className="mt-1 mb-0 truncate text-lg font-bold text-ink">
+            {user.username}
+          </h2>
         </span>
-        <Status tone={user.disabled ? "red" : "green"}>
+        <Status
+          tone={user.disabled ? "red" : "green"}
+          className="px-3 py-1 text-[11px]"
+        >
           {user.disabled ? "Disabled" : "Active"}
         </Status>
       </header>
@@ -142,7 +147,9 @@ function UserAccessDetail({
         <>
           <section className={detailSectionClass}>
             <AssignmentHeading>
-              <h3 className="text-xs font-bold">Group membership</h3>
+              <h3 className="text-sm font-bold text-ink">
+                Group membership ({access.data?.length ?? 0})
+              </h3>
               <PickerAction
                 open={groupPicker}
                 label="Add group"
@@ -153,93 +160,130 @@ function UserAccessDetail({
             {(access.error || membershipError) && (
               <ErrorNotice message={access.error || membershipError} />
             )}
-            {access.loading ? (
+            {access.loading && !access.data ? (
               <Loading />
             ) : (
               <AssignedList>
-                {access.data?.map((entry, index) => (
-                  <StaggerRow
-                    index={index}
-                    className={assignedRowClass}
-                    key={entry.group.id}
-                  >
-                    <span className={glyphClass}>
-                      <Icon name="groups" />
-                    </span>
-                    <span>
-                      <b>{entry.group.name}</b>
-                      <small>
-                        {entry.permissions.length} database
-                        {entry.permissions.length === 1 ? "" : "s"}
-                      </small>
-                    </span>
-                    <ConfirmAction
-                      trigger={<Icon name="close" />}
-                      triggerClassName={removeButtonClass}
-                      triggerAriaLabel={`Remove ${user.username} from ${entry.group.name}`}
-                      title={`Remove ${user.username} from ${entry.group.name}?`}
-                      description="The user will lose access inherited through this group."
-                      confirmLabel="Remove membership"
-                      onConfirm={() => removeMembership(entry.group.id)}
-                    />
-                  </StaggerRow>
-                ))}
+                {access.data?.map((entry) => {
+                  const isLeader = entry.group.leader_user_id === user.id;
+                  return (
+                    <StaggerRow
+                      className={cn(
+                        assignedRowClass,
+                        "grid-cols-[36px_minmax(0,1fr)_auto_32px]",
+                      )}
+                      key={entry.group.id}
+                    >
+                      <span className={glyphClass}>
+                        <Icon name="groups" className="size-4" />
+                      </span>
+                      <span>
+                        <b className="flex items-center gap-1.5">
+                          <Link
+                            to={`/admin/groups/${entry.group.id}`}
+                            className="truncate text-ink no-underline hover:text-violet hover:underline"
+                          >
+                            {entry.group.name}
+                          </Link>
+                        </b>
+                        <small>
+                          {entry.permissions.length} database
+                          {entry.permissions.length === 1 ? "" : "s"}
+                        </small>
+                      </span>
+                      {isLeader ? (
+                        <Status tone="violet" className="gap-1 text-[10px]">
+                          <Icon name="crown" className="size-3" />
+                          Keyholder
+                        </Status>
+                      ) : (
+                        <span className="text-[11px] font-medium text-muted">
+                          Member
+                        </span>
+                      )}
+                      {isLeader ? (
+                        <Link
+                          to={`/admin/groups/${entry.group.id}`}
+                          className="grid size-8 place-items-center rounded-lg text-violet hover:bg-violet-soft"
+                          title="Reassign Keyholder in group before removing"
+                          aria-label={`Manage Keyholder in ${entry.group.name}`}
+                        >
+                          <Icon name="lock" className="size-4" />
+                        </Link>
+                      ) : (
+                        <ConfirmAction
+                          trigger={<Icon name="close" className="size-4" />}
+                          triggerClassName={removeButtonClass}
+                          triggerAriaLabel={`Remove ${user.username} from ${entry.group.name}`}
+                          title={`Remove ${user.username} from ${entry.group.name}?`}
+                          description="The user will lose access inherited through this group."
+                          confirmLabel="Remove membership"
+                          onConfirm={() => removeMembership(entry.group.id)}
+                        />
+                      )}
+                    </StaggerRow>
+                  );
+                })}
               </AssignedList>
             )}
             {!access.loading && !access.data?.length && (
               <AssignmentEmpty>No groups</AssignmentEmpty>
             )}
-            <AnimatePresence>
-              {groupPicker && (
-                <PickerPopover>
-                  <div className="mt-[7px] max-h-[190px] overflow-auto">
-                    {availableGroups.map((group) => (
-                      <button
-                        className={pickerOptionClass}
-                        key={group.id}
-                        onClick={() => addMembership(group.id)}
+            {groupPicker && (
+              <PickerPopover>
+                <div className="max-h-[200px] overflow-auto">
+                  {availableGroups.map((group) => (
+                    <button
+                      type="button"
+                      className={pickerOptionClass}
+                      key={group.id}
+                      onClick={() => addMembership(group.id)}
+                    >
+                      <span
+                        className={cn(glyphClass, "size-8 rounded-[9px]")}
                       >
-                        <span
-                          className={cn(glyphClass, "size-8 rounded-[9px]")}
-                        >
-                          <Icon name="groups" />
-                        </span>
-                        <span>
-                          <b>{group.name}</b>
-                          <small>Group #{group.id}</small>
-                        </span>
-                        <em className="text-right text-[8px] font-bold not-italic text-violet">
-                          Add
-                        </em>
-                      </button>
-                    ))}
-                    {!availableGroups.length && (
-                      <p className="m-0 p-[18px] text-center text-[9px] text-muted">
-                        No groups available
-                      </p>
-                    )}
-                  </div>
-                </PickerPopover>
-              )}
-            </AnimatePresence>
+                        <Icon name="groups" className="size-4" />
+                      </span>
+                      <span>
+                        <b>{group.name}</b>
+                        <small>
+                          {group.leader_username
+                            ? `@${group.leader_username}`
+                            : `Group #${group.id}`}
+                        </small>
+                      </span>
+                      <em className="text-right text-xs font-bold not-italic text-violet">
+                        Add
+                      </em>
+                    </button>
+                  ))}
+                  {!availableGroups.length && (
+                    <p className="m-0 p-4 text-center text-xs text-muted">
+                      No groups available
+                    </p>
+                  )}
+                </div>
+              </PickerPopover>
+            )}
           </section>
 
           <section className={detailSectionClass}>
             <AssignmentHeading>
-              <h3 className="text-xs font-bold">Database access</h3>
+              <h3 className="text-sm font-bold text-ink">
+                Database access ({databaseAccess.length})
+              </h3>
             </AssignmentHeading>
             <AssignedList>
-              {databaseAccess.map(({ group, permission, database }, index) => (
+              {databaseAccess.map(({ group, permission, database }) => (
                 <StaggerRow
-                  index={index}
                   className={cn(
                     assignedRowClass,
-                    "grid-cols-[38px_minmax(0,1fr)_auto]",
+                    "grid-cols-[36px_minmax(0,1fr)_auto]",
                   )}
                   key={`${group.id}-${permission.database_id}`}
                 >
                   <span className={glyphClass}>
-                    <Icon name="database" />
+                    <Icon name="database" className="size-4" />
                   </span>
                   <span>
                     <b>
@@ -247,18 +291,15 @@ function UserAccessDetail({
                     </b>
                     <small>{group.name}</small>
                   </span>
-                  <span
-                    className={cn(
-                      "mt-1 inline-flex w-fit rounded-full px-[7px] py-1 text-[8px] font-extrabold",
-                      permission.permission === "view_edit"
-                        ? "bg-violet-soft text-violet"
-                        : "bg-accent-soft text-accent",
-                    )}
+                  <Status
+                    tone={
+                      permission.permission === "view_edit" ? "violet" : "accent"
+                    }
                   >
                     {permission.permission === "view_edit"
                       ? "Editor"
                       : "Viewer"}
-                  </span>
+                  </Status>
                 </StaggerRow>
               ))}
             </AssignedList>
@@ -271,7 +312,7 @@ function UserAccessDetail({
 
       <section className={detailSectionClass}>
         <AssignmentHeading>
-          <h3 className="text-xs font-bold">Account</h3>
+          <h3 className="m-0 text-sm font-bold text-ink">Account</h3>
           {user.disabled ? (
             <Button
               variant="dark"
@@ -295,7 +336,7 @@ function UserAccessDetail({
           )}
         </AssignmentHeading>
         {accountError && (
-          <ErrorNotice className="my-[10px]" message={accountError} />
+          <ErrorNotice className="my-2.5" message={accountError} />
         )}
       </section>
     </>
@@ -317,8 +358,10 @@ export function AdminUsersPage() {
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
 
-  if (users.loading || groups.loading || databases.loading)
-    return <Loading page />;
+  const isLoading =
+    (users.loading && !users.data) ||
+    (groups.loading && !groups.data) ||
+    (databases.loading && !databases.data);
 
   const selected =
     (userId
@@ -366,7 +409,9 @@ export function AdminUsersPage() {
       <UtilityHeader
         path="Administration"
         title="Users"
-        status={`${users.data?.length ?? 0} users`}
+        status={
+          isLoading ? "Loading users…" : `${users.data?.length ?? 0} users`
+        }
         actions={
           <Button variant="dark" onClick={() => setShowCreate((prev) => !prev)}>
             <Icon name="plus" />
@@ -374,13 +419,35 @@ export function AdminUsersPage() {
           </Button>
         }
       />
-      {(users.error || groups.error || databases.error || createError) && (
-        <ErrorNotice
-          message={
-            users.error || groups.error || databases.error || createError
-          }
-        />
-      )}
+
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <m.div
+            key="users-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="py-16"
+          >
+            <Loading label="Loading registered users…" />
+          </m.div>
+        ) : (
+          <m.div
+            key="users-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="space-y-4"
+          >
+            {(users.error || groups.error || databases.error || createError) && (
+              <ErrorNotice
+                message={
+                  users.error || groups.error || databases.error || createError
+                }
+              />
+            )}
 
       {showCreate && (
         <form
@@ -391,9 +458,7 @@ export function AdminUsersPage() {
             <h3 className="m-0 text-base font-bold text-ink">
               Create New User
             </h3>
-            <span className="text-xs text-muted">
-              Add regular database user
-            </span>
+            <span className="text-xs text-muted">Regular database user</span>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block text-xs font-bold text-ink">
@@ -431,37 +496,65 @@ export function AdminUsersPage() {
         </form>
       )}
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-84px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
+      <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
         <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>
-          <header className="flex min-h-16 items-center border-b border-line px-3 py-[10px]">
+          <header className="flex min-h-16 items-center border-b border-line px-3 py-2.5">
             <Search
               value={search}
               onChange={setSearch}
               placeholder="Search users"
             />
           </header>
-          {shown.map((user) => (
-            <button
-              className={cn(
-                "grid min-h-[68px] w-full grid-cols-[40px_minmax(0,1fr)_18px] items-center gap-[10px] border-0 border-b border-line bg-white px-3 py-[9px] text-left transition-colors cursor-pointer",
-                selected?.id === user.id &&
-                  "bg-violet-soft shadow-[inset_3px_0_var(--violet)]",
-              )}
-              key={user.id}
-              onClick={() => selectUser(user)}
-            >
-              <span className={avatarClass}>
-                {user.username.slice(0, 2).toUpperCase()}
-              </span>
-              <span>
-                <b className="block">{user.username}</b>
-                <code className="mt-1 block font-mono text-[9px] text-muted">
-                  #{user.id} {user.disabled ? "· Disabled" : ""}
-                </code>
-              </span>
-              <Icon name="chevron" />
-            </button>
-          ))}
+          {shown.map((user) => {
+            const ledCount = (groups.data ?? []).filter(
+              (g) => g.leader_user_id === user.id,
+            ).length;
+            return (
+              <button
+                type="button"
+                className={cn(
+                  "grid min-h-[72px] w-full grid-cols-[38px_minmax(0,1fr)_auto_18px] items-center gap-3 border-0 border-b border-line bg-white px-4 py-3 text-left hover:bg-violet-soft/20 cursor-pointer transition-colors duration-150",
+                  selected?.id === user.id &&
+                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--violet)]",
+                )}
+                key={user.id}
+                onClick={() => selectUser(user)}
+              >
+                <span className={avatarClass}>
+                  {user.username.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <b className="block truncate text-xs font-bold text-ink">
+                    {user.username}
+                  </b>
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-muted">
+                    <span>#{user.id}</span>
+                    <span>·</span>
+                    <span
+                      className={cn(
+                        user.disabled
+                          ? "text-danger font-semibold"
+                          : user.is_admin
+                            ? "text-violet font-semibold"
+                            : "text-success font-medium",
+                      )}
+                    >
+                      {user.disabled ? "Disabled" : user.is_admin ? "Admin" : "Active"}
+                    </span>
+                  </span>
+                </span>
+                {ledCount > 0 ? (
+                  <Status tone="violet" className="gap-1 text-[10px]">
+                    <Icon name="crown" className="size-3" />
+                    {ledCount}
+                  </Status>
+                ) : (
+                  <span />
+                )}
+                <Icon name="chevron" className="size-4 text-muted" />
+              </button>
+            );
+          })}
           {shown.length === 0 && (
             <div className="p-8 text-center text-xs text-muted">
               No users found matching &ldquo;{search}&rdquo;.
@@ -469,55 +562,34 @@ export function AdminUsersPage() {
           )}
         </section>
         <section className={cn(surfaceClass, "relative min-w-0")}>
-          <AnimatePresence initial={false} mode="popLayout">
-            {selected ? (
-              <m.div
-                className="h-full"
-                key={`user-${selected.id}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{
-                  opacity: 0,
-                  transition: { duration: 0.12, ease: "easeOut" },
-                }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-              >
-                <UserAccessDetail
-                  user={selected}
-                  groups={groups.data ?? []}
-                  databases={databases.data ?? []}
-                  onToggle={() => toggle(selected)}
-                />
-              </m.div>
-            ) : (
-              <m.div
-                className="h-full"
-                key="user-empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{
-                  opacity: 0,
-                  transition: { duration: 0.14, ease: "easeOut" },
-                }}
-              >
-                <EmptyState
-                  icon="users"
-                  title="Select a user"
-                  action={
-                    shown[0] ? (
-                      <Button onClick={() => selectUser(shown[0])}>
-                        View first user
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  Choose an account to inspect status and access.
-                </EmptyState>
-              </m.div>
-            )}
-          </AnimatePresence>
+          {selected ? (
+            <UserAccessDetail
+              key={selected.id}
+              user={selected}
+              groups={groups.data ?? []}
+              databases={databases.data ?? []}
+              onToggle={() => toggle(selected)}
+            />
+          ) : (
+            <EmptyState
+              icon="users"
+              title="Select a user"
+              action={
+                shown[0] ? (
+                  <Button onClick={() => selectUser(shown[0])}>
+                    View first user
+                  </Button>
+                ) : undefined
+              }
+            >
+              Choose an account to inspect status and access.
+            </EmptyState>
+          )}
         </section>
       </div>
+          </m.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

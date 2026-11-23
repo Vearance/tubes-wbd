@@ -113,7 +113,7 @@ function getPageSection(pathname: string) {
   if (pathname.startsWith('/admin/users')) return 'Admin users'
   if (pathname.startsWith('/admin/groups')) return 'Admin groups'
   if (pathname.startsWith('/admin/databases')) return 'Admin databases'
-  if (pathname.startsWith('/admin/logs')) return 'Audit logs'
+  if (pathname.startsWith('/admin/logs')) return 'Governance'
   if (pathname.endsWith('/edit')) return 'Table changes'
   if (pathname.includes('/query')) return 'SQL editor'
   if (pathname.includes('/schema')) return 'Schema'

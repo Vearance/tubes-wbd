@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowDownAZ,
   ArrowUpAZ,
   Check,
@@ -6,9 +7,12 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
+  Clock,
   Code2,
   Columns3,
   Copy,
+  Crown,
   Database,
   Eye,
   EyeOff,
@@ -17,15 +21,22 @@ import {
   LayoutGrid,
   Link2,
   ListFilter,
+  Lock,
+  LockOpen,
   LogOut,
   Network,
   Pencil,
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Save,
   ScrollText,
   Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
   Table2,
   Trash2,
   UserRoundPlus,
@@ -56,6 +67,7 @@ export type IconName =
   | 'chevron'
   | 'chevron-left'
   | 'chevron-down'
+  | 'chevrons-up-down'
   | 'edit'
   | 'check'
   | 'check-check'
@@ -68,6 +80,16 @@ export type IconName =
   | 'trash'
   | 'key'
   | 'link'
+  | 'shield'
+  | 'lock'
+  | 'unlock'
+  | 'crown'
+  | 'undo'
+  | 'redo'
+  | 'clock'
+  | 'alert'
+  | 'sparkles'
+  | 'send'
 
 const icons: Record<IconName, LucideIcon> = {
   grid: LayoutGrid,
@@ -91,6 +113,7 @@ const icons: Record<IconName, LucideIcon> = {
   chevron: ChevronRight,
   'chevron-left': ChevronLeft,
   'chevron-down': ChevronDown,
+  'chevrons-up-down': ChevronsUpDown,
   edit: Pencil,
   check: Check,
   'check-check': CheckCheck,
@@ -103,6 +126,16 @@ const icons: Record<IconName, LucideIcon> = {
   trash: Trash2,
   key: KeyRound,
   link: Link2,
+  shield: ShieldCheck,
+  lock: Lock,
+  unlock: LockOpen,
+  crown: Crown,
+  undo: RotateCcw,
+  redo: RotateCw,
+  clock: Clock,
+  alert: AlertTriangle,
+  sparkles: Sparkles,
+  send: Send,
 }
 
 export function Icon({
@@ -120,5 +153,28 @@ export function Icon({
       aria-hidden="true"
       strokeWidth={1.75}
     />
+  )
+}
+
+export function DatabaseMark({
+  connected = false,
+  className,
+}: {
+  connected?: boolean
+  className?: string
+}) {
+  return (
+    <span
+      className={
+        className ??
+        'relative grid size-[38px] shrink-0 place-items-center rounded-xl bg-violet-soft text-violet shadow-xs'
+      }
+      aria-hidden="true"
+    >
+      <Database className="size-4.5" strokeWidth={1.8} />
+      {connected && (
+        <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-white bg-success" />
+      )}
+    </span>
   )
 }
