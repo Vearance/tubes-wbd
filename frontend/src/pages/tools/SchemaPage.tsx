@@ -562,9 +562,9 @@ export function SchemaPage() {
                 type="button"
                 onClick={() => setViewMode('diagram')}
                 className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                   viewMode === 'diagram'
-                    ? 'bg-violet text-white shadow-2xs'
+                    ? 'bg-ink text-white shadow-2xs'
                     : 'text-muted hover:text-ink',
                 )}
               >
@@ -575,9 +575,9 @@ export function SchemaPage() {
                 type="button"
                 onClick={() => setViewMode('cards')}
                 className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                   viewMode === 'cards'
-                    ? 'bg-violet text-white shadow-2xs'
+                    ? 'bg-ink text-white shadow-2xs'
                     : 'text-muted hover:text-ink',
                 )}
               >
