@@ -5,7 +5,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: app
+
     environment:
       APP_PORT: ${APP_PORT:-8080}
       APP_DATABASE_URL: ${APP_DATABASE_URL}
@@ -39,7 +39,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: worker
+
     entrypoint: ["/worker"]
     restart: unless-stopped
     environment:
@@ -57,7 +57,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: frontend
+
     environment:
       APP_PORT: ${APP_PORT:-8080}
       BACKEND_HOST: internal
@@ -68,7 +68,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
-    container_name: rabbitmq
+
     restart: unless-stopped
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
@@ -83,7 +83,7 @@ services:
 
   platform-db:
     image: postgres:17-alpine
-    container_name: db
+
     environment:
       POSTGRES_DB: ${APP_NAME:-platform}
       POSTGRES_USER: ${APP_USER:-platform}
@@ -100,7 +100,7 @@ services:
 
   test-db:
     image: postgres:17-alpine
-    container_name: test-db
+
     environment:
       POSTGRES_DB: ${TEST_DB_NAME:-targetdb}
       POSTGRES_USER: ${TEST_DB_USER:-target}
