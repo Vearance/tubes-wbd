@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-
-	amqp "github.com/rabbitmq/amqp091-go"
 
 	"tubes-wbd/internal/access"
 	"tubes-wbd/internal/database/platformdb"
@@ -20,8 +18,10 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("worker stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -40,7 +40,7 @@ func run() error {
 	}
 	defer func() {
 		if err := platformdb.Close(db); err != nil {
-			log.Printf("closing platform database: %v", err)
+			slog.Error("closing platform database", "error", err)
 		}
 	}()
 
@@ -92,22 +92,8 @@ func run() error {
 		return fmt.Errorf("creating migration worker: %w", err)
 	}
 
-	connection, err := amqp.Dial(cfg.rabbitURL)
-	if err != nil {
-		return fmt.Errorf("connecting to RabbitMQ: %w", err)
-	}
-	defer connection.Close()
-	channel, err := connection.Channel()
-	if err != nil {
-		return fmt.Errorf("opening RabbitMQ channel: %w", err)
-	}
-	defer channel.Close()
-	if err := migration.DeclareExecutionQueue(channel, cfg.queue); err != nil {
-		return err
-	}
-
-	log.Printf("migration worker consuming RabbitMQ queue %q", cfg.queue)
-	err = worker.Consume(ctx, channel, cfg.queue)
+	slog.Info("migration worker consuming RabbitMQ queue", "queue", cfg.queue)
+	err = worker.ConsumeWithReconnect(ctx, cfg.rabbitURL, cfg.queue)
 	if errors.Is(err, context.Canceled) {
 		return nil
 	}

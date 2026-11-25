@@ -14,11 +14,21 @@ docker compose up --build
 
 The backend runs at `http://localhost:8080`, and the frontend runs at `http://localhost:5173`.
 
-## start server only
+## start server and migration worker locally
+
+Run the API and the durable migration worker in separate terminals. They have separate entrypoints and share the relevant Platform DB and RabbitMQ settings:
+
 ```bash
 cd backend
 go run ./cmd/server
 ```
+
+```bash
+cd backend
+go run ./cmd/worker
+```
+
+Execution delivery uses RabbitMQ; the Platform DB remains the source of truth. The API writes an outbox record atomically with the queued execution, and a relay publishes only the execution ID to the durable queue. In Compose, RabbitMQ and the separate `worker` service are started alongside the API automatically. For local runs, start RabbitMQ and set `APP_RABBITMQ_URL` (default `amqp://guest:guest@localhost:5672/`); `APP_RABBITMQ_QUEUE` defaults to `migration.executions`.
 
 ## OpenAPI
 
@@ -177,6 +187,10 @@ With both permissions assigned, a migration on `targetdb` needs approval from ru
 The groups receive no database permission from the seed, because a permission needs a registered managed database and its password is encrypted with `TARGET_DB_ENCRYPTION_KEY`. Sign in as the Platform Admin, register `targetdb` with the connection above, then assign it to `Student Council` with View + Edit and to `Team Spica` with View Only. The platform admin manages these assignments but does not receive target-database access automatically.
 
 The script is safe to run repeatedly and does not overwrite an existing user password. If `APP_USER` or `APP_NAME` is customized in `.env`, replace `platform` in the command with the configured values.
+
+## migration execution workflow
+
+The migration workflow/approval component must call the migration service's `ApproveExecution` only after all required group-leader approvals, then call `EnqueueApprovedExecution`. Enqueueing updates execution state and inserts the outbox message in one Platform-DB transaction. A relay publishes the execution ID to RabbitMQ with publisher confirms; workers load immutable execution snapshots from the Platform DB and acknowledge only after the result is persisted. Up, rollback, and forward each create immutable execution snapshots; target history is append-only.
 
 ## integration tests
 

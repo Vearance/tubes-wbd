@@ -1971,6 +1971,8 @@ components:
       type: object
       required:
         - version
+        - attempt_number
+        - status
         - name
         - executed_by
         - executed_at
@@ -1979,6 +1981,15 @@ components:
         version:
           type: integer
           format: int64
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [success, failed]
+        error_code:
+          type: string
+        error_message:
+          type: string
         execution_id:
           type: integer
           format: int64
@@ -2064,6 +2075,22 @@ components:
           items:
             type: object
             additionalProperties: true
+    MigrationBatchDefinition:
+      type: object
+      required:
+        - cursor_sql
+        - batch_size
+      properties:
+        cursor_sql:
+          type: string
+          description: >-
+            A single SELECT returning one positive bigint key per row. It receives the last
+            committed cursor as $1 (0 before the first batch) and batch_size as $2, and must
+            return keys in strictly increasing order.
+        batch_size:
+          type: integer
+          minimum: 1
+          maximum: 10000
     MigrationDraftRequest:
       type: object
       required:
@@ -2081,6 +2108,8 @@ components:
           default: false
         irreversible_reason:
           type: string
+        batch:
+          $ref: '#/components/schemas/MigrationBatchDefinition'
     MigrationDraft:
       type: object
       required:
@@ -2110,6 +2139,8 @@ components:
           type: boolean
         irreversible_reason:
           type: string
+        batch:
+          $ref: '#/components/schemas/MigrationBatchDefinition'
         status:
           type: string
           enum:
@@ -2251,6 +2282,19 @@ components:
           type: string
         down_sql:
           type: string
+        batch:
+          $ref: '#/components/schemas/MigrationBatchDefinition'
+        batch_count:
+          type: integer
+        rows_processed:
+          type: integer
+          format: int64
+        last_cursor:
+          type: integer
+          format: int64
+          nullable: true
+        batch_done:
+          type: boolean
         irreversible:
           type: boolean
         irreversible_reason:

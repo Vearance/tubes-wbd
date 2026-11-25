@@ -29,8 +29,8 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int) (*HistoryPa
 
 	offset := int64(page-1) * int64(pageSize)
 	rows, err := tx.Query(ctx,
-		`SELECT version, execution_id, execution_type, target_execution_id, active,
-			name, executed_by, executed_at, duration_ms
+		`SELECT version, execution_id, attempt_number, status, error_code, error_message,
+			execution_type, target_execution_id, active, name, executed_by, executed_at, duration_ms
 		FROM _dbm.migration_history
 		ORDER BY version DESC
 		LIMIT $1 OFFSET $2`, pageSize+1, offset)
@@ -39,15 +39,16 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int) (*HistoryPa
 	}
 	entries, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (HistorySummary, error) {
 		var (
-			e             HistorySummary
-			executionID   pgtype.Int8
-			targetID      pgtype.Int8
-			executionType string
-			executedBy    int64
-			durationMS    int64
+			e               HistorySummary
+			executionID     pgtype.Int8
+			targetID        pgtype.Int8
+			executionType   string
+			executionStatus string
+			executedBy      int64
+			durationMS      int64
 		)
-		if err := row.Scan(&e.Version, &executionID, &executionType, &targetID, &e.Active,
-			&e.Name, &executedBy, &e.ExecutedAt, &durationMS); err != nil {
+		if err := row.Scan(&e.Version, &executionID, &e.AttemptNumber, &executionStatus, &e.ErrorCode, &e.ErrorMessage,
+			&executionType, &targetID, &e.Active, &e.Name, &executedBy, &e.ExecutedAt, &durationMS); err != nil {
 			return HistorySummary{}, err
 		}
 		if executionID.Valid {
@@ -59,6 +60,7 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int) (*HistoryPa
 			e.TargetExecutionID = &id
 		}
 		e.Type = ExecutionType(executionType)
+		e.Status = RunStatus(executionStatus)
 		e.ExecutedBy = uint(executedBy)
 		e.Duration = time.Duration(durationMS) * time.Millisecond
 		return e, nil
@@ -88,17 +90,19 @@ func getExecutionHistoryByID(ctx context.Context, tx pgx.Tx, executionID uint) (
 		storedExecution pgtype.Int8
 		targetExecution pgtype.Int8
 		executionType   string
+		executionStatus string
 		executedBy      int64
 		durationMS      int64
 	)
 	err = tx.QueryRow(ctx,
-		`SELECT version, execution_id, execution_type, target_execution_id, active,
-			name, sql, down_sql, irreversible_reason, executed_by, executed_at, duration_ms
-		 FROM _dbm.migration_history WHERE execution_id = $1
-		 ORDER BY version DESC LIMIT 1`, int64(executionID)).Scan(
-		&entry.Version, &storedExecution, &executionType, &targetExecution, &entry.Active,
-		&entry.Name, &entry.SQL, &entry.DownSQL, &entry.IrreversibleReason,
-		&executedBy, &entry.ExecutedAt, &durationMS,
+		`SELECT version, execution_id, attempt_number, status, error_code, error_message,
+					execution_type, target_execution_id, active, name, sql, down_sql,
+					irreversible_reason, executed_by, executed_at, duration_ms
+				 FROM _dbm.migration_history WHERE execution_id = $1 AND status = 'success'
+				 ORDER BY version DESC LIMIT 1`, int64(executionID)).Scan(
+		&entry.Version, &storedExecution, &entry.AttemptNumber, &executionStatus, &entry.ErrorCode, &entry.ErrorMessage,
+		&executionType, &targetExecution, &entry.Active, &entry.Name, &entry.SQL, &entry.DownSQL,
+		&entry.IrreversibleReason, &executedBy, &entry.ExecutedAt, &durationMS,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrVersionNotFound
@@ -114,6 +118,7 @@ func getExecutionHistoryByID(ctx context.Context, tx pgx.Tx, executionID uint) (
 		entry.TargetExecutionID = &targetID
 	}
 	entry.Type = ExecutionType(executionType)
+	entry.Status = RunStatus(executionStatus)
 	entry.ExecutedBy = uint(executedBy)
 	entry.Duration = time.Duration(durationMS) * time.Millisecond
 	return &entry, nil
@@ -129,7 +134,7 @@ func latestActiveExecutionHistory(ctx context.Context, tx pgx.Tx) (*HistoryEntry
 	}
 	var executionID pgtype.Int8
 	err = tx.QueryRow(ctx,
-		"SELECT execution_id FROM _dbm.migration_history WHERE active = true ORDER BY version DESC LIMIT 1").Scan(&executionID)
+		"SELECT execution_id FROM _dbm.migration_history WHERE active = true AND status = 'success' ORDER BY version DESC LIMIT 1").Scan(&executionID)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && !executionID.Valid {
 		return nil, ErrVersionNotFound
 	}
@@ -149,7 +154,7 @@ func latestExecutionHistory(ctx context.Context, tx pgx.Tx) (*HistoryEntry, erro
 	}
 	var executionID pgtype.Int8
 	err = tx.QueryRow(ctx,
-		"SELECT execution_id FROM _dbm.migration_history ORDER BY version DESC LIMIT 1").Scan(&executionID)
+		"SELECT execution_id FROM _dbm.migration_history WHERE status = 'success' ORDER BY version DESC LIMIT 1").Scan(&executionID)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && !executionID.Valid {
 		return nil, ErrVersionNotFound
 	}
@@ -173,16 +178,18 @@ func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEnt
 		executionID     pgtype.Int8
 		targetExecution pgtype.Int8
 		executionType   string
+		executionStatus string
 		executedBy      int64
 		durationMS      int64
 	)
 	err = tx.QueryRow(ctx,
-		`SELECT version, execution_id, execution_type, target_execution_id, active,
-			name, sql, down_sql, irreversible_reason, executed_by, executed_at, duration_ms
+		`SELECT version, execution_id, attempt_number, status, error_code, error_message,
+			execution_type, target_execution_id, active, name, sql, down_sql,
+			irreversible_reason, executed_by, executed_at, duration_ms
 		FROM _dbm.migration_history
 		WHERE version = $1`, version).Scan(
-		&e.Version, &executionID, &executionType, &targetExecution, &e.Active,
-		&e.Name, &e.SQL, &e.DownSQL, &e.IrreversibleReason,
+		&e.Version, &executionID, &e.AttemptNumber, &executionStatus, &e.ErrorCode, &e.ErrorMessage,
+		&executionType, &targetExecution, &e.Active, &e.Name, &e.SQL, &e.DownSQL, &e.IrreversibleReason,
 		&executedBy, &e.ExecutedAt, &durationMS,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -200,6 +207,7 @@ func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEnt
 		e.TargetExecutionID = &targetID
 	}
 	e.Type = ExecutionType(executionType)
+	e.Status = RunStatus(executionStatus)
 	e.ExecutedBy = uint(executedBy)
 	e.Duration = time.Duration(durationMS) * time.Millisecond
 	return &e, nil

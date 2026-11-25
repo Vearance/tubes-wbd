@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,13 +21,13 @@ import (
 	"tubes-wbd/internal/migration"
 	"tubes-wbd/internal/users"
 	"tubes-wbd/internal/viewer"
-
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -50,7 +50,7 @@ func run() error {
 	}
 	defer func() {
 		if err := platformdb.Close(db); err != nil {
-			log.Printf("closing platform database: %v", err)
+			slog.Error("closing platform database", "error", err)
 		}
 	}()
 
@@ -147,19 +147,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating migration service: %w", err)
 	}
-	connection, err := amqp.Dial(cfg.RabbitMQURL)
-	if err != nil {
-		return fmt.Errorf("connecting to RabbitMQ: %w", err)
-	}
-	defer connection.Close()
-	channel, err := connection.Channel()
-	if err != nil {
-		return fmt.Errorf("opening RabbitMQ channel: %w", err)
-	}
-	defer channel.Close()
-	if err := migration.DeclareExecutionQueue(channel, cfg.RabbitMQQueue); err != nil {
-		return err
-	}
 
 	// Register HTTP routes and inject authentication dependencies.
 	cookieOptions := middleware.CookieOptions{Secure: cfg.CookieSecure}
@@ -184,7 +171,7 @@ func run() error {
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if _, err := io.WriteString(w, "Hello, world!\n"); err != nil {
-			log.Printf("writing response: %v", err)
+			slog.Error("writing root response", "error", err)
 		}
 	})
 
@@ -196,12 +183,8 @@ func run() error {
 
 	// Start serving in the background so signals can be handled.
 	serverErrors := make(chan error, 1)
-	relay, err := migration.NewOutboxRelay(db, channel, cfg.RabbitMQQueue)
-	if err != nil {
-		return err
-	}
 	go func() {
-		if err := relay.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := migration.RunOutboxRelay(ctx, db, cfg.RabbitMQURL, cfg.RabbitMQQueue); err != nil && !errors.Is(err, context.Canceled) {
 			serverErrors <- fmt.Errorf("running migration outbox relay: %w", err)
 		}
 	}()
@@ -209,7 +192,7 @@ func run() error {
 		serverErrors <- server.ListenAndServe()
 	}()
 
-	log.Printf("server listening on :%s", cfg.Port)
+	slog.Info("server listening", "port", cfg.Port)
 
 	// Wait for a server error or a shutdown signal.
 	select {
@@ -218,7 +201,7 @@ func run() error {
 			return fmt.Errorf("serving HTTP: %w", err)
 		}
 	case <-ctx.Done():
-		log.Printf("shutdown signal received")
+		slog.Info("shutdown signal received")
 	}
 
 	// Stop accepting requests and wait for active requests to finish.

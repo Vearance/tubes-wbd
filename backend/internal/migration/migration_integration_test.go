@@ -284,14 +284,14 @@ func TestIntegrationMultiStatementMigrationIsAtomic(t *testing.T) {
 	require.False(t, tableExists(t, pool, "orders"), "earlier statements must be rolled back")
 	require.False(t, columnExists(t, pool, "customers", "email"), "earlier statements must be rolled back")
 	require.True(t, tableExists(t, pool, "kept"), "a previous migration must not be affected")
-	require.Equal(t, []int64{1}, historyVersions(t, pool), "a failed migration must not be recorded")
+	require.Equal(t, []int64{2, 1}, historyVersions(t, pool), "the failed migration attempt must be recorded")
 
 	entry, err := svc.Execute(ctx, 1, 1, Migration{Name: "after failure", SQL: "CREATE TABLE next (id int)"})
 	require.NoError(t, err)
-	require.Equal(t, int64(2), entry.Version, "a failed migration must not use up a version")
+	require.Equal(t, int64(3), entry.Version, "a failed attempt must occupy a history version")
 }
 
-func TestIntegrationFailedFirstMigrationLeavesNoHistoryTable(t *testing.T) {
+func TestIntegrationFailedFirstMigrationCreatesHistoryEntry(t *testing.T) {
 	cfg, pool := newTarget(t, "")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 
@@ -301,7 +301,12 @@ func TestIntegrationFailedFirstMigrationLeavesNoHistoryTable(t *testing.T) {
 	require.ErrorAs(t, err, &execErr)
 	require.Equal(t, "42601", execErr.Code)
 	require.Positive(t, execErr.Position)
-	require.False(t, tableExists(t, pool, "_dbm.migration_history"))
+	require.True(t, tableExists(t, pool, "_dbm.migration_history"))
+	page, historyErr := svc.History(context.Background(), 1, 1, 1, 10)
+	require.NoError(t, historyErr)
+	require.Len(t, page.Entries, 1)
+	require.Equal(t, RunStatusFailed, page.Entries[0].Status)
+	require.Equal(t, "42601", page.Entries[0].ErrorCode)
 }
 
 func TestIntegrationTransactionControlIsRejectedBeforeRunning(t *testing.T) {
@@ -363,7 +368,7 @@ func TestIntegrationSimultaneousExecuteOnlyOneWins(t *testing.T) {
 		require.ErrorIs(t, err, ErrMigrationInProgress)
 	}
 	require.Equal(t, 1, succeeded)
-	require.Equal(t, []int64{1}, historyVersions(t, pool))
+	require.Len(t, historyVersions(t, pool), callers)
 }
 
 func TestIntegrationTargetsAreIsolated(t *testing.T) {
@@ -566,7 +571,7 @@ func TestIntegrationHistoryEntryDetail(t *testing.T) {
 	require.ErrorIs(t, err, ErrVersionNotFound)
 }
 
-func TestIntegrationFailedMigrationIsNotInHistory(t *testing.T) {
+func TestIntegrationFailedMigrationIsInHistory(t *testing.T) {
 	cfg, _ := newTarget(t, "")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 	ctx := context.Background()
@@ -577,7 +582,14 @@ func TestIntegrationFailedMigrationIsNotInHistory(t *testing.T) {
 
 	page, err := svc.History(ctx, 1, 1, 1, 10)
 	require.NoError(t, err)
-	require.Equal(t, []int64{1}, summaryVersions(page))
+	require.Equal(t, []int64{2, 1}, summaryVersions(page))
+	require.Equal(t, RunStatusFailed, page.Entries[0].Status)
+	require.Equal(t, "42P01", page.Entries[0].ErrorCode)
+
+	failedEntry, err := svc.HistoryEntry(ctx, 1, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, RunStatusFailed, failedEntry.Status)
+	require.Equal(t, "42P01", failedEntry.ErrorCode)
 }
 
 func TestIntegrationViewOnlyCanReadHistoryButNotExecute(t *testing.T) {

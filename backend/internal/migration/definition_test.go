@@ -41,6 +41,42 @@ func TestValidateDefinition(t *testing.T) {
 			migration: Migration{Name: "bad down", SQL: "SELECT 1", DownSQL: "COMMIT"},
 			wantError: ErrTransactionControl,
 		},
+		{
+			name: "batch migration definition",
+			migration: Migration{
+				Name:    "backfill email",
+				SQL:     "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
+				DownSQL: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
+				Batch:   &BatchDefinition{CursorSQL: "SELECT id FROM users WHERE id > $1 ORDER BY id LIMIT $2", BatchSize: 500},
+			},
+			wantDown: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
+		},
+		{
+			name: "batch requires an integer cursor query and bounded batch size",
+			migration: Migration{
+				Name: "bad batch", SQL: "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
+				DownSQL: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
+				Batch:   &BatchDefinition{CursorSQL: "DELETE FROM users WHERE id > $1", BatchSize: 500},
+			},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name: "batch size too large",
+			migration: Migration{
+				Name: "bad size", SQL: "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
+				DownSQL: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
+				Batch:   &BatchDefinition{CursorSQL: "SELECT id FROM users WHERE id > $1 ORDER BY id LIMIT $2", BatchSize: 10001},
+			},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name: "batch requires down SQL",
+			migration: Migration{
+				Name: "no down", SQL: "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
+				Batch: &BatchDefinition{CursorSQL: "SELECT id FROM users WHERE id > $1 ORDER BY id LIMIT $2", BatchSize: 500},
+			},
+			wantError: ErrInvalidInput,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

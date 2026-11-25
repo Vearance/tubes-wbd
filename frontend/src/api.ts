@@ -82,12 +82,17 @@ export type MigrationDraftStatus =
 	| "running"
 	| "applied"
 	| "failed";
+export type MigrationBatchDefinition = {
+	cursor_sql: string;
+	batch_size: number;
+};
 export type MigrationDraft = {
 	id: number;
 	database_id: number;
 	name: string;
 	sql: string;
 	down_sql?: string;
+	batch?: MigrationBatchDefinition;
 	irreversible?: boolean;
 	irreversible_reason?: string;
 	status: MigrationDraftStatus;
@@ -101,6 +106,7 @@ export type MigrationDraftInput = {
 	name: string;
 	sql: string;
 	down_sql?: string;
+	batch?: MigrationBatchDefinition;
 	irreversible?: boolean;
 	irreversible_reason?: string;
 };
@@ -141,6 +147,11 @@ export type MigrationExecution = {
 	name: string;
 	sql: string;
 	down_sql?: string;
+	batch?: MigrationBatchDefinition;
+	batch_count?: number;
+	rows_processed?: number;
+	last_cursor?: number | null;
+	batch_done?: boolean;
 	irreversible?: boolean;
 	irreversible_reason?: string;
 	executed_by: number;
@@ -158,6 +169,10 @@ export type MigrationExecution = {
 };
 export type MigrationHistoryEntry = {
 	version: number;
+	attempt_number: number;
+	status: "success" | "failed";
+	error_code?: string;
+	error_message?: string;
 	execution_id?: number | null;
 	execution_type?: MigrationExecutionType;
 	target_execution_id?: number | null;

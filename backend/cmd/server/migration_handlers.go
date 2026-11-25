@@ -7,7 +7,7 @@ import (
 	"tubes-wbd/internal/migration"
 )
 
-const migrationBodyLimit = 2*migration.MaxSQLBytes + 4<<10
+const migrationBodyLimit = 3*migration.MaxSQLBytes + 4<<10
 
 func (s apiServer) ListMigrationHistory(
 	w http.ResponseWriter,
@@ -35,6 +35,10 @@ func (s apiServer) ListMigrationHistory(
 	for _, e := range page.Entries {
 		entry := httpapi.MigrationHistoryEntry{
 			Version:           e.Version,
+			AttemptNumber:     e.AttemptNumber,
+			Status:            httpapi.MigrationHistoryEntryStatus(e.Status),
+			ErrorCode:         optionalString(e.ErrorCode),
+			ErrorMessage:      optionalString(e.ErrorMessage),
 			Name:              e.Name,
 			ExecutedBy:        int64(e.ExecutedBy),
 			ExecutedAt:        e.ExecutedAt,
@@ -103,6 +107,10 @@ func (s apiServer) GetMigrationHistoryEntry(
 	executionType := httpapi.MigrationHistoryDetailExecutionType(entry.Type)
 	writeJSON(w, http.StatusOK, httpapi.MigrationHistoryDetail{
 		Version:            entry.Version,
+		AttemptNumber:      entry.AttemptNumber,
+		Status:             httpapi.MigrationHistoryDetailStatus(entry.Status),
+		ErrorCode:          optionalString(entry.ErrorCode),
+		ErrorMessage:       optionalString(entry.ErrorMessage),
 		Name:               entry.Name,
 		Sql:                entry.SQL,
 		DownSql:            optionalString(entry.DownSQL),
@@ -307,6 +315,9 @@ func draftIDs(w http.ResponseWriter, r *http.Request, draftID httpapi.DraftId) (
 
 func migrationFromRequest(request httpapi.MigrationDraftRequest) migration.Migration {
 	m := migration.Migration{Name: request.Name, SQL: request.Sql}
+	if request.Batch != nil {
+		m.Batch = &migration.BatchDefinition{CursorSQL: request.Batch.CursorSql, BatchSize: request.Batch.BatchSize}
+	}
 	if request.DownSql != nil {
 		m.DownSQL = *request.DownSql
 	}
@@ -326,6 +337,7 @@ func draftResponse(d *migration.Draft) httpapi.MigrationDraft {
 		Name:               d.Name,
 		Sql:                d.SQL,
 		DownSql:            optionalString(d.DownSQL),
+		Batch:              batchResponse(d.Batch),
 		Irreversible:       new(d.Irreversible),
 		IrreversibleReason: optionalString(d.IrreversibleReason),
 		Status:             httpapi.MigrationDraftStatus(d.Status),
@@ -335,6 +347,13 @@ func draftResponse(d *migration.Draft) httpapi.MigrationDraft {
 		CreatedAt:          d.CreatedAt,
 		UpdatedAt:          d.UpdatedAt,
 	}
+}
+
+func batchResponse(batch *migration.BatchDefinition) *httpapi.MigrationBatchDefinition {
+	if batch == nil {
+		return nil
+	}
+	return &httpapi.MigrationBatchDefinition{CursorSql: batch.CursorSQL, BatchSize: batch.BatchSize}
 }
 
 func executionResponse(execution *migration.Execution) httpapi.MigrationExecution {
@@ -347,6 +366,11 @@ func executionResponse(execution *migration.Execution) httpapi.MigrationExecutio
 		Name:               execution.Name,
 		Sql:                execution.SQL,
 		DownSql:            optionalString(execution.DownSQL),
+		Batch:              batchResponse(execution.Batch),
+		BatchCount:         new(execution.BatchCount),
+		RowsProcessed:      new(execution.RowsProcessed),
+		LastCursor:         execution.LastCursor,
+		BatchDone:          new(execution.BatchDone),
 		Irreversible:       new(execution.Irreversible),
 		IrreversibleReason: optionalString(execution.IrreversibleReason),
 		ExecutedBy:         int64(execution.ExecutedBy),

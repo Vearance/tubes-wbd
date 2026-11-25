@@ -388,6 +388,18 @@ func (r *fakeRepo) FinishExecution(_ context.Context, id uint, status ExecutionS
 	return nil
 }
 
+func (r *fakeRepo) UpdateExecutionProgress(_ context.Context, id uint, batches int, rows int64, cursor *int64, done bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.executions[id]
+	if !ok {
+		return ErrExecutionNotFound
+	}
+	e.BatchCount, e.RowsProcessed, e.LastCursor, e.BatchDone = batches, rows, cursor, done
+	r.executions[id] = e
+	return nil
+}
+
 func (r *fakeRepo) RetryExecution(_ context.Context, id uint, _ time.Duration, message string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
