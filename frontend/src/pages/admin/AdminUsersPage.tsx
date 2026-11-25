@@ -16,6 +16,7 @@ import {
   EmptyState,
   ErrorNotice,
   Loading,
+  Modal,
   Search,
   Status,
 } from "../../components/ui";
@@ -413,12 +414,56 @@ export function AdminUsersPage() {
           isLoading ? "Loading users…" : `${users.data?.length ?? 0} users`
         }
         actions={
-          <Button variant="dark" onClick={() => setShowCreate((prev) => !prev)}>
+          <Button variant="dark" onClick={() => setShowCreate(true)}>
             <Icon name="plus" />
-            {showCreate ? "Close" : "Add user"}
+            Add user
           </Button>
         }
       />
+
+      <Modal
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Create New User"
+        description="Register a new platform user account with username and password."
+        size="md"
+      >
+        <form onSubmit={handleCreateUser} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block text-xs font-bold text-ink">
+              <span>Username</span>
+              <input
+                type="text"
+                required
+                autoComplete="off"
+                placeholder="e.g. alex"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+              />
+            </label>
+            <label className="block text-xs font-bold text-ink">
+              <span>Password</span>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                placeholder="••••••••"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+              />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-line/60">
+            <Button onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button type="submit" variant="dark" disabled={creating}>
+              <Icon name="save" />
+              {creating ? "Creating…" : "Save user"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       <AnimatePresence mode="wait">
         {isLoading ? (
@@ -448,53 +493,6 @@ export function AdminUsersPage() {
                 }
               />
             )}
-
-      {showCreate && (
-        <form
-          onSubmit={handleCreateUser}
-          className={cn(surfaceClass, "mb-4 p-5 space-y-4 shadow-xs")}
-        >
-          <div className="flex items-center justify-between border-b border-line pb-3">
-            <h3 className="m-0 text-base font-bold text-ink">
-              Create New User
-            </h3>
-            <span className="text-xs text-muted">Regular database user</span>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block text-xs font-bold text-ink">
-              <span>Username</span>
-              <input
-                type="text"
-                required
-                autoComplete="off"
-                placeholder="e.g. alex"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
-              />
-            </label>
-            <label className="block text-xs font-bold text-ink">
-              <span>Password</span>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                placeholder="••••••••"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
-              />
-            </label>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button type="submit" variant="dark" disabled={creating}>
-              <Icon name="save" />
-              {creating ? "Creating…" : "Save user"}
-            </Button>
-          </div>
-        </form>
-      )}
 
       <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
         <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>
