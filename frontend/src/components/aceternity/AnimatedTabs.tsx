@@ -22,7 +22,7 @@ export function AnimatedTabs({ tabs, value, onValueChange, className }: Animated
     <LayoutGroup id={groupId}>
       <div
         className={cn(
-          'flex min-h-12 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-[18px] border border-line/80 bg-white p-1.5 shadow-2xs',
+          'flex min-h-12 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-[18px] border border-line/80 bg-white p-1.5 shadow-2xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           className,
         )}
         role="tablist"
@@ -32,7 +32,7 @@ export function AnimatedTabs({ tabs, value, onValueChange, className }: Animated
           return (
             <button
               className={cn(
-                'relative min-h-9 min-w-20 shrink-0 rounded-xl border-0 bg-transparent px-4 text-xs font-semibold text-muted outline-none transition-colors duration-150 ease-out hover:text-ink focus-visible:ring-2 focus-visible:ring-violet/30 cursor-pointer',
+                'relative min-h-9 min-w-20 shrink-0 whitespace-nowrap rounded-xl border-0 bg-transparent px-4 text-xs font-semibold text-muted outline-none transition-colors duration-150 ease-out hover:text-ink focus-visible:ring-2 focus-visible:ring-violet/30 cursor-pointer',
                 active ? 'font-bold text-violet' : 'hover:text-ink',
               )}
               type="button"

@@ -303,7 +303,7 @@ function ExecutionAirlockCard({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
           <Button
             variant="outline"
             size="sm"
@@ -420,13 +420,13 @@ function ExecutionAirlockCard({
                   placeholder="Optional approval note, or required rejection reason…"
                   className="h-10 flex-1 rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
                 />
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={actionBusy}
                     onClick={handleReject}
-                    className="border-danger/40 text-danger hover:bg-danger-soft"
+                    className="flex-1 sm:flex-initial border-danger/40 text-danger hover:bg-danger-soft"
                   >
                     <Icon name="close" className="size-3.5" />
                     Trip Airlock (Reject)
@@ -436,6 +436,7 @@ function ExecutionAirlockCard({
                     size="sm"
                     loading={actionBusy}
                     onClick={handleApprove}
+                    className="flex-1 sm:flex-initial"
                   >
                     <Icon name="shield" className="size-3.5" />
                     Engage Seal (Approve)

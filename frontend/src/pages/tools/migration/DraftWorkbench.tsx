@@ -85,7 +85,7 @@ function DraftCard({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -534,19 +534,19 @@ export function DraftWorkbench({
             </div>
           )}
 
-          <div className="rounded-[16px] border border-line/90 bg-[#fbfafd] p-5 sm:p-6 space-y-4">
+          <div className="rounded-[16px] border border-line/90 bg-[#fbfafd] p-4 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-sm font-bold text-ink">
                 Rollback Strategy
               </span>
 
               <LayoutGroup id={strategyId}>
-                <div className="inline-flex rounded-xl border border-line bg-white p-1 shadow-2xs">
+                <div className="flex w-full flex-wrap rounded-xl border border-line bg-white p-1 shadow-2xs sm:inline-flex sm:w-auto">
                   <button
                     type="button"
                     onClick={() => setIrreversible(false)}
                     className={cn(
-                      'relative rounded-lg px-3.5 py-1.5 text-xs font-bold transition-colors cursor-pointer',
+                      'relative flex-1 justify-center rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors cursor-pointer sm:flex-initial sm:px-3.5 inline-flex items-center',
                       !irreversible ? 'text-violet' : 'text-muted hover:text-ink',
                     )}
                   >
@@ -570,7 +570,7 @@ export function DraftWorkbench({
                     type="button"
                     onClick={() => setIrreversible(true)}
                     className={cn(
-                      'relative rounded-lg px-3.5 py-1.5 text-xs font-bold transition-colors cursor-pointer',
+                      'relative flex-1 justify-center rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors cursor-pointer sm:flex-initial sm:px-3.5 inline-flex items-center',
                       irreversible ? 'text-warning' : 'text-muted hover:text-ink',
                     )}
                   >

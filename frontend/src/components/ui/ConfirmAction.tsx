@@ -1,6 +1,7 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog'
-import { useState, type ReactNode } from 'react'
+import { isValidElement, useState, type ReactNode } from 'react'
 import { cn } from '../../lib/utils'
+import { Button } from './Button'
 import { baseButtonClasses, buttonSizes, buttonVariants } from './buttonStyles'
 
 export type ConfirmActionProps = {
@@ -37,22 +38,33 @@ export function ConfirmAction({
     }
   }
 
+  const isButtonTrigger =
+    isValidElement(trigger) && (trigger.type === Button || trigger.type === 'button')
+
   return (
     <AlertDialog.Root open={open} onOpenChange={setOpen}>
-      <AlertDialog.Trigger
-        className={
-          triggerClassName ??
-          cn(baseButtonClasses, buttonVariants.default, buttonSizes.md)
-        }
-        aria-label={triggerAriaLabel}
-      >
-        {trigger}
-      </AlertDialog.Trigger>
+      {isButtonTrigger ? (
+        <AlertDialog.Trigger
+          render={trigger}
+          className={triggerClassName}
+          aria-label={triggerAriaLabel}
+        />
+      ) : (
+        <AlertDialog.Trigger
+          className={
+            triggerClassName ??
+            cn(baseButtonClasses, buttonVariants.default, buttonSizes.md)
+          }
+          aria-label={triggerAriaLabel}
+        >
+          {trigger}
+        </AlertDialog.Trigger>
+      )}
 
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs" />
         <AlertDialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-auto p-4 sm:p-6">
-          <AlertDialog.Popup className="w-[min(100%,480px)] rounded-[22px] border border-line/80 bg-white p-7 sm:p-8 shadow-2xl">
+          <AlertDialog.Popup className="w-[min(100%,480px)] rounded-[20px] sm:rounded-[22px] border border-line/80 bg-white p-5 sm:p-8 shadow-2xl">
             <AlertDialog.Title className="m-0 text-balance text-xl font-bold tracking-tight text-ink sm:text-[22px]">
               {title}
             </AlertDialog.Title>

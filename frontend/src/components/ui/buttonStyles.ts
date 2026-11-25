@@ -1,5 +1,5 @@
 export const baseButtonClasses =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl font-bold text-[13px] tracking-tight disabled:cursor-not-allowed select-none transition-colors'
+  'inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-xl font-bold text-[13px] tracking-tight disabled:cursor-not-allowed select-none transition-colors'
 
 export const buttonVariants = {
   default:

@@ -324,21 +324,21 @@ export function TablePage() {
       <UtilityHeader
         backTo="/databases"
         path={
-          <span className="flex items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
             <Link
               to="/databases"
-              className="hover:underline hover:text-ink transition-colors"
+              className="truncate hover:underline hover:text-ink transition-colors"
             >
               {databaseName}
             </Link>
-            <span>/</span>
+            <span className="shrink-0">/</span>
             {schemas.data && schemas.data.length > 1 ? (
               <select
                 value={schema}
                 onChange={(e) =>
                   navigate(`/databases/${id}/${e.target.value}/tables`)
                 }
-                className="bg-canvas border border-line rounded px-1.5 py-0.5 text-[11px] font-mono outline-none cursor-pointer"
+                className="max-w-[110px] shrink-0 bg-canvas border border-line rounded px-1.5 py-0.5 text-[11px] font-mono outline-none cursor-pointer"
               >
                 {schemas.data.map((s) => (
                   <option key={s} value={s}>
@@ -347,7 +347,7 @@ export function TablePage() {
                 ))}
               </select>
             ) : (
-              <span>{schema}</span>
+              <span className="shrink-0">{schema}</span>
             )}
           </span>
         }
@@ -361,7 +361,7 @@ export function TablePage() {
         }
         actions={
           selected ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
               <Link
                 to={`/databases/${id}/${schema}/query?table=${encodeURIComponent(selected)}`}
                 className={cn(
@@ -512,8 +512,8 @@ export function TablePage() {
         )}
 
         {tab === 'data' && (
-          <footer className="flex min-h-[50px] min-w-0 items-center justify-between border-t border-line px-4 text-xs text-muted">
-            <div className="flex items-center gap-4">
+          <footer className="flex min-h-[50px] min-w-0 flex-wrap items-center justify-between gap-2 border-t border-line px-3.5 py-2.5 sm:px-4 text-xs text-muted">
+            <div className="flex items-center gap-2 sm:gap-4">
               <span>
                 Page <strong className="text-ink">{page}</strong>
               </span>

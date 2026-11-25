@@ -199,7 +199,7 @@ export function EditPage() {
               : undefined
         }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
             <Button variant="outline" size="sm" onClick={testInQueryEditor}>
               <Icon name="code" className="size-3.5" />
               Explain Up SQL
@@ -480,7 +480,7 @@ export function EditPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-line/80 [&_button]:flex-1 sm:[&_button]:flex-initial">
+            <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3 pt-4 border-t border-line/80">
               <Button variant="outline" size="sm" onClick={testInQueryEditor}>
                 <Icon name="code" className="size-3.5" />
                 Explain Up SQL

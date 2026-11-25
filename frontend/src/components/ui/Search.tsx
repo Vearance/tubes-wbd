@@ -17,7 +17,7 @@ export function Search({
   return (
     <label
       className={cn(
-        'group flex h-10 min-w-60 items-center gap-2 rounded-lg border border-line bg-white px-3 text-muted focus-within:border-violet focus-within:ring-2 focus-within:ring-violet/20',
+        'group flex h-10 min-w-0 w-full sm:w-auto sm:min-w-60 items-center gap-2 rounded-lg border border-line bg-white px-3 text-muted focus-within:border-violet focus-within:ring-2 focus-within:ring-violet/20',
         className,
       )}
     >

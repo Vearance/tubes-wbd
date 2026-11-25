@@ -124,7 +124,7 @@ function UserAccessDetail({
 
   return (
     <>
-      <header className="flex min-h-[84px] items-center gap-3.5 border-b border-line p-5">
+      <header className="flex flex-wrap min-h-[84px] items-center gap-3.5 border-b border-line p-5">
         <button
           type="button"
           onClick={() => {
@@ -471,7 +471,7 @@ export function AdminUsersPage() {
               />
             </label>
           </div>
-          <div className="flex justify-end gap-3 pt-5 border-t border-line/80">
+          <div className="flex flex-wrap justify-end gap-3 pt-5 border-t border-line/80">
             <Button onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button type="submit" variant="dark" disabled={creating}>
               <Icon name="save" />

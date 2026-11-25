@@ -306,7 +306,7 @@ function GroupDetail({
   return (
     <>
       <header className="flex flex-wrap min-h-[84px] items-center justify-between gap-3 border-b border-line p-5">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"
             onClick={() => {
@@ -318,11 +318,11 @@ function GroupDetail({
             <Icon name="chevron-left" className="size-3.5" />
             <span>List</span>
           </button>
-          <div>
+          <div className="min-w-0">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
               Group #{group.id}
             </span>
-            <h2 className="mt-1 mb-0 text-lg font-bold text-ink">{group.name}</h2>
+            <h2 className="mt-1 mb-0 truncate text-lg font-bold text-ink">{group.name}</h2>
           </div>
         </div>
         {hasLeader ? (
@@ -726,7 +726,7 @@ export function AdminGroupsPage() {
               placeholder="e.g. Customer Editors"
             />
           </label>
-          <div className="flex justify-end gap-3 pt-5 border-t border-line/80">
+          <div className="flex flex-wrap justify-end gap-3 pt-5 border-t border-line/80">
             <Button onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button type="submit" variant="dark">
               Create group

@@ -318,25 +318,6 @@ export function QueryPage() {
         title="SQL editor"
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setMobileSchemaOpen(true)}
-              className="min-[901px]:hidden"
-              title="View schema tables and columns"
-            >
-              <Icon name="table" className="size-3.5" />
-              Tables
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleFormat}
-              title="Format SQL keywords"
-            >
-              <Icon name="code" className="size-3.5" />
-              Format
-            </Button>
             {canEdit && (
               <Button
                 variant="outline"
@@ -345,7 +326,7 @@ export function QueryPage() {
                 title="Promote this SQL into a Migration Draft"
               >
                 <Icon name="migration" className="size-3.5" />
-                Stage as Migration Draft
+                Stage Draft
               </Button>
             )}
             <Button
@@ -477,15 +458,35 @@ export function QueryPage() {
           </div>
         </aside>
 
-        <section className="grid min-w-0 grid-rows-[44px_200px_44px_minmax(0,1fr)] sm:grid-rows-[44px_280px_44px_minmax(0,1fr)] overflow-hidden">
-          <div className="flex min-w-0 items-center justify-between border-b border-line bg-canvas/40 px-4 text-xs font-medium text-muted">
+        <section className="grid min-w-0 grid-rows-[auto_200px_auto_minmax(0,1fr)] sm:grid-rows-[auto_280px_auto_minmax(0,1fr)] overflow-hidden">
+          <div className="flex min-h-[44px] min-w-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-canvas/40 px-3.5 py-2 sm:px-4 text-xs font-medium text-muted">
             <span className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-violet" />
-              SQL Editor
+              <span className="font-semibold text-ink">SQL</span>
+              <span className="text-[11px] text-muted">
+                · {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+              </span>
             </span>
-            <span className="text-[11px] text-muted">
-              {lineCount} {lineCount === 1 ? 'line' : 'lines'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMobileSchemaOpen(true)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[11px] font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer min-[901px]:hidden"
+                title="Insert column or table from schema"
+              >
+                <Icon name="columns" className="size-3.5 text-violet" />
+                Columns
+              </button>
+              <button
+                type="button"
+                onClick={handleFormat}
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[11px] font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer"
+                title="Format SQL keywords"
+              >
+                <Icon name="code" className="size-3.5 text-muted" />
+                Format
+              </button>
+            </div>
           </div>
 
           <div className="grid min-h-0 min-w-0 grid-cols-[46px_minmax(0,1fr)] overflow-hidden bg-[#242227]">
@@ -509,11 +510,11 @@ export function QueryPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between border-b border-line bg-canvas/40 px-4 text-xs">
-            <div className="flex items-center gap-2">
+          <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 border-b border-line bg-canvas/40 px-3.5 py-2 sm:px-4 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-ink">Query Execution Plan</span>
               {rawPlan && (
-                <div className="flex items-center gap-1 ml-3 border-l border-line pl-3">
+                <div className="flex items-center gap-1 sm:ml-2 sm:border-l sm:border-line sm:pl-3">
                   <button
                     type="button"
                     onClick={() => setPlanTab('visual')}

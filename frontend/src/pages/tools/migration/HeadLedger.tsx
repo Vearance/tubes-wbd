@@ -99,7 +99,7 @@ function HistoryEntryRow({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
           <span className="rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-[11px] text-muted tabular-nums">
             {entry.duration_ms} ms
           </span>

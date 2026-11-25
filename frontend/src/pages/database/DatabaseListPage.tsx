@@ -118,7 +118,7 @@ export function DatabaseListPage() {
                   key={exec.id}
                   className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white/80 hover:bg-white transition-colors"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                     <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[11px] font-bold text-violet shrink-0">
                       #{exec.id}
                     </span>
@@ -145,7 +145,7 @@ export function DatabaseListPage() {
       )}
 
       {databases.length > 0 && (
-        <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
+        <div className="grid min-w-0 grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
           {filtered.map((db) => {
             const isEditor = db.permission === 'view_edit'
             const dbPending = pendingApprovals.filter(

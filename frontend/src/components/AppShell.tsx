@@ -134,7 +134,7 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-dvh min-[901px]:grid min-[901px]:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="min-h-dvh overflow-x-clip min-[901px]:grid min-[901px]:grid-cols-[240px_minmax(0,1fr)]">
       {/* ─── DESKTOP SIDEBAR (>= 901px) ─── */}
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-line/70 bg-white/85 backdrop-blur-md px-3.5 pt-5 pb-4 min-[901px]:flex">
         <NavLink
@@ -391,8 +391,8 @@ export function AppShell({
       </aside>
 
       {/* ─── MOBILE STICKY TOP APP BAR (< 901px) ─── */}
-      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-line/80 bg-white/92 px-3.5 backdrop-blur-md min-[901px]:hidden shadow-2xs">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-2 border-b border-line/80 bg-white/92 px-3.5 backdrop-blur-md min-[901px]:hidden shadow-2xs">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <NavLink
             className="inline-flex items-center gap-2 text-base font-black tracking-tight text-ink no-underline shrink-0"
             to={user.is_admin ? '/admin/users' : '/databases'}
@@ -409,7 +409,7 @@ export function AppShell({
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-line bg-canvas/70 px-2.5 py-1 text-[11px] font-semibold text-ink max-w-[150px] sm:max-w-[220px] truncate cursor-pointer hover:bg-canvas"
+              className="flex min-w-0 items-center gap-1.5 rounded-full border border-line bg-canvas/70 px-2.5 py-1 text-[11px] font-semibold text-ink max-w-[160px] sm:max-w-[220px] cursor-pointer hover:bg-canvas"
             >
               <span className="size-1.5 rounded-full bg-success shrink-0" />
               <span className="truncate">{activeDatabase.name}</span>
@@ -424,7 +424,7 @@ export function AppShell({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {dbPendingCount > 0 && !isAdminRoute && (
             <Link
               to={`/databases/${databaseId}/migrations`}
@@ -727,7 +727,7 @@ export function AppShell({
       ) : null}
 
       {/* ─── MAIN CONTENT VIEWPORT ─── */}
-      <main className="min-w-0 px-3.5 pt-4 pb-20 sm:px-6 sm:pt-5 sm:pb-10 [font-variant-numeric:tabular-nums] [&_h1]:text-balance [&_h2]:text-balance [&_h3]:text-balance [&_p]:text-pretty max-[900px]:w-full">
+      <main className="min-w-0 px-3.5 pt-4 pb-20 sm:px-6 sm:pt-5 min-[901px]:pb-10 [font-variant-numeric:tabular-nums] [&_h1]:text-balance [&_h2]:text-balance [&_h3]:text-balance [&_p]:text-pretty max-[900px]:w-full">
         <Outlet
           context={
             {
@@ -756,32 +756,38 @@ export function UtilityHeader({
   backTo?: string
 }) {
   return (
-    <header className="mb-4 flex flex-col gap-3 border-b border-line/60 pb-3 min-[901px]:flex-row min-[901px]:items-center min-[901px]:justify-between min-[901px]:min-h-[58px]">
-      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-        {backTo && (
-          <Link
-            to={backTo}
-            className="size-8 sm:size-8.5 rounded-xl border border-line/80 bg-white/90 shadow-2xs grid place-items-center text-muted hover:text-ink hover:border-line-strong transition-colors shrink-0"
-            aria-label="Go back"
-          >
-            <Icon name="chevron-left" className="size-4" />
-          </Link>
-        )}
-        <span className="inline-flex min-h-7 sm:min-h-[30px] items-center gap-1.5 sm:gap-2 rounded-full border border-line/70 bg-white/75 px-2.5 sm:px-3 font-mono text-[10px] sm:text-[11px] text-muted shadow-2xs max-w-full">
-          <i className="size-1.5 sm:size-2 rounded-full bg-success shadow-[0_0_0_3px_var(--green-soft)] shrink-0" />
-          <span className="truncate">{path}</span>
-        </span>
-        <h1 className="m-0 text-lg sm:text-xl font-bold tracking-tight text-ink">
-          {title}
-        </h1>
-        {status && (
-          <span className="rounded-full bg-white/80 border border-line/70 px-2 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-semibold text-muted shadow-2xs">
-            {status}
+    <header className="mb-5 flex min-w-0 flex-col gap-3.5 border-b border-line/60 pb-4 min-[901px]:mb-4 min-[901px]:min-h-[58px] min-[901px]:flex-row min-[901px]:items-center min-[901px]:justify-between min-[901px]:gap-4 min-[901px]:pb-3">
+      <div className="flex min-w-0 flex-col gap-2 min-[901px]:flex-row min-[901px]:flex-wrap min-[901px]:items-center min-[901px]:gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {backTo && (
+            <Link
+              to={backTo}
+              className="grid size-7.5 shrink-0 place-items-center rounded-xl border border-line/80 bg-white/90 text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink min-[901px]:size-8.5"
+              aria-label="Go back"
+            >
+              <Icon name="chevron-left" className="size-4" />
+            </Link>
+          )}
+          <span className="inline-flex min-h-7 min-w-0 max-w-full items-center gap-1.5 rounded-full border border-line/70 bg-white/75 px-2.5 font-mono text-[11px] text-muted shadow-2xs min-[901px]:min-h-[30px] min-[901px]:gap-2 min-[901px]:px-3">
+            <i className="size-1.5 shrink-0 rounded-full bg-success shadow-[0_0_0_3px_var(--green-soft)] min-[901px]:size-2" />
+            <span className="min-w-0 truncate">{path}</span>
           </span>
-        )}
+        </div>
+
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h1 className="m-0 min-w-0 break-words text-xl leading-tight font-bold tracking-tight text-ink">
+            {title}
+          </h1>
+          {status && (
+            <span className="max-w-full truncate rounded-full border border-line/70 bg-white/80 px-2.5 py-0.5 text-[10px] font-semibold text-muted shadow-2xs">
+              {status}
+            </span>
+          )}
+        </div>
       </div>
+
       {actions && (
-        <div className="flex flex-wrap items-center gap-2 min-[901px]:ml-auto [&_button]:flex-1 min-[901px]:[&_button]:flex-initial [&_a]:flex-1 min-[901px]:[&_a]:flex-initial">
+        <div className="flex min-w-0 w-full flex-wrap items-center gap-2.5 min-[901px]:ml-auto min-[901px]:w-auto min-[901px]:justify-end">
           {actions}
         </div>
       )}

@@ -142,7 +142,7 @@ export function MigrationPage() {
             : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} history entries`
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
             {hasLiveQueueOrRunning && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-soft px-2.5 py-1 text-[11px] font-bold text-violet">
                 <span className="size-2 rounded-full bg-violet animate-ping" />

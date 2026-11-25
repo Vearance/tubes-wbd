@@ -559,21 +559,21 @@ export function SchemaPage() {
       <UtilityHeader
         backTo="/databases"
         path={
-          <span className="flex items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
             <Link
               to="/databases"
-              className="hover:underline hover:text-ink transition-colors"
+              className="truncate hover:underline hover:text-ink transition-colors"
             >
               {databaseName}
             </Link>
-            <span>/</span>
+            <span className="shrink-0">/</span>
             {schemas.data && schemas.data.length > 1 ? (
               <select
                 value={schema}
                 onChange={(e) =>
                   navigate(`/databases/${id}/${e.target.value}/schema`)
                 }
-                className="bg-canvas border border-line rounded px-1.5 py-0.5 text-[11px] font-mono outline-none cursor-pointer"
+                className="max-w-[110px] shrink-0 bg-canvas border border-line rounded px-1.5 py-0.5 text-[11px] font-mono outline-none cursor-pointer"
               >
                 {schemas.data.map((s) => (
                   <option key={s} value={s}>
@@ -582,7 +582,7 @@ export function SchemaPage() {
                 ))}
               </select>
             ) : (
-              <span>{schema}</span>
+              <span className="shrink-0">{schema}</span>
             )}
           </span>
         }
@@ -593,7 +593,7 @@ export function SchemaPage() {
             : `${tables.data?.length ?? 0} tables · ${relationships.length} relations`
         }
         actions={
-          <div className="flex flex-wrap items-center gap-2 w-full min-[901px]:w-auto">
+          <div className="flex flex-wrap items-center gap-2.5 w-full min-[901px]:w-auto">
             <div className="flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs shrink-0">
               <button
                 type="button"
@@ -627,7 +627,7 @@ export function SchemaPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Find table…"
-                className="flex-1 sm:min-w-48"
+                className="min-w-0 flex-1 basis-[180px] sm:flex-initial sm:min-w-48"
               />
             )}
           </div>
@@ -672,8 +672,8 @@ export function SchemaPage() {
               />
             ) : (
               <div className="grid min-h-[500px] min-w-0 max-w-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-5">
-                <section className="min-w-0 rounded-[18px] border border-line bg-[#fdfcfe] p-5 shadow-xs">
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
+                <section className="min-w-0 rounded-[18px] border border-line bg-[#fdfcfe] p-3.5 sm:p-5 shadow-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
                     {filteredTables.map((table) => {
                       const data = tableMap[table.name]
                       const colCount = data?.structure?.columns.length ?? 0
@@ -702,7 +702,7 @@ export function SchemaPage() {
                                 </span>
                               )}
                             </Link>
-                            <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                               <span>{colCount > 0 ? `${colCount} columns` : 'View definition'}</span>
                               <div className="flex items-center gap-2.5">
                                 <Link

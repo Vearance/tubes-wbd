@@ -486,24 +486,25 @@ export function AdminDatabasesPage() {
           {selected ? (
             <div>
               <div className="flex flex-wrap items-center gap-4 border-b border-line p-5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
-                  title="Back to databases list"
-                >
-                  <Icon name="chevron-left" className="size-3.5" />
-                  <span>List</span>
-                </button>
-                <div className="flex-1 min-w-[200px]">
-
-                  <h2 className="my-1 text-xl font-bold">{selected.name}</h2>
-                  <p className="text-xs text-muted m-0">
-                    {selected.host}:{selected.port} · {selected.db_name} (SSL:{" "}
-                    {selected.ssl_mode})
-                  </p>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+                    title="Back to databases list"
+                  >
+                    <Icon name="chevron-left" className="size-3.5" />
+                    <span>List</span>
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="my-1 truncate text-xl font-bold">{selected.name}</h2>
+                    <p className="m-0 truncate text-xs text-muted">
+                      {selected.host}:{selected.port} · {selected.db_name} (SSL:{" "}
+                      {selected.ssl_mode})
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button size="sm" onClick={() => test(selected.id)}>
@@ -683,7 +684,7 @@ export function AdminDatabasesPage() {
                       value={grantGroupId}
                       onChange={(e) => setGrantGroupId(e.target.value)}
                       required
-                      className="h-9 flex-1 min-w-44 rounded-lg border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+                      className="h-9 w-full min-w-0 flex-1 rounded-lg border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet sm:w-auto sm:min-w-44"
                     >
                       <option value="">Choose a group…</option>
                       {unattachedGroups.map((g) => (
