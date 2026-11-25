@@ -322,6 +322,20 @@ func (r *GormRepository) DecideExecution(ctx context.Context, executionID, userI
 				return fmt.Errorf("updating reviewed migration draft: %w", err)
 			}
 		}
+		if execution.Compensation && decision == ApprovalDecisionRejected {
+			if execution.TargetExecutionID == nil {
+				return ErrInvalidCompensation
+			}
+			result := tx.Model(&Execution{}).
+				Where("id = ? AND status = ?", *execution.TargetExecutionID, ExecutionStatusCompensationPending).
+				Updates(map[string]any{"status": ExecutionStatusPartial, "updated_at": now})
+			if result.Error != nil {
+				return fmt.Errorf("releasing partial migration after compensation rejection: %w", result.Error)
+			}
+			if result.RowsAffected != 1 {
+				return ErrInvalidCompensation
+			}
+		}
 		return nil
 	})
 }

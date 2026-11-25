@@ -33,6 +33,15 @@ type PoolProvider interface {
 	Pool(ctx context.Context, id targetdb.DatabaseID) (*pgxpool.Pool, error)
 }
 
+type TargetConfigSnapshotter interface {
+	EncryptedSnapshot(ctx context.Context, id targetdb.DatabaseID) ([]byte, error)
+	ResolveSnapshot([]byte) (targetdb.ConnConfig, error)
+}
+
+type explicitConfigPoolProvider interface {
+	PoolWithConfig(ctx context.Context, config targetdb.ConnConfig) (*pgxpool.Pool, error)
+}
+
 type Options struct {
 	StatementTimeout time.Duration
 	LockTimeout      time.Duration
@@ -57,13 +66,14 @@ func (o Options) withDefaults() Options {
 }
 
 type MigrationService struct {
-	authz Authorizer
-	pools PoolProvider
-	repo  Repository
-	opts  Options
+	authz     Authorizer
+	pools     PoolProvider
+	repo      Repository
+	opts      Options
+	snapshots TargetConfigSnapshotter
 }
 
-func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, opts Options) (*MigrationService, error) {
+func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, opts Options, snapshots ...TargetConfigSnapshotter) (*MigrationService, error) {
 	if authz == nil {
 		return nil, errors.New("migration authorizer is nil")
 	}
@@ -74,7 +84,16 @@ func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, 
 		return nil, errors.New("migration repository is nil")
 	}
 
-	return &MigrationService{authz: authz, pools: pools, repo: repo, opts: opts.withDefaults()}, nil
+	if len(snapshots) > 1 {
+		return nil, errors.New("migration config snapshotter may be provided only once")
+	}
+	var snapshotter TargetConfigSnapshotter
+	if len(snapshots) == 1 {
+		snapshotter = snapshots[0]
+	}
+	return &MigrationService{
+		authz: authz, pools: pools, repo: repo, opts: opts.withDefaults(), snapshots: snapshotter,
+	}, nil
 }
 
 // Execute runs SQL directly without a draft, so no run is recorded in the
@@ -101,12 +120,15 @@ func (s *MigrationService) run(ctx context.Context, userID, dbID uint, m Migrati
 }
 
 func (s *MigrationService) runExecution(ctx context.Context, execution *Execution) (*HistoryEntry, error) {
-	if execution.Batch != nil {
-		return s.runBatchExecution(ctx, execution)
-	}
-	pool, err := s.pools.Pool(ctx, execution.ManagedDatabaseID)
+	pool, closePool, err := s.executionPool(ctx, execution)
 	if err != nil {
 		return nil, err
+	}
+	if closePool {
+		defer pool.Close()
+	}
+	if execution.Batch != nil {
+		return s.runBatchExecution(ctx, execution, pool)
 	}
 	if err := ensureHistorySchema(ctx, pool, false); err != nil {
 		return nil, err
@@ -135,6 +157,33 @@ func (s *MigrationService) runExecution(ctx context.Context, execution *Executio
 		_ = tx.Rollback(ctx)
 	}
 	return applyExecution(ctx, pool, execution, s.opts)
+}
+
+func (s *MigrationService) executionPool(ctx context.Context, execution *Execution) (*pgxpool.Pool, bool, error) {
+	if len(execution.EncryptedTargetConfig) == 0 {
+		pool, err := s.pools.Pool(ctx, execution.ManagedDatabaseID)
+		return pool, false, err
+	}
+	if s.snapshots == nil {
+		return nil, false, errors.New("migration: execution has an encrypted target config snapshot but no snapshot resolver is configured")
+	}
+	opener, ok := s.pools.(explicitConfigPoolProvider)
+	if !ok {
+		return nil, false, errors.New("migration: target pool provider cannot open a snapshotted config")
+	}
+	config, err := s.snapshots.ResolveSnapshot(execution.EncryptedTargetConfig)
+	if err != nil {
+		return nil, false, err
+	}
+	pool, err := opener.PoolWithConfig(ctx, config)
+	return pool, true, err
+}
+
+func (s *MigrationService) targetConfigSnapshot(ctx context.Context, databaseID uint) ([]byte, error) {
+	if s.snapshots == nil {
+		return nil, nil
+	}
+	return s.snapshots.EncryptedSnapshot(ctx, databaseID)
 }
 
 func (s *MigrationService) History(ctx context.Context, userID, dbID uint, page, pageSize int) (*HistoryPage, error) {
@@ -227,20 +276,13 @@ func validateDefinition(m Migration) (Migration, error) {
 	m.DownSQL = strings.TrimSpace(m.DownSQL)
 	if m.Batch != nil {
 		batch := *m.Batch
-		batch.CursorSQL = strings.TrimSpace(batch.CursorSQL)
+		batch.Schema = strings.TrimSpace(batch.Schema)
+		batch.Table = strings.TrimSpace(batch.Table)
+		batch.KeyColumn = strings.TrimSpace(batch.KeyColumn)
+		batch.ScopeSQL = strings.TrimSpace(batch.ScopeSQL)
 		m.Batch = &batch
-		if batch.BatchSize < 1 || batch.BatchSize > 10000 {
-			return m, fmt.Errorf("%w: batch size must be between 1 and 10000", ErrInvalidInput)
-		}
-		if len(batch.CursorSQL) == 0 || len(batch.CursorSQL) > MaxSQLBytes || !utf8.ValidString(batch.CursorSQL) || strings.ContainsRune(batch.CursorSQL, 0) {
-			return m, fmt.Errorf("%w: batch cursor query is invalid", ErrInvalidInput)
-		}
-		cursorStatements := statements(batch.CursorSQL)
-		if len(cursorStatements) != 1 || cursorStatements[0][0] != "select" {
-			return m, fmt.Errorf("%w: batch cursor query must be one SELECT statement", ErrInvalidInput)
-		}
-		if !strings.Contains(batch.CursorSQL, "$1") || !strings.Contains(batch.CursorSQL, "$2") {
-			return m, fmt.Errorf("%w: batch cursor query must use $1 for the last cursor and $2 for batch size", ErrInvalidInput)
+		if err := validateBatchDefinition(batch); err != nil {
+			return m, err
 		}
 		if len(statements(m.SQL)) != 1 || !strings.Contains(m.SQL, "$1") {
 			return m, fmt.Errorf("%w: batch up SQL must be one statement using $1 as the selected bigint key array", ErrInvalidInput)

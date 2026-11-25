@@ -12,9 +12,10 @@ type Migration struct {
 }
 
 type BatchDefinition struct {
-	// CursorSQL selects one positive bigint cursor value per row. It receives
-	// the last committed cursor and batch size as $1 and $2.
-	CursorSQL string `json:"cursor_sql"`
+	Schema    string `json:"schema"`
+	Table     string `json:"table"`
+	KeyColumn string `json:"key_column"`
+	ScopeSQL  string `json:"scope_sql"`
 	BatchSize int    `json:"batch_size"`
 }
 

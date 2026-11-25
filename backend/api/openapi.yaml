@@ -1310,6 +1310,36 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /migrations/executions/{executionId}/compensate:
+    parameters:
+      - $ref: '#/components/parameters/ExecutionId'
+    post:
+      operationId: submitMigrationCompensation
+      summary: Submit compensation for a partial batch migration
+      description: Creates a new rollback execution from committed batch keys and submits it to the same approval workflow.
+      tags:
+        - migrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '202':
+          description: Compensation submitted for review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationExecution'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /migrations/executions/{executionId}/approvals:
     parameters:
       - $ref: '#/components/parameters/ExecutionId'
@@ -2078,15 +2108,24 @@ components:
     MigrationBatchDefinition:
       type: object
       required:
-        - cursor_sql
+        - schema
+        - table
+        - key_column
+        - scope_sql
         - batch_size
       properties:
-        cursor_sql:
+        schema:
           type: string
-          description: >-
-            A single SELECT returning one positive bigint key per row. It receives the last
-            committed cursor as $1 (0 before the first batch) and batch_size as $2, and must
-            return keys in strictly increasing order.
+          description: Schema containing the table to process.
+        table:
+          type: string
+          description: Table containing the rows to process.
+        key_column:
+          type: string
+          description: NOT NULL bigint primary key or single-column unique key.
+        scope_sql:
+          type: string
+          description: Optional WHERE predicate that selects the fixed key set; an empty value selects all rows.
         batch_size:
           type: integer
           minimum: 1
@@ -2169,7 +2208,7 @@ components:
           format: date-time
     MigrationExecutionStatus:
       type: string
-      enum: [pending_review, rejected, approved, queued, running, success, failed, partial]
+      enum: [pending_review, rejected, approved, queued, running, success, failed, partial, compensation_pending, compensating, compensated]
     MigrationApprovalDecision:
       type: string
       enum: [pending, approved, rejected]
@@ -2257,6 +2296,7 @@ components:
         - status
         - name
         - sql
+        - compensation
         - executed_by
         - attempt
         - created_at
@@ -2306,6 +2346,9 @@ components:
           type: integer
           format: int64
           nullable: true
+        compensation:
+          type: boolean
+          description: True when this rollback execution compensates a partial batch Up.
         version:
           type: integer
           format: int64

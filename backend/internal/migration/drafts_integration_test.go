@@ -161,7 +161,7 @@ func TestIntegrationFailedDraftCanBeFixedAndRetried(t *testing.T) {
 	require.Equal(t, "42P01", failed.ErrorCode)
 	require.Contains(t, failed.ErrorMessage, `"customer"`)
 	require.Nil(t, failed.Version)
-	require.Nil(t, historyVersions(t, env.target))
+	require.Equal(t, []int64{1}, historyVersions(t, env.target), "the failed attempt must be recorded in target history")
 
 	stored, err := svc.GetDraft(ctx, 1, d.ID)
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestIntegrationFailedDraftCanBeFixedAndRetried(t *testing.T) {
 
 	succeeded, err := svc.ExecuteDraft(ctx, 1, d.ID)
 	require.NoError(t, err)
-	require.Equal(t, int64(1), *succeeded.Version, "the failed attempt must not use up a version")
+	require.Equal(t, int64(2), *succeeded.Version, "the failed attempt must occupy a target history version")
 	require.True(t, columnExists(t, env.target, "customers", "email"))
 
 	runs, err := svc.ListRuns(ctx, 1, d.ID)

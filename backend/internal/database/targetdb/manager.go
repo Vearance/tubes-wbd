@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/singleflight"
 )
@@ -100,6 +101,31 @@ func (m *Manager) openPool(ctx context.Context, id DatabaseID) (*pgxpool.Pool, e
 		return nil, err
 	}
 	return m.connect(ctx, cfg)
+}
+
+func (m *Manager) PoolWithConfig(ctx context.Context, cfg ConnConfig) (*pgxpool.Pool, error) {
+	m.mu.Lock()
+	closed := m.closed
+	m.mu.Unlock()
+	if closed {
+		return nil, ErrManagerClosed
+	}
+
+	connectCtx, cancel := context.WithTimeout(ctx, m.opts.ConnectTimeout)
+	defer cancel()
+	pool, err := m.connect(connectCtx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	m.mu.Lock()
+	closed = m.closed
+	m.mu.Unlock()
+	if closed {
+		pool.Close()
+		return nil, ErrManagerClosed
+	}
+	return pool, nil
 }
 
 func (m *Manager) Test(ctx context.Context, cfg ConnConfig) error {

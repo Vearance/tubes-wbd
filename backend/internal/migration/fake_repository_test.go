@@ -212,6 +212,31 @@ func (r *fakeRepo) CreateExecution(_ context.Context, e *Execution) error {
 	return nil
 }
 
+func (r *fakeRepo) CreateCompensationExecution(_ context.Context, execution *Execution) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if execution.TargetExecutionID == nil || !execution.Compensation || execution.Type != ExecutionTypeRollback {
+		return ErrInvalidCompensation
+	}
+	target, ok := r.executions[*execution.TargetExecutionID]
+	if !ok || target.ManagedDatabaseID != execution.ManagedDatabaseID || target.Type != ExecutionTypeUp ||
+		target.Status != ExecutionStatusPartial || target.ActiveDatabaseID == nil ||
+		*target.ActiveDatabaseID != target.ManagedDatabaseID || target.Batch == nil ||
+		target.BatchCount == 0 || target.DownSQL == "" || target.Irreversible {
+		return ErrInvalidCompensation
+	}
+	execution.ID = r.nextID
+	if err := r.createApprovals(execution); err != nil {
+		execution.ID = 0
+		return err
+	}
+	r.nextID++
+	r.executions[execution.ID] = *execution
+	target.Status = ExecutionStatusCompensationPending
+	r.executions[target.ID] = target
+	return nil
+}
+
 func (r *fakeRepo) GetExecution(_ context.Context, id uint) (*Execution, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -267,6 +292,11 @@ func (r *fakeRepo) DecideExecution(_ context.Context, executionID, userID uint, 
 			r.drafts[d.ID] = d
 		}
 	}
+	if e.Compensation && decision == ApprovalDecisionRejected && e.TargetExecutionID != nil {
+		target := r.executions[*e.TargetExecutionID]
+		target.Status = ExecutionStatusPartial
+		r.executions[target.ID] = target
+	}
 	return nil
 }
 
@@ -314,7 +344,7 @@ func (r *fakeRepo) EnqueueApprovedExecution(_ context.Context, id uint) error {
 	if !ok {
 		return ErrExecutionNotFound
 	}
-	if e.Status != ExecutionStatusApproved {
+	if e.Status != ExecutionStatusApproved && !(e.Status == ExecutionStatusPartial && e.Batch != nil) {
 		return ErrExecutionNotApproved
 	}
 	known := map[uint]bool{}
@@ -344,9 +374,11 @@ func (r *fakeRepo) EnqueueApprovedExecution(_ context.Context, id uint) error {
 	}
 	e.Status = ExecutionStatusQueued
 	r.executions[id] = e
-	d := r.drafts[e.DraftID]
-	d.Status = DraftStatusQueued
-	r.drafts[d.ID] = d
+	if e.Type == ExecutionTypeUp {
+		d := r.drafts[e.DraftID]
+		d.Status = DraftStatusQueued
+		r.drafts[d.ID] = d
+	}
 	return nil
 }
 
@@ -357,12 +389,33 @@ func (r *fakeRepo) ClaimExecution(_ context.Context, id uint) (*Execution, error
 	if !ok || e.Status != ExecutionStatusQueued {
 		return nil, nil
 	}
+	if e.Compensation {
+		if e.TargetExecutionID == nil {
+			return nil, ErrInvalidCompensation
+		}
+		target := r.executions[*e.TargetExecutionID]
+		switch target.Status {
+		case ExecutionStatusCompensationPending:
+			target.Status, target.ActiveDatabaseID = ExecutionStatusCompensating, nil
+			r.executions[target.ID] = target
+		case ExecutionStatusCompensating:
+			if e.ActiveDatabaseID == nil || *e.ActiveDatabaseID != e.ManagedDatabaseID {
+				return nil, ErrInvalidCompensation
+			}
+		default:
+			return nil, ErrInvalidCompensation
+		}
+	}
 	e.Status = ExecutionStatusRunning
 	e.Attempt++
+	databaseID := e.ManagedDatabaseID
+	e.ActiveDatabaseID = &databaseID
 	r.executions[id] = e
-	d := r.drafts[e.DraftID]
-	d.Status = DraftStatusRunning
-	r.drafts[d.ID] = d
+	if e.Type == ExecutionTypeUp {
+		d := r.drafts[e.DraftID]
+		d.Status = DraftStatusRunning
+		r.drafts[d.ID] = d
+	}
 	return &e, nil
 }
 
@@ -377,14 +430,27 @@ func (r *fakeRepo) FinishExecution(_ context.Context, id uint, status ExecutionS
 		return ErrExecutionNotQueueable
 	}
 	e.Status, e.Version, e.ErrorCode, e.ErrorMessage = status, version, code, message
-	r.executions[id] = e
-	d := r.drafts[e.DraftID]
-	if status == ExecutionStatusSuccess {
-		d.Status, d.AppliedVersion = DraftStatusApplied, version
+	if status == ExecutionStatusPartial {
+		databaseID := e.ManagedDatabaseID
+		e.ActiveDatabaseID = &databaseID
 	} else {
-		d.Status = DraftStatusFailed
+		e.ActiveDatabaseID = nil
 	}
-	r.drafts[d.ID] = d
+	r.executions[id] = e
+	if e.Type == ExecutionTypeUp {
+		d := r.drafts[e.DraftID]
+		if status == ExecutionStatusSuccess {
+			d.Status, d.AppliedVersion = DraftStatusApplied, version
+		} else {
+			d.Status = DraftStatusFailed
+		}
+		r.drafts[d.ID] = d
+	}
+	if e.Compensation && status == ExecutionStatusSuccess && e.TargetExecutionID != nil {
+		target := r.executions[*e.TargetExecutionID]
+		target.Status, target.ActiveDatabaseID = ExecutionStatusCompensated, nil
+		r.executions[target.ID] = target
+	}
 	return nil
 }
 
@@ -411,6 +477,10 @@ func (r *fakeRepo) RetryExecution(_ context.Context, id uint, _ time.Duration, m
 		return ErrExecutionNotQueueable
 	}
 	e.Status, e.ErrorMessage = ExecutionStatusQueued, message
+	if e.Batch != nil {
+		databaseID := e.ManagedDatabaseID
+		e.ActiveDatabaseID = &databaseID
+	}
 	r.executions[id] = e
 	if e.Type == ExecutionTypeUp {
 		d := r.drafts[e.DraftID]

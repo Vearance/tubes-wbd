@@ -93,6 +93,7 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Patch("/migrations/drafts/{draftId}", protectedWrapper.UpdateMigrationDraft)
 	router.Post("/migrations/drafts/{draftId}/execute", protectedWrapper.ExecuteMigrationDraft)
 	router.Get("/migrations/executions/{executionId}", protectedWrapper.GetMigrationExecution)
+	router.Post("/migrations/executions/{executionId}/compensate", protectedWrapper.SubmitMigrationCompensation)
 	router.Get("/migrations/executions/{executionId}/approvals", protectedWrapper.GetMigrationExecutionApprovals)
 	router.Post("/migrations/executions/{executionId}/approve", protectedWrapper.ApproveMigrationExecution)
 	router.Post("/migrations/executions/{executionId}/reject", protectedWrapper.RejectMigrationExecution)

@@ -83,7 +83,10 @@ export type MigrationDraftStatus =
 	| "applied"
 	| "failed";
 export type MigrationBatchDefinition = {
-	cursor_sql: string;
+	schema: string;
+	table: string;
+	key_column: string;
+	scope_sql: string;
 	batch_size: number;
 };
 export type MigrationDraft = {
@@ -118,7 +121,10 @@ export type MigrationExecutionStatus =
 	| "running"
 	| "success"
 	| "failed"
-	| "partial";
+	| "partial"
+	| "compensation_pending"
+	| "compensating"
+	| "compensated";
 export type MigrationApprovalDecision = "pending" | "approved" | "rejected";
 export type MigrationApproval = {
 	group_id: number;
@@ -144,6 +150,7 @@ export type MigrationExecution = {
 	draft_id: number;
 	type: MigrationExecutionType;
 	status: MigrationExecutionStatus;
+	compensation: boolean;
 	name: string;
 	sql: string;
 	down_sql?: string;
@@ -382,6 +389,11 @@ export const api = {
 	enqueueExecution: (executionId: number) =>
 		request<MigrationExecution>(
 			`/migrations/executions/${executionId}/enqueue`,
+			{ method: "POST" },
+		),
+	compensateExecution: (executionId: number) =>
+		request<MigrationExecution>(
+			`/migrations/executions/${executionId}/compensate`,
 			{ method: "POST" },
 		),
 	pendingApprovals: async () => {

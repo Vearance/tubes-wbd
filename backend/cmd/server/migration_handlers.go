@@ -251,6 +251,28 @@ func (s apiServer) SubmitMigrationForward(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusAccepted, executionResponse(execution))
 }
 
+func (s apiServer) SubmitMigrationCompensation(
+	w http.ResponseWriter,
+	r *http.Request,
+	executionID httpapi.ExecutionId,
+	_ httpapi.SubmitMigrationCompensationParams,
+) {
+	userID, ok := currentUserID(w, r)
+	if !ok {
+		return
+	}
+	id, ok := positiveID(w, int64(executionID), "execution")
+	if !ok {
+		return
+	}
+	execution, err := s.migrations.SubmitCompensationForReview(r.Context(), userID, id)
+	if err != nil {
+		writeServiceError(w, err, "submitting migration compensation")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, executionResponse(execution))
+}
+
 func (s apiServer) ListMigrationExecutions(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId) {
 	userID, dbID, ok := viewerIDs(w, r, databaseID)
 	if !ok {
@@ -316,7 +338,11 @@ func draftIDs(w http.ResponseWriter, r *http.Request, draftID httpapi.DraftId) (
 func migrationFromRequest(request httpapi.MigrationDraftRequest) migration.Migration {
 	m := migration.Migration{Name: request.Name, SQL: request.Sql}
 	if request.Batch != nil {
-		m.Batch = &migration.BatchDefinition{CursorSQL: request.Batch.CursorSql, BatchSize: request.Batch.BatchSize}
+		m.Batch = &migration.BatchDefinition{
+			Schema: request.Batch.Schema, Table: request.Batch.Table,
+			KeyColumn: request.Batch.KeyColumn, ScopeSQL: request.Batch.ScopeSql,
+			BatchSize: request.Batch.BatchSize,
+		}
 	}
 	if request.DownSql != nil {
 		m.DownSQL = *request.DownSql
@@ -353,7 +379,10 @@ func batchResponse(batch *migration.BatchDefinition) *httpapi.MigrationBatchDefi
 	if batch == nil {
 		return nil
 	}
-	return &httpapi.MigrationBatchDefinition{CursorSql: batch.CursorSQL, BatchSize: batch.BatchSize}
+	return &httpapi.MigrationBatchDefinition{
+		Schema: batch.Schema, Table: batch.Table, KeyColumn: batch.KeyColumn,
+		ScopeSql: batch.ScopeSQL, BatchSize: batch.BatchSize,
+	}
 }
 
 func executionResponse(execution *migration.Execution) httpapi.MigrationExecution {
@@ -363,6 +392,7 @@ func executionResponse(execution *migration.Execution) httpapi.MigrationExecutio
 		DraftId:            int64(execution.DraftID),
 		Type:               httpapi.MigrationExecutionType(execution.Type),
 		Status:             httpapi.MigrationExecutionStatus(execution.Status),
+		Compensation:       execution.Compensation,
 		Name:               execution.Name,
 		Sql:                execution.SQL,
 		DownSql:            optionalString(execution.DownSQL),

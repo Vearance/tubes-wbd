@@ -13,6 +13,7 @@ var (
 	ErrVersionNotFound     = errors.New("migration: version not found")
 	ErrInvalidRollback     = errors.New("migration: rollback is not valid for the active migration")
 	ErrInvalidForward      = errors.New("migration: forward is not valid for the latest rollback")
+	ErrInvalidCompensation = errors.New("migration: compensation is not valid for this partial batch execution")
 	ErrDraftNotFound       = errors.New("migration: draft not found")
 	ErrDraftNotEditable    = errors.New("migration: draft cannot be edited while running or after it is applied")
 	ErrDraftNotExecutable  = errors.New("migration: draft cannot be executed while running or after it is applied")

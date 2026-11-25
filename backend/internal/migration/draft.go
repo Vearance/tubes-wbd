@@ -39,14 +39,17 @@ const (
 type ExecutionStatus string
 
 const (
-	ExecutionStatusPendingReview ExecutionStatus = "pending_review"
-	ExecutionStatusRejected      ExecutionStatus = "rejected"
-	ExecutionStatusApproved      ExecutionStatus = "approved"
-	ExecutionStatusQueued        ExecutionStatus = "queued"
-	ExecutionStatusRunning       ExecutionStatus = "running"
-	ExecutionStatusSuccess       ExecutionStatus = "success"
-	ExecutionStatusFailed        ExecutionStatus = "failed"
-	ExecutionStatusPartial       ExecutionStatus = "partial"
+	ExecutionStatusPendingReview       ExecutionStatus = "pending_review"
+	ExecutionStatusRejected            ExecutionStatus = "rejected"
+	ExecutionStatusApproved            ExecutionStatus = "approved"
+	ExecutionStatusQueued              ExecutionStatus = "queued"
+	ExecutionStatusRunning             ExecutionStatus = "running"
+	ExecutionStatusSuccess             ExecutionStatus = "success"
+	ExecutionStatusFailed              ExecutionStatus = "failed"
+	ExecutionStatusPartial             ExecutionStatus = "partial"
+	ExecutionStatusCompensationPending ExecutionStatus = "compensation_pending"
+	ExecutionStatusCompensating        ExecutionStatus = "compensating"
+	ExecutionStatusCompensated         ExecutionStatus = "compensated"
 )
 
 type Draft struct {
@@ -89,34 +92,36 @@ type Run struct {
 func (Run) TableName() string { return "migration_runs" }
 
 type Execution struct {
-	ID                 uint             `gorm:"primaryKey" json:"id"`
-	ManagedDatabaseID  uint             `gorm:"not null;index" json:"database_id"`
-	ActiveDatabaseID   *uint            `gorm:"uniqueIndex:ux_migration_executions_active_database_id" json:"-"`
-	DraftID            uint             `gorm:"not null;index" json:"draft_id"`
-	Type               ExecutionType    `gorm:"not null" json:"type"`
-	Status             ExecutionStatus  `gorm:"not null;index" json:"status"`
-	Name               string           `gorm:"not null" json:"name"`
-	SQL                string           `gorm:"type:text;not null" json:"sql"`
-	DownSQL            string           `gorm:"type:text" json:"down_sql,omitempty"`
-	Batch              *BatchDefinition `gorm:"type:jsonb;serializer:json" json:"batch,omitempty"`
-	BatchCount         int              `gorm:"not null;default:0" json:"batch_count"`
-	RowsProcessed      int64            `gorm:"not null;default:0" json:"rows_processed"`
-	LastCursor         *int64           `json:"last_cursor,omitempty"`
-	BatchDone          bool             `gorm:"not null;default:false" json:"batch_done"`
-	Irreversible       bool             `gorm:"not null;default:false" json:"irreversible"`
-	IrreversibleReason string           `gorm:"type:text" json:"irreversible_reason,omitempty"`
-	ExecutedBy         uint             `gorm:"not null" json:"executed_by"`
-	TargetExecutionID  *uint            `json:"target_execution_id,omitempty"`
-	Version            *int64           `json:"version,omitempty"`
-	Attempt            int              `gorm:"not null;default:0" json:"attempt"`
-	QueuedAt           *time.Time       `json:"queued_at,omitempty"`
-	AvailableAt        *time.Time       `json:"available_at,omitempty"`
-	StartedAt          *time.Time       `json:"started_at,omitempty"`
-	FinishedAt         *time.Time       `json:"finished_at,omitempty"`
-	ErrorCode          string           `json:"error_code,omitempty"`
-	ErrorMessage       string           `json:"error_message,omitempty"`
-	CreatedAt          time.Time        `json:"created_at"`
-	UpdatedAt          time.Time        `json:"updated_at"`
+	ID                    uint             `gorm:"primaryKey" json:"id"`
+	ManagedDatabaseID     uint             `gorm:"not null;index" json:"database_id"`
+	ActiveDatabaseID      *uint            `gorm:"uniqueIndex:ux_migration_executions_active_database_id" json:"-"`
+	DraftID               uint             `gorm:"not null;index" json:"draft_id"`
+	Type                  ExecutionType    `gorm:"not null" json:"type"`
+	Status                ExecutionStatus  `gorm:"not null;index" json:"status"`
+	Name                  string           `gorm:"not null" json:"name"`
+	SQL                   string           `gorm:"type:text;not null" json:"sql"`
+	DownSQL               string           `gorm:"type:text" json:"down_sql,omitempty"`
+	Batch                 *BatchDefinition `gorm:"type:jsonb;serializer:json" json:"batch,omitempty"`
+	BatchCount            int              `gorm:"not null;default:0" json:"batch_count"`
+	RowsProcessed         int64            `gorm:"not null;default:0" json:"rows_processed"`
+	LastCursor            *int64           `json:"last_cursor,omitempty"`
+	BatchDone             bool             `gorm:"not null;default:false" json:"batch_done"`
+	Irreversible          bool             `gorm:"not null;default:false" json:"irreversible"`
+	IrreversibleReason    string           `gorm:"type:text" json:"irreversible_reason,omitempty"`
+	ExecutedBy            uint             `gorm:"not null" json:"executed_by"`
+	TargetExecutionID     *uint            `json:"target_execution_id,omitempty"`
+	Compensation          bool             `gorm:"not null;default:false" json:"compensation"`
+	EncryptedTargetConfig []byte           `gorm:"type:bytea" json:"-"`
+	Version               *int64           `json:"version,omitempty"`
+	Attempt               int              `gorm:"not null;default:0" json:"attempt"`
+	QueuedAt              *time.Time       `json:"queued_at,omitempty"`
+	AvailableAt           *time.Time       `json:"available_at,omitempty"`
+	StartedAt             *time.Time       `json:"started_at,omitempty"`
+	FinishedAt            *time.Time       `json:"finished_at,omitempty"`
+	ErrorCode             string           `json:"error_code,omitempty"`
+	ErrorMessage          string           `json:"error_message,omitempty"`
+	CreatedAt             time.Time        `json:"created_at"`
+	UpdatedAt             time.Time        `json:"updated_at"`
 
 	ManagedDatabase *manageddb.ManagedDatabase `gorm:"constraint:OnDelete:RESTRICT" json:"-"`
 }

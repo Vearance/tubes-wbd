@@ -284,7 +284,7 @@ func TestIntegrationMultiStatementMigrationIsAtomic(t *testing.T) {
 	require.False(t, tableExists(t, pool, "orders"), "earlier statements must be rolled back")
 	require.False(t, columnExists(t, pool, "customers", "email"), "earlier statements must be rolled back")
 	require.True(t, tableExists(t, pool, "kept"), "a previous migration must not be affected")
-	require.Equal(t, []int64{2, 1}, historyVersions(t, pool), "the failed migration attempt must be recorded")
+	require.Equal(t, []int64{1, 2}, historyVersions(t, pool), "the failed migration attempt must be recorded")
 
 	entry, err := svc.Execute(ctx, 1, 1, Migration{Name: "after failure", SQL: "CREATE TABLE next (id int)"})
 	require.NoError(t, err)

@@ -23,6 +23,7 @@ var ErrDraftChangedDuringSubmission = errors.New("migration: draft changed while
 type executionRepository interface {
 	SubmitExecution(context.Context, *Execution) error
 	CreateExecution(context.Context, *Execution) error
+	CreateCompensationExecution(context.Context, *Execution) error
 	GetExecution(context.Context, uint) (*Execution, error)
 	EnqueueApprovedExecution(context.Context, uint) error
 	ClaimExecution(context.Context, uint) (*Execution, error)
@@ -52,22 +53,27 @@ func (s *MigrationService) SubmitDraftForReview(ctx context.Context, userID, dra
 	if err != nil {
 		return nil, err
 	}
+	configSnapshot, err := s.targetConfigSnapshot(ctx, d.ManagedDatabaseID)
+	if err != nil {
+		return nil, fmt.Errorf("snapshotting target database config: %w", err)
+	}
 	executions, ok := s.repo.(executionRepository)
 	if !ok {
 		return nil, errors.New("migration: repository does not support asynchronous executions")
 	}
 	execution := &Execution{
-		ManagedDatabaseID:  d.ManagedDatabaseID,
-		DraftID:            d.ID,
-		Type:               ExecutionTypeUp,
-		Status:             ExecutionStatusPendingReview,
-		Name:               m.Name,
-		SQL:                m.SQL,
-		DownSQL:            m.DownSQL,
-		Batch:              m.Batch,
-		Irreversible:       m.Irreversible,
-		IrreversibleReason: m.IrreversibleReason,
-		ExecutedBy:         userID,
+		ManagedDatabaseID:     d.ManagedDatabaseID,
+		DraftID:               d.ID,
+		Type:                  ExecutionTypeUp,
+		Status:                ExecutionStatusPendingReview,
+		Name:                  m.Name,
+		SQL:                   m.SQL,
+		DownSQL:               m.DownSQL,
+		Batch:                 m.Batch,
+		Irreversible:          m.Irreversible,
+		IrreversibleReason:    m.IrreversibleReason,
+		EncryptedTargetConfig: configSnapshot,
+		ExecutedBy:            userID,
 	}
 	if err := executions.SubmitExecution(ctx, execution); err != nil {
 		return nil, err
@@ -135,18 +141,19 @@ func (s *MigrationService) createActionExecution(ctx context.Context, userID, db
 		return nil, err
 	}
 	execution := &Execution{
-		ManagedDatabaseID:  dbID,
-		DraftID:            target.DraftID,
-		Type:               action,
-		Status:             ExecutionStatusPendingReview,
-		Name:               m.Name,
-		SQL:                m.SQL,
-		DownSQL:            target.SQL,
-		Batch:              target.Batch,
-		Irreversible:       target.Irreversible,
-		IrreversibleReason: target.IrreversibleReason,
-		ExecutedBy:         userID,
-		TargetExecutionID:  &targetID,
+		ManagedDatabaseID:     dbID,
+		DraftID:               target.DraftID,
+		Type:                  action,
+		Status:                ExecutionStatusPendingReview,
+		Name:                  m.Name,
+		SQL:                   m.SQL,
+		DownSQL:               target.SQL,
+		Batch:                 target.Batch,
+		Irreversible:          target.Irreversible,
+		IrreversibleReason:    target.IrreversibleReason,
+		ExecutedBy:            userID,
+		TargetExecutionID:     &targetID,
+		EncryptedTargetConfig: append([]byte(nil), target.EncryptedTargetConfig...),
 	}
 	if action == ExecutionTypeForward {
 		execution.DownSQL = target.DownSQL
@@ -158,6 +165,54 @@ func (s *MigrationService) createActionExecution(ctx context.Context, userID, db
 		return nil, err
 	}
 	return execution, nil
+}
+
+func (s *MigrationService) SubmitCompensationForReview(ctx context.Context, userID, executionID uint) (*Execution, error) {
+	repo, ok := s.repo.(executionRepository)
+	if !ok {
+		return nil, errors.New("migration: repository does not support asynchronous executions")
+	}
+	target, err := repo.GetExecution(ctx, executionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.authz.RequireEdit(ctx, userID, target.ManagedDatabaseID); err != nil {
+		return nil, err
+	}
+	if target.Type != ExecutionTypeUp || target.Status != ExecutionStatusPartial ||
+		target.Batch == nil || target.BatchCount == 0 || target.DownSQL == "" || target.Irreversible {
+		return nil, ErrInvalidCompensation
+	}
+
+	name := "Compensate: " + target.Name
+	definition, err := validateDefinition(Migration{
+		Name:    name,
+		SQL:     target.DownSQL,
+		DownSQL: target.SQL,
+		Batch:   target.Batch,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("validating batch compensation: %w", err)
+	}
+	targetID := target.ID
+	compensation := &Execution{
+		ManagedDatabaseID:     target.ManagedDatabaseID,
+		DraftID:               target.DraftID,
+		Type:                  ExecutionTypeRollback,
+		Status:                ExecutionStatusPendingReview,
+		Name:                  definition.Name,
+		SQL:                   definition.SQL,
+		DownSQL:               definition.DownSQL,
+		Batch:                 definition.Batch,
+		ExecutedBy:            userID,
+		TargetExecutionID:     &targetID,
+		Compensation:          true,
+		EncryptedTargetConfig: append([]byte(nil), target.EncryptedTargetConfig...),
+	}
+	if err := repo.CreateCompensationExecution(ctx, compensation); err != nil {
+		return nil, err
+	}
+	return compensation, nil
 }
 
 func (s *MigrationService) Execution(ctx context.Context, userID, executionID uint) (*Execution, error) {
@@ -218,6 +273,44 @@ func (r *GormRepository) CreateExecution(ctx context.Context, e *Execution) erro
 			return fmt.Errorf("creating migration execution: %w", err)
 		}
 		return createApprovals(tx, e)
+	})
+}
+
+func (r *GormRepository) CreateCompensationExecution(ctx context.Context, execution *Execution) error {
+	if execution.TargetExecutionID == nil || !execution.Compensation || execution.Type != ExecutionTypeRollback {
+		return ErrInvalidCompensation
+	}
+	now := time.Now()
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var target Execution
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&target, *execution.TargetExecutionID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrInvalidCompensation
+			}
+			return fmt.Errorf("locking partial migration for compensation: %w", err)
+		}
+		if target.ManagedDatabaseID != execution.ManagedDatabaseID ||
+			target.Type != ExecutionTypeUp || target.Status != ExecutionStatusPartial ||
+			target.ActiveDatabaseID == nil || *target.ActiveDatabaseID != target.ManagedDatabaseID ||
+			target.Batch == nil || target.BatchCount == 0 || target.DownSQL == "" || target.Irreversible {
+			return ErrInvalidCompensation
+		}
+		if err := tx.Create(execution).Error; err != nil {
+			return fmt.Errorf("creating migration compensation execution: %w", err)
+		}
+		if err := createApprovals(tx, execution); err != nil {
+			return err
+		}
+		result := tx.Model(&Execution{}).
+			Where("id = ? AND status = ? AND active_database_id = ?", target.ID, ExecutionStatusPartial, target.ManagedDatabaseID).
+			Updates(map[string]any{"status": ExecutionStatusCompensationPending, "updated_at": now})
+		if result.Error != nil {
+			return fmt.Errorf("reserving partial migration for compensation: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrInvalidCompensation
+		}
+		return nil
 	})
 }
 
@@ -306,39 +399,67 @@ func (r *GormRepository) ClaimExecution(ctx context.Context, id uint) (*Executio
 		result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND status = ?", id, ExecutionStatusQueued).
 			Where("available_at IS NULL OR available_at <= ?", time.Now()).
-			Where(`NOT EXISTS (
-				SELECT 1 FROM migration_executions running
-				WHERE running.managed_database_id = migration_executions.managed_database_id
-				AND running.status IN ?
-			)`, []ExecutionStatus{ExecutionStatusRunning, ExecutionStatusPartial}).
 			First(&execution)
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			var queued Execution
-			queuedResult := tx.Where("id = ? AND status = ?", id, ExecutionStatusQueued).First(&queued)
-			if errors.Is(queuedResult.Error, gorm.ErrRecordNotFound) {
-				return nil
-			}
-			if queuedResult.Error != nil {
-				return queuedResult.Error
-			}
-			if queued.AvailableAt != nil && queued.AvailableAt.After(time.Now()) {
-				return nil
-			}
-			var busy bool
-			if err := tx.Raw(`SELECT EXISTS (
-				SELECT 1 FROM migration_executions
-				WHERE managed_database_id = ? AND status IN ?
-			)`, queued.ManagedDatabaseID, []ExecutionStatus{ExecutionStatusRunning, ExecutionStatusPartial}).Scan(&busy).Error; err != nil {
-				return err
-			}
-			if busy {
-				return ErrExecutionBusy
-			}
 			return nil
 		}
 		if result.Error != nil {
 			return result.Error
 		}
+
+		busyStatuses := []ExecutionStatus{
+			ExecutionStatusRunning,
+			ExecutionStatusPartial,
+			ExecutionStatusCompensationPending,
+			ExecutionStatusCompensating,
+		}
+		busyQuery := tx.Model(&Execution{}).
+			Where("managed_database_id = ? AND status IN ?", execution.ManagedDatabaseID, busyStatuses)
+		if execution.Compensation && execution.TargetExecutionID != nil {
+			busyQuery = busyQuery.Where("id <> ?", *execution.TargetExecutionID)
+		}
+		var busy int64
+		if err := busyQuery.Count(&busy).Error; err != nil {
+			return fmt.Errorf("checking for active target database execution: %w", err)
+		}
+		if busy > 0 {
+			return ErrExecutionBusy
+		}
+
+		if execution.Compensation {
+			if execution.TargetExecutionID == nil {
+				return ErrInvalidCompensation
+			}
+			var target Execution
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&target, *execution.TargetExecutionID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return ErrInvalidCompensation
+				}
+				return fmt.Errorf("locking partial migration during compensation claim: %w", err)
+			}
+			if target.ManagedDatabaseID != execution.ManagedDatabaseID || target.Type != ExecutionTypeUp {
+				return ErrInvalidCompensation
+			}
+			switch target.Status {
+			case ExecutionStatusCompensationPending:
+				result = tx.Model(&Execution{}).
+					Where("id = ? AND status = ? AND active_database_id = ?", target.ID, ExecutionStatusCompensationPending, target.ManagedDatabaseID).
+					Updates(map[string]any{"status": ExecutionStatusCompensating, "active_database_id": nil, "updated_at": time.Now()})
+				if result.Error != nil {
+					return fmt.Errorf("transferring active migration lock to compensation: %w", result.Error)
+				}
+				if result.RowsAffected != 1 {
+					return ErrInvalidCompensation
+				}
+			case ExecutionStatusCompensating:
+				if execution.ActiveDatabaseID == nil || *execution.ActiveDatabaseID != execution.ManagedDatabaseID {
+					return ErrInvalidCompensation
+				}
+			default:
+				return ErrInvalidCompensation
+			}
+		}
+
 		now := time.Now()
 		result = tx.Model(&Execution{}).
 			Where("id = ? AND status = ?", execution.ID, ExecutionStatusQueued).
@@ -459,6 +580,20 @@ func (r *GormRepository) FinishExecution(ctx context.Context, id uint, status Ex
 				return ErrDraftNotExecutable
 			}
 		}
+		if execution.Compensation && status == ExecutionStatusSuccess {
+			if execution.TargetExecutionID == nil {
+				return ErrInvalidCompensation
+			}
+			result := tx.Model(&Execution{}).
+				Where("id = ? AND status = ?", *execution.TargetExecutionID, ExecutionStatusCompensating).
+				Updates(map[string]any{"status": ExecutionStatusCompensated, "active_database_id": nil, "updated_at": now})
+			if result.Error != nil {
+				return fmt.Errorf("marking compensated migration complete: %w", result.Error)
+			}
+			if result.RowsAffected != 1 {
+				return ErrInvalidCompensation
+			}
+		}
 		return nil
 	})
 }
@@ -569,10 +704,7 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), w.service.opts.StatementTimeout+10*time.Second)
 	defer cancel()
 	if err := w.service.authz.RequireEdit(workCtx, execution.ExecutedBy, execution.ManagedDatabaseID); err != nil {
-		status := ExecutionStatusFailed
-		if execution.Batch != nil {
-			status = ExecutionStatusPartial
-		}
+		status := executionFailureStatus(execution)
 		if finishErr := w.repo.FinishExecution(workCtx, execution.ID, status, nil, "permission_revoked", err.Error()); finishErr != nil {
 			return errors.Join(err, finishErr)
 		}
@@ -600,10 +732,7 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 		if errors.As(runErr, &executionErr) {
 			code, message = executionErr.Code, executionErr.Message
 		}
-		terminalStatus := ExecutionStatusFailed
-		if execution.Batch != nil {
-			terminalStatus = ExecutionStatusPartial
-		}
+		terminalStatus := executionFailureStatus(execution)
 		if finishErr := w.repo.FinishExecution(workCtx, execution.ID, terminalStatus, nil, code, message); finishErr != nil {
 			return errors.Join(runErr, finishErr)
 		}
@@ -640,63 +769,70 @@ func (w *ExecutionWorker) RecoverStale(ctx context.Context) error {
 		return err
 	}
 	for i := range executions {
-		execution := &executions[i]
-		pool, err := w.service.pools.Pool(ctx, execution.ManagedDatabaseID)
-		if err != nil {
-			return err
-		}
-		if err := ensureHistorySchema(ctx, pool, false); err != nil {
-			return err
-		}
-		tx, err := pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("begin stale execution recovery: %w", err)
-		}
-		var locked bool
-		if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtext($1))", lockName).Scan(&locked); err != nil {
-			_ = tx.Rollback(ctx)
-			return fmt.Errorf("checking target lock during execution recovery: %w", err)
-		}
-		if !locked {
-			_ = tx.Rollback(ctx)
-			continue
-		}
-		exists, err := historyExists(ctx, tx)
-		if err != nil {
-			_ = tx.Rollback(ctx)
-			return err
-		}
-		if exists {
-			entry, lookupErr := getExecutionHistoryByID(ctx, tx, execution.ID)
-			if lookupErr == nil {
-				if err := w.repo.FinishExecution(ctx, execution.ID, ExecutionStatusSuccess, &entry.Version, "", ""); err != nil {
-					_ = tx.Rollback(ctx)
-					return err
-				}
-				_ = tx.Rollback(ctx)
-				continue
-			}
-			if !errors.Is(lookupErr, ErrVersionNotFound) {
-				_ = tx.Rollback(ctx)
-				return lookupErr
-			}
-		}
-		_ = tx.Rollback(ctx)
-		if execution.Attempt >= maxExecutionAttempts {
-			terminalStatus := ExecutionStatusFailed
-			if execution.Batch != nil {
-				terminalStatus = ExecutionStatusPartial
-			}
-			if err := w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", "worker stopped before completing the execution"); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := w.repo.RetryExecution(ctx, execution.ID, 0, "worker restarted before execution completed"); err != nil {
+		if err := w.recoverStaleExecution(ctx, &executions[i]); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (w *ExecutionWorker) recoverStaleExecution(ctx context.Context, execution *Execution) error {
+	pool, closePool, err := w.service.executionPool(ctx, execution)
+	if err != nil {
+		return err
+	}
+	if closePool {
+		defer pool.Close()
+	}
+	if err := ensureHistorySchema(ctx, pool, false); err != nil {
+		return err
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin stale execution recovery: %w", err)
+	}
+	var locked bool
+	if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtext($1))", lockName).Scan(&locked); err != nil {
+		_ = tx.Rollback(ctx)
+		return fmt.Errorf("checking target lock during execution recovery: %w", err)
+	}
+	if !locked {
+		_ = tx.Rollback(ctx)
+		return nil
+	}
+	exists, err := historyExists(ctx, tx)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	if exists {
+		entry, lookupErr := getExecutionHistoryByID(ctx, tx, execution.ID)
+		if lookupErr == nil {
+			if err := w.repo.FinishExecution(ctx, execution.ID, ExecutionStatusSuccess, &entry.Version, "", ""); err != nil {
+				_ = tx.Rollback(ctx)
+				return err
+			}
+			_ = tx.Rollback(ctx)
+			return nil
+		}
+		if !errors.Is(lookupErr, ErrVersionNotFound) {
+			_ = tx.Rollback(ctx)
+			return lookupErr
+		}
+	}
+	_ = tx.Rollback(ctx)
+	if execution.Attempt >= maxExecutionAttempts {
+		terminalStatus := executionFailureStatus(execution)
+		return w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", "worker stopped before completing the execution")
+	}
+	return w.repo.RetryExecution(ctx, execution.ID, 0, "worker restarted before execution completed")
+}
+
+func executionFailureStatus(execution *Execution) ExecutionStatus {
+	if execution.Compensation || execution.Batch != nil && (execution.BatchCount > 0 || execution.RowsProcessed > 0) {
+		return ExecutionStatusPartial
+	}
+	return ExecutionStatusFailed
 }
 
 func retryableExecutionError(err error) bool {

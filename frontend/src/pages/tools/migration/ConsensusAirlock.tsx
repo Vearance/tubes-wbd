@@ -40,6 +40,12 @@ function statusMeta(status: MigrationExecution['status']) {
       return { label: 'Rejected', tone: 'red' as const }
     case 'partial':
       return { label: 'Partial', tone: 'amber' as const }
+    case 'compensation_pending':
+      return { label: 'Compensation Pending Review', tone: 'amber' as const }
+    case 'compensating':
+      return { label: 'Compensating', tone: 'violet' as const }
+    case 'compensated':
+      return { label: 'Compensated', tone: 'green' as const }
   }
 }
 
@@ -228,6 +234,23 @@ function ExecutionAirlockCard({
     }
   }
 
+  async function handleCompensate() {
+    setActionBusy(true)
+    setActionError('')
+    try {
+      const compensation = await api.compensateExecution(execution.id)
+      await onMutated(
+        `Compensation Execution #${compensation.id} submitted for group approval.`,
+      )
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : 'Unable to submit compensation',
+      )
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
   const meta = statusMeta(execution.status)
   const approvedCount =
     summary?.approvals.filter((a) => a.decision === 'approved').length ?? 0
@@ -262,7 +285,7 @@ function ExecutionAirlockCard({
                     : 'gray'
               }
             >
-              {typeLabel(execution.type)}
+              {execution.compensation ? 'Compensation' : typeLabel(execution.type)}
             </Status>
             <h3 className="m-0 truncate text-sm font-bold text-ink">
               {execution.name}
@@ -456,7 +479,10 @@ function ExecutionAirlockCard({
             execution.status === 'running' ||
             execution.status === 'success' ||
             execution.status === 'failed' ||
-            execution.status === 'partial') && (
+            execution.status === 'partial' ||
+            execution.status === 'compensation_pending' ||
+            execution.status === 'compensating' ||
+            execution.status === 'compensated') && (
             <div className="rounded-xl border border-line bg-canvas/70 p-3.5 text-xs space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-bold text-ink">
@@ -485,6 +511,21 @@ function ExecutionAirlockCard({
                   )}
                 </div>
               </div>
+              {canEdit && execution.status === 'partial' && execution.type === 'up' && execution.batch && (
+                <ConfirmAction
+                  title={`Compensate partial execution #${execution.id}?`}
+                  description="Creates a new rollback execution using Down SQL for committed batches only, in reverse order. It must receive the same group approvals before it can run."
+                  confirmLabel="Submit Compensation for Review"
+                  tone="primary"
+                  onConfirm={handleCompensate}
+                  trigger={
+                    <Button variant="outline" size="sm" loading={actionBusy}>
+                      <Icon name="undo" className="size-3.5" />
+                      Compensate Committed Batches
+                    </Button>
+                  }
+                />
+              )}
               {execution.error_message && (
                 <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-[11px] text-danger">
                   {execution.error_code ? `[${execution.error_code}] ` : ''}
@@ -515,32 +556,45 @@ export function ConsensusAirlock({
 }) {
   const counts = {
     all: executions.length,
-    pending_review: executions.filter((e) => e.status === 'pending_review')
-      .length,
+    pending_review: executions.filter(
+      (e) => e.status === 'pending_review' || e.status === 'compensation_pending',
+    ).length,
     approved: executions.filter((e) => e.status === 'approved').length,
     queue_running: executions.filter(
-      (e) => e.status === 'queued' || e.status === 'running',
+      (e) =>
+        e.status === 'queued' ||
+        e.status === 'running' ||
+        e.status === 'compensating',
     ).length,
     completed: executions.filter(
       (e) =>
         e.status === 'success' ||
         e.status === 'failed' ||
         e.status === 'rejected' ||
-        e.status === 'partial',
+        e.status === 'partial' ||
+        e.status === 'compensated',
     ).length,
   }
 
   const filtered = executions.filter((e) => {
     if (filter === 'all') return true
-    if (filter === 'pending_review') return e.status === 'pending_review'
+    if (filter === 'pending_review') {
+      return e.status === 'pending_review' || e.status === 'compensation_pending'
+    }
     if (filter === 'approved') return e.status === 'approved'
-    if (filter === 'queue_running')
-      return e.status === 'queued' || e.status === 'running'
+    if (filter === 'queue_running') {
+      return (
+        e.status === 'queued' ||
+        e.status === 'running' ||
+        e.status === 'compensating'
+      )
+    }
     return (
       e.status === 'success' ||
       e.status === 'failed' ||
       e.status === 'rejected' ||
-      e.status === 'partial'
+      e.status === 'partial' ||
+      e.status === 'compensated'
     )
   })
 

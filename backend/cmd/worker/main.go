@@ -83,6 +83,7 @@ func run() error {
 		targetManager,
 		migration.NewGormRepository(db),
 		migration.Options{},
+		configSource,
 	)
 	if err != nil {
 		return fmt.Errorf("creating migration service: %w", err)
