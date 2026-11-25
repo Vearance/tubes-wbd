@@ -17,6 +17,7 @@ import {
   EmptyState,
   ErrorNotice,
   Loading,
+  Modal,
   Status,
   baseButtonClasses,
   buttonSizes,
@@ -92,18 +93,11 @@ function ConnectionForm({
   }
 
   const fieldClass =
-    "grid gap-1.5 text-xs font-semibold text-ink [&_input]:h-11 [&_input]:w-full [&_input]:rounded-[10px] [&_input]:border [&_input]:border-line-strong [&_input]:bg-white [&_input]:px-3 [&_input]:text-xs [&_input]:text-ink [&_input]:focus:border-violet [&_select]:h-11 [&_select]:w-full [&_select]:rounded-[10px] [&_select]:border [&_select]:border-line-strong [&_select]:bg-white [&_select]:px-3 [&_select]:text-xs [&_select]:text-ink [&_select]:focus:border-violet";
+    "grid gap-1.5 text-sm font-bold text-ink [&_input]:h-11 [&_input]:w-full [&_input]:rounded-[10px] [&_input]:border [&_input]:border-line-strong [&_input]:bg-white [&_input]:px-3 [&_input]:text-xs [&_input]:font-normal [&_input]:text-ink [&_input]:focus:border-violet [&_select]:h-11 [&_select]:w-full [&_select]:rounded-[10px] [&_select]:border [&_select]:border-line-strong [&_select]:bg-white [&_select]:px-3 [&_select]:text-xs [&_select]:font-normal [&_select]:text-ink [&_select]:focus:border-violet";
 
   return (
-    <form className={cn(surfaceClass, "mb-4 overflow-hidden")} onSubmit={save}>
-      <header className="border-b border-line px-[22px] py-5">
-        <h2 className="m-0 text-xl font-bold text-balance">
-          {initialData
-            ? "Edit PostgreSQL database connection"
-            : "Add PostgreSQL database"}
-        </h2>
-      </header>
-      <div className="grid grid-cols-1 gap-4 p-4 min-[601px]:p-[22px] min-[901px]:grid-cols-2">
+    <form className="space-y-4" onSubmit={save}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={fieldClass}>
           <span>Display name</span>
           <input
@@ -177,7 +171,7 @@ function ConnectionForm({
             }
           />
         </label>
-        <label className={fieldClass}>
+        <label className={cn(fieldClass, "sm:col-span-2")}>
           <span>SSL mode</span>
           <select
             value={value.ssl_mode}
@@ -195,13 +189,13 @@ function ConnectionForm({
       </div>
       {message && (
         <p
-          className="mx-[22px] mb-4 rounded-[10px] bg-violet-soft px-3 py-2.5 text-xs font-medium text-[#60428b]"
+          className="rounded-[10px] bg-violet-soft px-3 py-2.5 text-xs font-medium text-[#60428b]"
           role="status"
         >
           {message}
         </p>
       )}
-      <footer className="flex flex-wrap justify-end gap-2 border-t border-line px-4 py-3 min-[601px]:px-[22px] min-[601px]:py-[14px] min-[901px]:flex-nowrap [&_button]:flex-auto min-[601px]:[&_button]:flex-1 min-[901px]:[&_button]:flex-none max-[600px]:[&_button]:w-full">
+      <footer className="flex flex-wrap justify-end gap-2 border-t border-line/60 pt-3">
         <Button onClick={onCancel}>Cancel</Button>
         <Button disabled={busy} onClick={test}>
           <Icon name="refresh" />
@@ -353,20 +347,53 @@ export function AdminDatabasesPage() {
             : `${databases.data?.length ?? 0} connections`
         }
         actions={
-          databases.data?.length && !showForm ? (
-            <Button
-              variant="dark"
-              onClick={() => {
-                setEditingDb(null);
-                setShowForm(true);
-              }}
-            >
-              <Icon name="plus" />
-              Add database
-            </Button>
-          ) : undefined
+          <Button
+            variant="dark"
+            onClick={() => {
+              setEditingDb(null);
+              setShowForm(true);
+            }}
+          >
+            <Icon name="plus" />
+            Add database
+          </Button>
         }
       />
+
+      <Modal
+        open={showForm}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowForm(false);
+            setEditingDb(null);
+          }
+        }}
+        title={
+          editingDb
+            ? "Edit PostgreSQL Database Connection"
+            : "Add PostgreSQL Database"
+        }
+        description={
+          editingDb
+            ? "Modify credentials or network endpoints for this target database."
+            : "Connect a new PostgreSQL target database to the consensus pipeline."
+        }
+        size="lg"
+      >
+        <ConnectionForm
+          initialData={editingDb}
+          onCancel={() => {
+            setShowForm(false);
+            setEditingDb(null);
+          }}
+          onCreated={async (saved) => {
+            setShowForm(false);
+            setEditingDb(null);
+            await databases.reload();
+            selectDatabase(saved);
+          }}
+        />
+      </Modal>
 
       <AnimatePresence mode="wait">
         {isLoading ? (
@@ -391,21 +418,6 @@ export function AdminDatabasesPage() {
           >
       {(databases.error || groupMatrix.error) && (
         <ErrorNotice message={databases.error || groupMatrix.error} />
-      )}
-      {showForm && (
-        <ConnectionForm
-          initialData={editingDb}
-          onCancel={() => {
-            setShowForm(false);
-            setEditingDb(null);
-          }}
-          onCreated={async (saved) => {
-            setShowForm(false);
-            setEditingDb(null);
-            await databases.reload();
-            selectDatabase(saved);
-          }}
-        />
       )}
       <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
         <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>

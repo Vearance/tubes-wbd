@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
-import { LayoutGroup, m, useReducedMotion } from 'motion/react'
+import { AnimatePresence, LayoutGroup, m, useReducedMotion } from 'motion/react'
 import {
   api,
   type ExplainResponse,
@@ -12,6 +12,7 @@ import {
   ConfirmAction,
   EmptyState,
   ErrorNotice,
+  Modal,
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
@@ -331,12 +332,10 @@ export function DraftWorkbench({
           <Button
             variant="dark"
             size="sm"
-            onClick={() =>
-              showComposer ? closeComposer() : openNewComposer()
-            }
+            onClick={() => openNewComposer()}
           >
-            <Icon name={showComposer ? 'close' : 'plus'} className="size-3.5" />
-            {showComposer ? 'Close Composer' : 'New Draft'}
+            <Icon name="plus" className="size-3.5" />
+            New Draft
           </Button>
         ) : (
           <Status tone="accent" className="px-3 py-1">
@@ -345,26 +344,25 @@ export function DraftWorkbench({
         )}
       </div>
 
-      {showComposer && canEdit && (
-        <form
-          onSubmit={handleSubmitForm}
-          className="rounded-[18px] border border-violet/30 bg-white p-4.5 shadow-2xs space-y-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-            <div>
-              <h3 className="m-0 text-base font-bold text-ink">
-                {editingDraft
-                  ? `Edit Draft #${editingDraft.id}`
-                  : 'New Schema Change Draft'}
-              </h3>
-              <p className="mt-0.5 mb-0 text-xs text-muted">
-                Target database: <strong className="text-ink">{databaseName}</strong>
-              </p>
+      <Modal
+        open={showComposer && canEdit}
+        onOpenChange={(open) => {
+          if (!open) closeComposer()
+        }}
+        title={
+          editingDraft
+            ? `Edit Draft #${editingDraft.id}`
+            : 'New Schema Change Draft'
+        }
+        description={`Target database: ${databaseName}`}
+        size="xl"
+      >
+        <form onSubmit={handleSubmitForm} className="space-y-4">
+          {editingDraft?.status === 'failed' && (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning-soft/30 px-3.5 py-2 text-xs font-semibold text-warning">
+              <span>Reopening failed draft for revision</span>
             </div>
-            {editingDraft?.status === 'failed' && (
-              <Status tone="red">Reopening failed draft for revision</Status>
-            )}
-          </div>
+          )}
 
           {formError && (
             <ErrorNotice
@@ -374,7 +372,7 @@ export function DraftWorkbench({
           )}
 
           <label className="block">
-            <span className="mb-1.5 block text-xs font-bold text-ink">
+            <span className="mb-2 block text-sm font-bold text-ink">
               Migration Name
             </span>
             <input
@@ -383,13 +381,13 @@ export function DraftWorkbench({
               placeholder="e.g. 003_add_orders_status_index"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet"
+              className="h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet"
             />
           </label>
 
           <div>
-            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-bold text-ink">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-bold text-ink">
                 Up SQL (Forward Schema Change)
               </span>
               <Button
@@ -443,9 +441,9 @@ export function DraftWorkbench({
             </div>
           )}
 
-          <div className="rounded-xl border border-line bg-[#fbfafd] p-4 space-y-3">
+          <div className="rounded-xl border border-line bg-[#fbfafd] p-4.5 space-y-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-bold text-ink">
+              <span className="text-sm font-bold text-ink">
                 Rollback Strategy
               </span>
 
@@ -455,7 +453,7 @@ export function DraftWorkbench({
                     type="button"
                     onClick={() => setIrreversible(false)}
                     className={cn(
-                      'relative rounded-md px-3 py-1.5 text-xs font-bold transition-colors',
+                      'relative rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                       !irreversible ? 'text-violet' : 'text-muted hover:text-ink',
                     )}
                   >
@@ -479,7 +477,7 @@ export function DraftWorkbench({
                     type="button"
                     onClick={() => setIrreversible(true)}
                     className={cn(
-                      'relative rounded-md px-3 py-1.5 text-xs font-bold transition-colors',
+                      'relative rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                       irreversible ? 'text-warning' : 'text-muted hover:text-ink',
                     )}
                   >
@@ -503,37 +501,58 @@ export function DraftWorkbench({
               </LayoutGroup>
             </div>
 
-            {!irreversible ? (
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-ink">
-                  Down SQL (Executed if rolled back later)
-                </span>
-                <textarea
-                  rows={4}
-                  spellCheck={false}
-                  placeholder="ALTER TABLE public.orders DROP COLUMN status;"
-                  value={downSql}
-                  onChange={(e) => setDownSql(e.target.value)}
-                  className="w-full rounded-[10px] border border-line-strong bg-white p-3 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-y"
-                />
-              </label>
-            ) : (
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-warning">
-                  Irreversible Justification (Required)
-                </span>
-                <input
-                  type="text"
-                  placeholder="e.g. Drops deprecated legacy column; data cannot be reconstructed."
-                  value={irreversibleReason}
-                  onChange={(e) => setIrreversibleReason(e.target.value)}
-                  className="h-10 w-full rounded-[10px] border border-warning/40 bg-white px-3 text-xs outline-none focus:border-warning"
-                />
-              </label>
-            )}
+            <div className="min-h-[142px]">
+              <AnimatePresence mode="wait" initial={false}>
+                {!irreversible ? (
+                  <m.div
+                    key="reversible-block"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.14 }}
+                  >
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-semibold text-ink">
+                        Down SQL (Executed if rolled back later)
+                      </span>
+                      <textarea
+                        rows={4}
+                        spellCheck={false}
+                        placeholder="ALTER TABLE public.orders DROP COLUMN status;"
+                        value={downSql}
+                        onChange={(e) => setDownSql(e.target.value)}
+                        className="w-full rounded-[10px] border border-line-strong bg-white p-3 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-none"
+                      />
+                    </label>
+                  </m.div>
+                ) : (
+                  <m.div
+                    key="irreversible-block"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.14 }}
+                  >
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-semibold text-warning">
+                        Irreversible Justification (Required)
+                      </span>
+                      <textarea
+                        rows={4}
+                        spellCheck={false}
+                        placeholder="e.g. Drops deprecated legacy column; data cannot be reconstructed without manual backup."
+                        value={irreversibleReason}
+                        onChange={(e) => setIrreversibleReason(e.target.value)}
+                        className="w-full rounded-[10px] border border-warning/40 bg-white p-3 text-xs leading-5 text-ink outline-none focus:border-warning resize-none"
+                      />
+                    </label>
+                  </m.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 pt-1">
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-line/60">
             <Button variant="outline" size="sm" onClick={closeComposer}>
               Cancel
             </Button>
@@ -543,7 +562,7 @@ export function DraftWorkbench({
             </Button>
           </div>
         </form>
-      )}
+      </Modal>
 
       <div className="space-y-3">
         {drafts.map((draft) => (

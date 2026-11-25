@@ -16,6 +16,7 @@ import {
   EmptyState,
   ErrorNotice,
   Loading,
+  Modal,
   Search,
   Status,
 } from "../../components/ui";
@@ -681,12 +682,40 @@ export function AdminGroupsPage() {
           isLoading ? "Loading groups…" : `${groups.data?.length ?? 0} groups`
         }
         actions={
-          <Button variant="dark" onClick={() => setShowCreate((prev) => !prev)}>
+          <Button variant="dark" onClick={() => setShowCreate(true)}>
             <Icon name="plus" />
-            {showCreate ? "Close" : "Add group"}
+            Add group
           </Button>
         }
       />
+
+      <Modal
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Create Access Group"
+        description="Create a new access control group to manage database permissions and Keyholders."
+        size="sm"
+      >
+        <form onSubmit={createGroup} className="space-y-4">
+          <label className="block text-sm font-bold text-ink">
+            <span>Group name</span>
+            <input
+              className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              autoFocus
+              placeholder="e.g. Customer Editors"
+            />
+          </label>
+          <div className="flex justify-end gap-2 pt-2 border-t border-line/60">
+            <Button onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button type="submit" variant="dark">
+              Create group
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       <AnimatePresence mode="wait">
         {isLoading ? (
@@ -714,33 +743,6 @@ export function AdminGroupsPage() {
                 message={groups.error || users.error || databases.error || error}
               />
             )}
-      {showCreate && (
-        <form
-          className={cn(
-            surfaceClass,
-            "mb-3 flex items-end gap-3 px-4 py-3.5 max-[900px]:flex-wrap max-[900px]:items-start max-[600px]:[&>div]:w-full max-[600px]:[&_button]:w-full",
-          )}
-          onSubmit={createGroup}
-        >
-          <label className="grid flex-1 gap-1.5 text-xs font-semibold max-[900px]:min-w-[min(100%,260px)]">
-            <span>Group name</span>
-            <input
-              className="h-11 w-full rounded-[10px] border border-line-strong px-3 text-xs outline-none focus:border-violet"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-              autoFocus
-              placeholder="Customer editors"
-            />
-          </label>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button type="submit" variant="dark">
-              Create group
-            </Button>
-          </div>
-        </form>
-      )}
       <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
         <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>
           <header className="flex min-h-14 items-center border-b border-line px-4 py-2.5">
