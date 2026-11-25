@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -130,6 +131,15 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 		return fail(executionError(err))
 	}
 
+	start := time.Now()
+	slog.Info("migration SQL attempt started",
+		"execution_id", execution.ID,
+		"database_id", execution.ManagedDatabaseID,
+		"execution_type", execution.Type,
+		"attempt", historyAttemptNumber(execution),
+		"statement_type", "migration",
+		"sql", safeSQLForLog(execution.SQL),
+	)
 	if _, err := tx.Exec(ctx, execution.SQL); err != nil {
 		return fail(executionError(err))
 	}

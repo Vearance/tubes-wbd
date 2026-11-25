@@ -6,8 +6,16 @@ type Migration struct {
 	Name               string
 	SQL                string
 	DownSQL            string
+	Batch              *BatchDefinition
 	Irreversible       bool
 	IrreversibleReason string
+}
+
+type BatchDefinition struct {
+	// CursorSQL selects one positive bigint cursor value per row. It receives
+	// the last committed cursor and batch size as $1 and $2.
+	CursorSQL string `json:"cursor_sql"`
+	BatchSize int    `json:"batch_size"`
 }
 
 type HistoryEntry struct {

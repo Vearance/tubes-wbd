@@ -25,6 +25,7 @@ func (s *MigrationService) CreateDraft(ctx context.Context, userID, dbID uint, m
 		Name:               m.Name,
 		SQL:                m.SQL,
 		DownSQL:            m.DownSQL,
+		Batch:              m.Batch,
 		Irreversible:       m.Irreversible,
 		IrreversibleReason: m.IrreversibleReason,
 		Status:             DraftStatusDraft,
@@ -53,7 +54,7 @@ func (s *MigrationService) UpdateDraft(ctx context.Context, userID, draftID uint
 		return nil, err
 	}
 
-	d.Name, d.SQL, d.DownSQL = m.Name, m.SQL, m.DownSQL
+	d.Name, d.SQL, d.DownSQL, d.Batch = m.Name, m.SQL, m.DownSQL, m.Batch
 	d.Irreversible, d.IrreversibleReason = m.Irreversible, m.IrreversibleReason
 	d.UpdatedBy = userID
 	if err := s.repo.UpdateDraft(ctx, d); err != nil {

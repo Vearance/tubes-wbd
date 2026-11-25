@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -69,6 +70,68 @@ func (r *OutboxRelay) Run(ctx context.Context) error {
 	}
 }
 
+// RunOutboxRelay reconnects to RabbitMQ and resumes publishing pending outbox rows.
+func RunOutboxRelay(ctx context.Context, db *gorm.DB, rabbitURL, queue string) error {
+	return runRabbitMQ(ctx, rabbitURL, queue, "outbox relay", func(channel *amqp.Channel) error {
+		relay, err := NewOutboxRelay(db, channel, queue)
+		if err != nil {
+			return err
+		}
+		return relay.Run(ctx)
+	})
+}
+
+// ConsumeWithReconnect resumes consuming after RabbitMQ closes the connection.
+// Unacked deliveries are requeued by RabbitMQ when their channel closes.
+func (w *ExecutionWorker) ConsumeWithReconnect(ctx context.Context, rabbitURL, queue string) error {
+	return runRabbitMQ(ctx, rabbitURL, queue, "migration worker", func(channel *amqp.Channel) error {
+		if err := DeclareExecutionQueue(channel, queue); err != nil {
+			return err
+		}
+		return w.Consume(ctx, channel, queue)
+	})
+}
+
+func runRabbitMQ(ctx context.Context, rabbitURL, queue, component string, run func(*amqp.Channel) error) error {
+	delay := time.Second
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		connection, err := amqp.Dial(rabbitURL)
+		if err == nil {
+			var channel *amqp.Channel
+			channel, err = connection.Channel()
+			if err == nil {
+				err = DeclareExecutionQueue(channel, queue)
+				if err == nil {
+					err = run(channel)
+				}
+				_ = channel.Close()
+			}
+			_ = connection.Close()
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		slog.Warn("RabbitMQ connection lost; retrying", "component", component, "error", err, "retry_in", delay)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+		if delay < 30*time.Second {
+			delay *= 2
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+		}
+	}
+}
+
 func (r *OutboxRelay) publishBatch(ctx context.Context, confirms <-chan amqp.Confirmation) error {
 	var messages []ExecutionOutbox
 	if err := r.db.WithContext(ctx).
@@ -114,6 +177,9 @@ func (w *ExecutionWorker) Consume(ctx context.Context, channel *amqp.Channel, qu
 	}
 	if queue == "" {
 		queue = defaultExecutionQueue
+	}
+	if err := DeclareExecutionQueue(channel, queue); err != nil {
+		return err
 	}
 	if err := channel.Qos(1, 0, false); err != nil {
 		return fmt.Errorf("setting migration worker prefetch: %w", err)

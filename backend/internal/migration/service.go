@@ -101,6 +101,9 @@ func (s *MigrationService) run(ctx context.Context, userID, dbID uint, m Migrati
 }
 
 func (s *MigrationService) runExecution(ctx context.Context, execution *Execution) (*HistoryEntry, error) {
+	if execution.Batch != nil {
+		return s.runBatchExecution(ctx, execution)
+	}
 	pool, err := s.pools.Pool(ctx, execution.ManagedDatabaseID)
 	if err != nil {
 		return nil, err
@@ -209,13 +212,43 @@ func normalizePage(page, pageSize int) (int, int, error) {
 	return page, pageSize, nil
 }
 
+func sameBatch(a, b *BatchDefinition) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 func validateDefinition(m Migration) (Migration, error) {
 	m, err := validate(m)
 	if err != nil {
 		return m, err
 	}
 	m.DownSQL = strings.TrimSpace(m.DownSQL)
+	if m.Batch != nil {
+		batch := *m.Batch
+		batch.CursorSQL = strings.TrimSpace(batch.CursorSQL)
+		m.Batch = &batch
+		if batch.BatchSize < 1 || batch.BatchSize > 10000 {
+			return m, fmt.Errorf("%w: batch size must be between 1 and 10000", ErrInvalidInput)
+		}
+		if len(batch.CursorSQL) == 0 || len(batch.CursorSQL) > MaxSQLBytes || !utf8.ValidString(batch.CursorSQL) || strings.ContainsRune(batch.CursorSQL, 0) {
+			return m, fmt.Errorf("%w: batch cursor query is invalid", ErrInvalidInput)
+		}
+		cursorStatements := statements(batch.CursorSQL)
+		if len(cursorStatements) != 1 || cursorStatements[0][0] != "select" {
+			return m, fmt.Errorf("%w: batch cursor query must be one SELECT statement", ErrInvalidInput)
+		}
+		if !strings.Contains(batch.CursorSQL, "$1") || !strings.Contains(batch.CursorSQL, "$2") {
+			return m, fmt.Errorf("%w: batch cursor query must use $1 for the last cursor and $2 for batch size", ErrInvalidInput)
+		}
+		if len(statements(m.SQL)) != 1 || !strings.Contains(m.SQL, "$1") {
+			return m, fmt.Errorf("%w: batch up SQL must be one statement using $1 as the selected bigint key array", ErrInvalidInput)
+		}
+	}
 	switch {
+	case m.Batch != nil && (m.Irreversible || m.DownSQL == ""):
+		return m, fmt.Errorf("%w: batch migrations require Down SQL and cannot be marked irreversible", ErrInvalidInput)
 	case m.Irreversible && m.DownSQL != "":
 		return m, fmt.Errorf("%w: provide down SQL or mark the migration irreversible, not both", ErrInvalidInput)
 	case m.Irreversible && strings.TrimSpace(m.IrreversibleReason) == "":
@@ -231,6 +264,9 @@ func validateDefinition(m Migration) (Migration, error) {
 			return m, fmt.Errorf("invalid down SQL: %w", err)
 		}
 		m.DownSQL = down.SQL
+		if m.Batch != nil && (len(statements(m.DownSQL)) != 1 || !strings.Contains(m.DownSQL, "$1")) {
+			return m, fmt.Errorf("%w: batch down SQL must be one statement using $1 as the selected bigint key array", ErrInvalidInput)
+		}
 	}
 	return m, nil
 }
