@@ -428,8 +428,8 @@ export function AdminUsersPage() {
         description="Register a new platform user account with username and password."
         size="md"
       >
-        <form onSubmit={handleCreateUser} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form onSubmit={handleCreateUser} className="space-y-6">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <label className="block text-sm font-bold text-ink">
               <span>Username</span>
               <input
@@ -439,7 +439,7 @@ export function AdminUsersPage() {
                 placeholder="e.g. alex"
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+                className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 text-xs outline-none focus:border-violet"
               />
             </label>
             <label className="block text-sm font-bold text-ink">
@@ -451,11 +451,11 @@ export function AdminUsersPage() {
                 placeholder="••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+                className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 text-xs outline-none focus:border-violet"
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-line/60">
+          <div className="flex justify-end gap-3 pt-5 border-t border-line/80">
             <Button onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button type="submit" variant="dark" disabled={creating}>
               <Icon name="save" />

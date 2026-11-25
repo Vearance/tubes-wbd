@@ -696,11 +696,11 @@ export function AdminGroupsPage() {
         description="Create a new access control group to manage database permissions and Keyholders."
         size="sm"
       >
-        <form onSubmit={createGroup} className="space-y-4">
+        <form onSubmit={createGroup} className="space-y-6">
           <label className="block text-sm font-bold text-ink">
             <span>Group name</span>
             <input
-              className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+              className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 text-xs outline-none focus:border-violet"
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
@@ -708,7 +708,7 @@ export function AdminGroupsPage() {
               placeholder="e.g. Customer Editors"
             />
           </label>
-          <div className="flex justify-end gap-2 pt-2 border-t border-line/60">
+          <div className="flex justify-end gap-3 pt-5 border-t border-line/80">
             <Button onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button type="submit" variant="dark">
               Create group

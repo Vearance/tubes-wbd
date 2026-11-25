@@ -401,7 +401,7 @@ export function DraftWorkbench({
         description={`Target database: ${databaseName}`}
         size="xl"
       >
-        <form onSubmit={handleSubmitForm} className="space-y-4">
+        <form onSubmit={handleSubmitForm} className="space-y-6">
           {editingDraft?.status === 'failed' && (
             <div className="flex items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning-soft/30 px-3.5 py-2 text-xs font-semibold text-warning">
               <span>Reopening failed draft for revision</span>
@@ -425,12 +425,12 @@ export function DraftWorkbench({
               placeholder="e.g. 003_add_orders_status_index"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet"
+              className="h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet"
             />
           </label>
 
           <div>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-bold text-ink">
                 Up SQL (Forward Schema Change)
               </span>
@@ -452,7 +452,7 @@ export function DraftWorkbench({
               placeholder="ALTER TABLE public.orders ADD COLUMN status text NOT NULL DEFAULT 'pending';"
               value={sql}
               onChange={(e) => setSql(e.target.value)}
-              className="w-full rounded-[10px] border border-line-strong bg-white p-3.5 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-y"
+              className="w-full rounded-[12px] border border-line-strong bg-white p-4 font-mono text-xs leading-6 text-ink outline-none focus:border-violet resize-y"
             />
           </div>
 
@@ -534,26 +534,26 @@ export function DraftWorkbench({
             </div>
           )}
 
-          <div className="rounded-xl border border-line bg-[#fbfafd] p-4.5 space-y-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-[16px] border border-line/90 bg-[#fbfafd] p-5 sm:p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-sm font-bold text-ink">
                 Rollback Strategy
               </span>
 
               <LayoutGroup id={strategyId}>
-                <div className="inline-flex rounded-lg border border-line bg-white p-0.5">
+                <div className="inline-flex rounded-xl border border-line bg-white p-1 shadow-2xs">
                   <button
                     type="button"
                     onClick={() => setIrreversible(false)}
                     className={cn(
-                      'relative rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
+                      'relative rounded-lg px-3.5 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                       !irreversible ? 'text-violet' : 'text-muted hover:text-ink',
                     )}
                   >
                     {!irreversible && (
                       <m.span
                         layoutId="rollback-strategy-pill"
-                        className="absolute inset-0 rounded-md bg-violet-soft"
+                        className="absolute inset-0 rounded-lg bg-violet-soft"
                         transition={
                           reduceMotion
                             ? { duration: 0 }
@@ -561,7 +561,7 @@ export function DraftWorkbench({
                         }
                       />
                     )}
-                    <span className="relative z-1 inline-flex items-center gap-1">
+                    <span className="relative z-1 inline-flex items-center gap-1.5">
                       <Icon name="undo" className="size-3.5" />
                       Reversible (Down SQL)
                     </span>
@@ -570,14 +570,14 @@ export function DraftWorkbench({
                     type="button"
                     onClick={() => setIrreversible(true)}
                     className={cn(
-                      'relative rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
+                      'relative rounded-lg px-3.5 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                       irreversible ? 'text-warning' : 'text-muted hover:text-ink',
                     )}
                   >
                     {irreversible && (
                       <m.span
                         layoutId="rollback-strategy-pill"
-                        className="absolute inset-0 rounded-md bg-warning-soft"
+                        className="absolute inset-0 rounded-lg bg-warning-soft"
                         transition={
                           reduceMotion
                             ? { duration: 0 }
@@ -585,7 +585,7 @@ export function DraftWorkbench({
                         }
                       />
                     )}
-                    <span className="relative z-1 inline-flex items-center gap-1">
+                    <span className="relative z-1 inline-flex items-center gap-1.5">
                       <Icon name="alert" className="size-3.5" />
                       Irreversible
                     </span>
@@ -605,7 +605,7 @@ export function DraftWorkbench({
                     transition={{ duration: 0.14 }}
                   >
                     <label className="block">
-                      <span className="mb-1.5 block text-xs font-semibold text-ink">
+                      <span className="mb-2 block text-xs font-bold text-ink">
                         Down SQL (Executed if rolled back later)
                       </span>
                       <textarea
@@ -614,7 +614,7 @@ export function DraftWorkbench({
                         placeholder="ALTER TABLE public.orders DROP COLUMN status;"
                         value={downSql}
                         onChange={(e) => setDownSql(e.target.value)}
-                        className="w-full rounded-[10px] border border-line-strong bg-white p-3 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-none"
+                        className="w-full rounded-[12px] border border-line-strong bg-white p-3.5 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-none"
                       />
                     </label>
                   </m.div>
@@ -627,7 +627,7 @@ export function DraftWorkbench({
                     transition={{ duration: 0.14 }}
                   >
                     <label className="block">
-                      <span className="mb-1.5 block text-xs font-semibold text-warning">
+                      <span className="mb-2 block text-xs font-bold text-warning">
                         Irreversible Justification (Required)
                       </span>
                       <textarea
@@ -636,7 +636,7 @@ export function DraftWorkbench({
                         placeholder="e.g. Drops deprecated legacy column; data cannot be reconstructed without manual backup."
                         value={irreversibleReason}
                         onChange={(e) => setIrreversibleReason(e.target.value)}
-                        className="w-full rounded-[10px] border border-warning/40 bg-white p-3 text-xs leading-5 text-ink outline-none focus:border-warning resize-none"
+                        className="w-full rounded-[12px] border border-warning/40 bg-white p-3.5 text-xs leading-5 text-ink outline-none focus:border-warning resize-none"
                       />
                     </label>
                   </m.div>
@@ -645,12 +645,12 @@ export function DraftWorkbench({
             </div>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-line/60">
-            <Button variant="outline" size="sm" onClick={closeComposer}>
+          <div className="flex flex-wrap justify-end gap-3 pt-5 border-t border-line/80">
+            <Button variant="outline" onClick={closeComposer}>
               Cancel
             </Button>
-            <Button variant="dark" size="sm" type="submit" loading={saving}>
-              <Icon name="save" className="size-3.5" />
+            <Button variant="dark" type="submit" loading={saving}>
+              <Icon name="save" className="size-4" />
               {editingDraft ? 'Update draft' : 'Save draft'}
             </Button>
           </div>
