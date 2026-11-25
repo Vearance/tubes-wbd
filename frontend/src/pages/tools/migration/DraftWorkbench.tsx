@@ -12,6 +12,7 @@ import {
   ConfirmAction,
   EmptyState,
   ErrorNotice,
+  Modal,
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
@@ -331,12 +332,10 @@ export function DraftWorkbench({
           <Button
             variant="dark"
             size="sm"
-            onClick={() =>
-              showComposer ? closeComposer() : openNewComposer()
-            }
+            onClick={() => openNewComposer()}
           >
-            <Icon name={showComposer ? 'close' : 'plus'} className="size-3.5" />
-            {showComposer ? 'Close Composer' : 'New Draft'}
+            <Icon name="plus" className="size-3.5" />
+            New Draft
           </Button>
         ) : (
           <Status tone="accent" className="px-3 py-1">
@@ -345,26 +344,25 @@ export function DraftWorkbench({
         )}
       </div>
 
-      {showComposer && canEdit && (
-        <form
-          onSubmit={handleSubmitForm}
-          className="rounded-[18px] border border-violet/30 bg-white p-4.5 shadow-2xs space-y-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-            <div>
-              <h3 className="m-0 text-base font-bold text-ink">
-                {editingDraft
-                  ? `Edit Draft #${editingDraft.id}`
-                  : 'New Schema Change Draft'}
-              </h3>
-              <p className="mt-0.5 mb-0 text-xs text-muted">
-                Target database: <strong className="text-ink">{databaseName}</strong>
-              </p>
+      <Modal
+        open={showComposer && canEdit}
+        onOpenChange={(open) => {
+          if (!open) closeComposer()
+        }}
+        title={
+          editingDraft
+            ? `Edit Draft #${editingDraft.id}`
+            : 'New Schema Change Draft'
+        }
+        description={`Target database: ${databaseName}`}
+        size="xl"
+      >
+        <form onSubmit={handleSubmitForm} className="space-y-4">
+          {editingDraft?.status === 'failed' && (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning-soft/30 px-3.5 py-2 text-xs font-semibold text-warning">
+              <span>Reopening failed draft for revision</span>
             </div>
-            {editingDraft?.status === 'failed' && (
-              <Status tone="red">Reopening failed draft for revision</Status>
-            )}
-          </div>
+          )}
 
           {formError && (
             <ErrorNotice
@@ -533,7 +531,7 @@ export function DraftWorkbench({
             )}
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 pt-1">
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-line/60">
             <Button variant="outline" size="sm" onClick={closeComposer}>
               Cancel
             </Button>
@@ -543,7 +541,7 @@ export function DraftWorkbench({
             </Button>
           </div>
         </form>
-      )}
+      </Modal>
 
       <div className="space-y-3">
         {drafts.map((draft) => (
