@@ -497,9 +497,6 @@ func (r *GormRepository) RetryExecution(ctx context.Context, id uint, delay time
 		}).Error; err != nil {
 			return fmt.Errorf("requeueing migration execution: %w", err)
 		}
-		if err := tx.Create(&ExecutionOutbox{ExecutionID: id, AvailableAt: availableAt}).Error; err != nil {
-			return fmt.Errorf("creating retry outbox record: %w", err)
-		}
 		if execution.Type == ExecutionTypeUp {
 			result := tx.Model(&Draft{}).Where("id = ? AND status = ?", execution.DraftID, DraftStatusRunning).
 				Update("status", DraftStatusQueued)

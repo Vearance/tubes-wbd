@@ -140,9 +140,26 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 		"statement_type", "migration",
 		"sql", safeSQLForLog(execution.SQL),
 	)
-	if _, err := tx.Exec(ctx, execution.SQL); err != nil {
+	command, err := tx.Exec(ctx, execution.SQL)
+	if err != nil {
+		slog.Error("migration SQL attempt failed",
+			"execution_id", execution.ID,
+			"database_id", execution.ManagedDatabaseID,
+			"execution_type", execution.Type,
+			"attempt", historyAttemptNumber(execution),
+			"duration", time.Since(start),
+			"error", err,
+		)
 		return fail(executionError(err))
 	}
+	slog.Info("migration SQL attempt finished",
+		"execution_id", execution.ID,
+		"database_id", execution.ManagedDatabaseID,
+		"execution_type", execution.Type,
+		"attempt", historyAttemptNumber(execution),
+		"duration", time.Since(start),
+		"rows_affected", command.RowsAffected(),
+	)
 	if tx.Conn().PgConn().TxStatus() != 'T' {
 		return fail(ErrTransactionControl)
 	}
