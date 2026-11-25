@@ -14,6 +14,12 @@ docker compose up --build
 
 The backend runs at `http://localhost:8080`, and the frontend runs at `http://localhost:5173`.
 
+To run multiple migration workers (jobs for the same target database still run one at a time):
+
+```bash
+docker compose up -d --scale worker=3
+```
+
 ## start server and migration worker locally
 
 Run the API and the durable migration worker in separate terminals. They have separate entrypoints and share the relevant Platform DB and RabbitMQ settings:
