@@ -237,51 +237,53 @@ export function EditPage() {
           >
             {structure.error && <ErrorNotice message={structure.error} />}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <section className="rounded-[18px] border border-line/80 bg-white p-5 shadow-xs space-y-5">
-          <div className="flex flex-wrap gap-1.5">
-            {RECIPES.map((item) => {
-              const active = recipe === item.key
-              return (
-                <m.button
-                  key={item.key}
-                  type="button"
-                  whileHover={{ y: -1 }}
-                  whileTap={{ scale: 0.97 }}
-                  transition={{ duration: 0.12 }}
-                  onClick={() => setRecipe(item.key)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-[border-color,background-color,box-shadow] cursor-pointer shadow-2xs',
-                    active
-                      ? 'border-violet/40 bg-violet-soft text-violet shadow-xs'
-                      : 'border-line/80 bg-white text-muted hover:border-violet/40 hover:text-ink hover:shadow-xs',
-                  )}
-                >
-                  <Icon name={item.icon} className="size-3.5" />
-                  {item.label}
-                </m.button>
-              )
-            })}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="rounded-[20px] border border-line bg-white shadow-xs overflow-hidden">
+          {/* Operation Selector */}
+          <div className="border-b border-line bg-[#fbfafd] p-3.5 sm:p-4">
+            <div className="flex flex-wrap gap-2">
+              {RECIPES.map((item) => {
+                const active = recipe === item.key
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setRecipe(item.key)}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer',
+                      active
+                        ? 'bg-ink text-white shadow-xs'
+                        : 'border border-line/80 bg-white text-muted hover:border-line-strong hover:text-ink',
+                    )}
+                  >
+                    <Icon name={item.icon} className="size-3.5" />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          <div className="border-t border-line pt-4 space-y-4">
+          {/* Operation Parameters */}
+          <div className="p-6 sm:p-7 space-y-6">
             {recipe === 'add_column' && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block text-xs font-bold text-ink">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-ink">
                   <span>Column name</span>
                   <input
                     type="text"
                     value={newColName}
                     onChange={(e) => setNewColName(e.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong px-3 font-mono text-xs outline-none focus:border-violet"
+                    placeholder="e.g. notes"
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
                   />
                 </label>
-                <label className="block text-xs font-bold text-ink">
+                <label className="block text-sm font-bold text-ink">
                   <span>PostgreSQL type</span>
                   <select
                     value={newColType}
                     onChange={(e) => setNewColType(e.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
                   >
                     {PG_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -290,36 +292,38 @@ export function EditPage() {
                     ))}
                   </select>
                 </label>
-                <label className="block text-xs font-bold text-ink">
+                <label className="block text-sm font-bold text-ink">
                   <span>Default expression</span>
                   <input
                     type="text"
                     value={defaultExpr}
                     onChange={(e) => setDefaultExpr(e.target.value)}
                     placeholder="e.g. 'pending' or NOW()"
-                    className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong px-3 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
                   />
                 </label>
-                <label className="flex items-center gap-2 pt-6 text-xs font-semibold text-ink cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={nullable}
-                    onChange={(e) => setNullable(e.target.checked)}
-                    className="size-4 accent-violet"
-                  />
-                  Nullable
-                </label>
+                <div className="flex flex-col justify-end">
+                  <label className="flex h-11 items-center gap-3 rounded-[12px] border border-line bg-canvas/30 px-4 text-xs font-bold text-ink cursor-pointer hover:border-line-strong transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={nullable}
+                      onChange={(e) => setNullable(e.target.checked)}
+                      className="size-4 rounded accent-violet"
+                    />
+                    <span>Nullable</span>
+                  </label>
+                </div>
               </div>
             )}
 
-            {recipe !== 'add_column' && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="block text-xs font-bold text-ink">
+            {recipe === 'rename_column' && (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-ink">
                   <span>Target column</span>
                   <select
                     value={activeColName}
                     onChange={(e) => setSelectedCol(e.target.value)}
-                    className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
                   >
                     {columns.map((col) => (
                       <option key={col.name} value={col.name}>
@@ -328,79 +332,125 @@ export function EditPage() {
                     ))}
                   </select>
                 </label>
+                <label className="block text-sm font-bold text-ink">
+                  <span>New column name</span>
+                  <input
+                    type="text"
+                    value={renameTarget}
+                    onChange={(e) => setRenameTarget(e.target.value)}
+                    placeholder={`${activeColName}_v2`}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
+                  />
+                </label>
+              </div>
+            )}
 
-                {recipe === 'rename_column' && (
-                  <label className="block text-xs font-bold text-ink">
-                    <span>New column name</span>
+            {recipe === 'alter_column' && (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-ink">
+                  <span>Target column</span>
+                  <select
+                    value={activeColName}
+                    onChange={(e) => setSelectedCol(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                  >
+                    {columns.map((col) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name} ({col.type})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-bold text-ink">
+                  <span>New PostgreSQL type</span>
+                  <select
+                    value={newColType}
+                    onChange={(e) => setNewColType(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                  >
+                    {PG_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {recipe === 'create_index' && (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-ink">
+                  <span>Target column</span>
+                  <select
+                    value={activeColName}
+                    onChange={(e) => setSelectedCol(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                  >
+                    {columns.map((col) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name} ({col.type})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-bold text-ink">
+                  <span>Index name</span>
+                  <input
+                    type="text"
+                    value={indexName}
+                    onChange={(e) => setIndexName(e.target.value)}
+                    placeholder={`idx_${table}_${activeColName}`}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
+                  />
+                </label>
+                <div className="sm:col-span-2">
+                  <label className="flex h-11 max-w-xs items-center gap-3 rounded-[12px] border border-line bg-canvas/30 px-4 text-xs font-bold text-ink cursor-pointer hover:border-line-strong transition-colors">
                     <input
-                      type="text"
-                      value={renameTarget}
-                      onChange={(e) => setRenameTarget(e.target.value)}
-                      placeholder={`${activeColName}_v2`}
-                      className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong px-3 font-mono text-xs outline-none focus:border-violet"
+                      type="checkbox"
+                      checked={indexUnique}
+                      onChange={(e) => setIndexUnique(e.target.checked)}
+                      className="size-4 rounded accent-violet"
                     />
+                    <span>Unique index</span>
                   </label>
-                )}
+                </div>
+              </div>
+            )}
 
-                {recipe === 'alter_column' && (
-                  <label className="block text-xs font-bold text-ink">
-                    <span>New PostgreSQL type</span>
-                    <select
-                      value={newColType}
-                      onChange={(e) => setNewColType(e.target.value)}
-                      className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet"
-                    >
-                      {PG_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-
-                {recipe === 'create_index' && (
-                  <>
-                    <label className="block text-xs font-bold text-ink">
-                      <span>Index name</span>
-                      <input
-                        type="text"
-                        value={indexName}
-                        onChange={(e) => setIndexName(e.target.value)}
-                        placeholder={`idx_${table}_${activeColName}`}
-                        className="mt-1.5 h-10 w-full rounded-[10px] border border-line-strong px-3 font-mono text-xs outline-none focus:border-violet"
-                      />
-                    </label>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-ink cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={indexUnique}
-                        onChange={(e) => setIndexUnique(e.target.checked)}
-                        className="size-4 accent-violet"
-                      />
-                      Unique index
-                    </label>
-                  </>
-                )}
-
-                {recipe === 'drop_column' && (
-                  <label className="block text-xs font-bold text-warning sm:col-span-2">
-                    <span>Irreversible reason</span>
-                    <input
-                      type="text"
-                      value={dropReason}
-                      onChange={(e) => setDropReason(e.target.value)}
-                      className="mt-1.5 h-10 w-full rounded-[10px] border border-warning/40 px-3 text-xs text-ink outline-none focus:border-warning"
-                    />
-                  </label>
-                )}
+            {recipe === 'drop_column' && (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-danger sm:col-span-2">
+                  <span>Target column</span>
+                  <select
+                    value={activeColName}
+                    onChange={(e) => setSelectedCol(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-danger/40 bg-white px-3.5 font-mono text-xs text-danger outline-none focus:border-danger cursor-pointer"
+                  >
+                    {columns.map((col) => (
+                      <option key={col.name} value={col.name}>
+                        {col.name} ({col.type})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-bold text-warning sm:col-span-2">
+                  <span>Reason</span>
+                  <input
+                    type="text"
+                    value={dropReason}
+                    onChange={(e) => setDropReason(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-[12px] border border-warning/40 px-3.5 text-xs text-ink outline-none focus:border-warning"
+                  />
+                </label>
               </div>
             )}
           </div>
 
-          <div className="border-t border-line pt-4 space-y-3">
+          {/* Blueprint SQL Preview */}
+          <div className="border-t border-line bg-[#fbfafd]/60 p-6 sm:p-7 space-y-5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted">
                 Blueprint SQL
               </span>
               {blueprint.downSql ? (
@@ -410,26 +460,27 @@ export function EditPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
-                <span className="mb-1 block text-[11px] font-bold text-ink">
+                <span className="mb-2 block text-xs font-bold text-ink">
                   Up SQL
                 </span>
-                <pre className="m-0 min-h-24 overflow-auto rounded-xl border border-[#3a3740] bg-[#242227] p-3 font-mono text-xs leading-6 text-[#f2edf4]">
+                <pre className="m-0 min-h-24 overflow-auto rounded-xl border border-line-strong/80 bg-white p-3.5 font-mono text-xs leading-5 text-ink">
                   {blueprint.upSql}
                 </pre>
               </div>
+
               <div>
-                <span className="mb-1 block text-[11px] font-bold text-success">
+                <span className="mb-2 block text-xs font-bold text-ink">
                   {blueprint.downSql ? 'Down SQL' : 'Reason'}
                 </span>
-                <pre className="m-0 min-h-24 overflow-auto rounded-xl border border-line bg-[#fbfafd] p-3 font-mono text-xs leading-6 text-ink">
+                <pre className="m-0 min-h-24 overflow-auto rounded-xl border border-line-strong/80 bg-white p-3.5 font-mono text-xs leading-5 text-ink">
                   {blueprint.downSql || blueprint.irreversibleReason}
                 </pre>
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-line/80">
               <Button variant="outline" size="sm" onClick={testInQueryEditor}>
                 <Icon name="code" className="size-3.5" />
                 Explain Up SQL
@@ -452,39 +503,52 @@ export function EditPage() {
           </div>
         </section>
 
-        <aside className="h-fit rounded-[18px] border border-line/80 bg-white p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b border-line pb-3">
+        {/* Sidebar: Table Columns */}
+        <aside className="h-fit rounded-[20px] border border-line bg-white shadow-xs overflow-hidden">
+          <div className="flex items-center justify-between border-b border-line bg-[#fbfafd] px-5 py-4">
             <h2 className="m-0 font-mono text-sm font-bold text-ink">
               {schema}.{table}
             </h2>
             <Link
               to={`/databases/${id}/${schema}/${encodeURIComponent(table)}`}
-              className="text-xs font-semibold text-violet no-underline hover:underline"
+              className="text-xs font-bold text-violet no-underline hover:underline flex items-center gap-1"
             >
-              View table →
+              <span>View table</span>
+              <Icon name="chevron" className="size-3" />
             </Link>
           </div>
 
-          <div className="max-h-96 overflow-auto divide-y divide-line/60">
-            {columns.map((col) => (
-              <div
-                key={col.name}
-                className="flex items-center justify-between gap-2 py-2 text-xs"
-              >
-                <div className="min-w-0">
-                  <strong className="block truncate font-mono font-semibold text-ink">
-                    {col.name}
-                  </strong>
-                  <span className="text-[10px] text-muted">
-                    {col.nullable ? 'NULL' : 'NOT NULL'}
-                    {col.default ? ` · ${col.default}` : ''}
+          <div className="max-h-[520px] overflow-auto divide-y divide-line">
+            {columns.map((col) => {
+              const isSelected = activeColName === col.name
+              return (
+                <button
+                  type="button"
+                  key={col.name}
+                  onClick={() => setSelectedCol(col.name)}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors cursor-pointer text-xs",
+                    isSelected
+                      ? "bg-violet-soft/60 shadow-[inset_3px_0_var(--violet)]"
+                      : "bg-white hover:bg-canvas/60"
+                  )}
+                  title={`Select ${col.name} as target`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <strong className={cn("block truncate font-mono text-xs", isSelected ? "text-violet font-bold" : "text-ink font-semibold")}>
+                      {col.name}
+                    </strong>
+                    <span className="text-[10px] text-muted">
+                      {col.nullable ? 'NULL' : 'NOT NULL'}
+                      {col.default ? ` · ${col.default}` : ''}
+                    </span>
+                  </div>
+                  <span className="shrink-0 rounded-md border border-line bg-canvas/80 px-2 py-0.5 font-mono text-[11px] text-violet font-semibold">
+                    {col.type}
                   </span>
-                </div>
-                <span className="shrink-0 rounded bg-canvas px-2 py-0.5 font-mono text-[11px] text-violet">
-                  {col.type}
-                </span>
-              </div>
-            ))}
+                </button>
+              )
+            })}
           </div>
         </aside>
       </div>
