@@ -962,6 +962,42 @@ paths:
           $ref: '#/components/responses/NotFound'
         '502':
           $ref: '#/components/responses/TargetUnavailable'
+  /databases/{databaseId}/query:
+    parameters:
+      - $ref: '#/components/parameters/DatabaseId'
+    post:
+      operationId: executeDatabaseQuery
+      summary: Execute a read-only SQL query
+      description: Requires View permission. Runs a single read-only SELECT statement with a bounded limit and timeout.
+      tags:
+        - viewer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteDatabaseQueryRequest'
+      responses:
+        '200':
+          description: Query results with columns, rows, and truncation flag.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/TargetUnavailable'
   /databases/{databaseId}/migrations/explain:
     parameters:
       - $ref: '#/components/parameters/DatabaseId'
@@ -2113,6 +2149,51 @@ components:
           type: integer
           minimum: 1
           maximum: 10000
+    ExecuteDatabaseQueryRequest:
+      type: object
+      required:
+        - sql
+      properties:
+        sql:
+          type: string
+          description: SQL statement to execute. Must be a single read-only query.
+        page:
+          type: integer
+          minimum: 1
+          description: 1-based result page number.
+        page_size:
+          type: integer
+          minimum: 1
+          description: Maximum number of rows per page.
+    QueryResult:
+      type: object
+      required:
+        - columns
+        - rows
+        - page
+        - page_size
+        - has_next
+        - truncated
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+              nullable: true
+        page:
+          type: integer
+        page_size:
+          type: integer
+        has_next:
+          type: boolean
+        truncated:
+          type: boolean
     MigrationDraftRequest:
       type: object
       required:

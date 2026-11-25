@@ -5,7 +5,7 @@ import {
 } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { AnimatePresence, m } from 'motion/react'
-import { api, type TableStructure } from '../../api'
+import { api, type QueryResult, type TableStructure } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
 import { useWorkspaceContext } from '../../components/workspaceContext'
 import { Icon } from '../../components/Icon'
@@ -14,6 +14,7 @@ import {
   EmptyState,
   ErrorNotice,
   Modal,
+  NullBadge,
   Status,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
@@ -192,7 +193,7 @@ export function QueryPage() {
   const [editedSql, setEditedSql] = useState<string | null>(
     initialSqlParam ??
       (initialTableParam
-        ? `SELECT * FROM ${schema}.${initialTableParam}\nLIMIT 25;`
+        ? `SELECT * FROM ${schema}.${initialTableParam};`
         : null),
   )
 
@@ -200,7 +201,7 @@ export function QueryPage() {
   const sql =
     editedSql ??
     (defaultTableName
-      ? `SELECT * FROM ${schema}.${defaultTableName}\nLIMIT 25;`
+      ? `SELECT * FROM ${schema}.${defaultTableName};`
       : `-- Select a table from the schema reference on the left\nSELECT 1;`)
 
   const [expandedTable, setExpandedTable] = useState<string | null>(
@@ -210,12 +211,18 @@ export function QueryPage() {
     Record<string, TableStructure>
   >({})
   const [tableFilter, setTableFilter] = useState('')
+  const [queryResult, setQueryResult] = useState<QueryResult | null>(null)
+  const [queryBusy, setQueryBusy] = useState(false)
+  const [pageSize, setPageSize] = useState(50)
+  const [executedSql, setExecutedSql] = useState('')
+  const [activeTab, setActiveTab] = useState<'results' | 'plan'>('results')
   const [plan, setPlan] = useState<unknown[] | null>(null)
   const [rawPlan, setRawPlan] = useState('')
   const [planTab, setPlanTab] = useState<'visual' | 'json'>('visual')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedCell, setCopiedCell] = useState<string | null>(null)
   const [mobileSchemaOpen, setMobileSchemaOpen] = useState(false)
 
   const lineNumbersRef = useRef<HTMLDivElement>(null)
@@ -229,6 +236,44 @@ export function QueryPage() {
     }
   }
 
+  async function executeQueryPage(
+    targetSql: string,
+    targetPage: number,
+    targetPageSize: number,
+  ) {
+    if (!targetSql.trim()) return
+    setQueryBusy(true)
+    setError('')
+    try {
+      const result = await api.query(id, targetSql, targetPage, targetPageSize)
+      setQueryResult(result)
+      setExecutedSql(targetSql)
+      setActiveTab('results')
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to execute query',
+      )
+    } finally {
+      setQueryBusy(false)
+    }
+  }
+
+  function runQuery() {
+    void executeQueryPage(sql, 1, pageSize)
+  }
+
+  function goToPage(targetPage: number) {
+    if (targetPage < 1 || !executedSql.trim()) return
+    void executeQueryPage(executedSql, targetPage, pageSize)
+  }
+
+  function handlePageSizeChange(nextSize: number) {
+    setPageSize(nextSize)
+    if (executedSql.trim() && queryResult) {
+      void executeQueryPage(executedSql, 1, nextSize)
+    }
+  }
+
   async function explain() {
     if (!sql.trim()) return
     setBusy(true)
@@ -238,6 +283,7 @@ export function QueryPage() {
       setRawPlan(JSON.stringify(result.statements, null, 2))
       const plans = result.statements.flatMap((s) => s.plan)
       setPlan(plans)
+      setActiveTab('plan')
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'Unable to explain query',
@@ -250,7 +296,11 @@ export function QueryPage() {
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault()
-      void explain()
+      if (e.shiftKey) {
+        void explain()
+      } else {
+        void runQuery()
+      }
     }
   }
 
@@ -263,6 +313,41 @@ export function QueryPage() {
     void navigator.clipboard?.writeText(rawPlan)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  function copyCellValue(val: string | null, key: string) {
+    if (val === null) return
+    void navigator.clipboard?.writeText(val)
+    setCopiedCell(key)
+    setTimeout(() => setCopiedCell(null), 1500)
+  }
+
+  function handleExportCsv() {
+    if (!queryResult || queryResult.rows.length === 0) return
+    const escapeCsv = (val: string | null) => {
+      if (val === null) return ''
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`
+      }
+      return val
+    }
+    const header = queryResult.columns.map(escapeCsv).join(',')
+    const rows = queryResult.rows
+      .map((row) => row.map(escapeCsv).join(','))
+      .join('\n')
+    const csvContent = `${header}\n${rows}`
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute(
+      'download',
+      `query-result-p${queryResult.page}-${Date.now()}.csv`,
+    )
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   async function toggleTableReference(tableName: string) {
@@ -330,14 +415,23 @@ export function QueryPage() {
               </Button>
             )}
             <Button
-              variant="dark"
+              variant="outline"
               size="sm"
               loading={busy}
               onClick={explain}
-              title="Run EXPLAIN (FORMAT JSON) (Ctrl+Enter)"
+              title="Run EXPLAIN (FORMAT JSON) (Ctrl+Shift+Enter)"
+            >
+              Explain
+            </Button>
+            <Button
+              variant="dark"
+              size="sm"
+              loading={queryBusy}
+              onClick={runQuery}
+              title="Execute read-only SQL query (Ctrl+Enter)"
             >
               <Icon name="play" className="size-3.5" />
-              Explain query
+              Run query
             </Button>
           </>
         }
@@ -442,17 +536,20 @@ export function QueryPage() {
               <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink shadow-2xs">
                 Ctrl+Enter
               </kbd>{' '}
-              to explain query cost.
+              to run query, or{' '}
+              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink shadow-2xs">
+                Ctrl+Shift+Enter
+              </kbd>{' '}
+              to explain cost.
             </p>
-            <div className="rounded-2xl border border-violet/20 bg-violet-soft/50 p-3.5 text-[#5e3894] shadow-2xs">
+            <div className="rounded-2xl border border-line/80 bg-white p-3.5 text-ink shadow-2xs">
               <div className="flex items-center gap-1.5 font-bold text-xs">
-                <Icon name="shield" className="size-4" />
-                Safe Planning Mode
+                <Icon name="shield" className="size-4 text-violet" />
+                Read-Only Execution
               </div>
-              <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[#7350a8]">
-                Evaluates via read-only{' '}
-                <code className="font-mono text-[10px] font-bold">EXPLAIN</code>{' '}
-                without mutating tables.
+              <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-muted">
+                Executes in a safe read-only transaction with statement timeout
+                and paginated results (up to 100 rows per page).
               </p>
             </div>
           </div>
@@ -511,15 +608,54 @@ export function QueryPage() {
           </div>
 
           <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 border-b border-line bg-canvas/40 px-3.5 py-2 sm:px-4 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold text-ink">Query Execution Plan</span>
-              {rawPlan && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('results')}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                  activeTab === 'results'
+                    ? 'bg-ink text-white'
+                    : 'text-muted hover:text-ink hover:bg-canvas',
+                )}
+              >
+                <span>Results</span>
+                {queryResult && (
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-0.2 font-mono text-[10px]',
+                      activeTab === 'results'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-canvas text-ink border border-line',
+                    )}
+                  >
+                    {queryResult.page > 1 ? `p.${queryResult.page} · ` : ''}
+                    {queryResult.rows.length}
+                    {queryResult.has_next ? '+' : ''}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('plan')}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                  activeTab === 'plan'
+                    ? 'bg-ink text-white'
+                    : 'text-muted hover:text-ink hover:bg-canvas',
+                )}
+              >
+                <span>Explain Plan</span>
+              </button>
+
+              {activeTab === 'plan' && rawPlan && (
                 <div className="flex items-center gap-1 sm:ml-2 sm:border-l sm:border-line sm:pl-3">
                   <button
                     type="button"
                     onClick={() => setPlanTab('visual')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
                       planTab === 'visual'
                         ? 'bg-violet text-white'
                         : 'text-muted hover:text-ink',
@@ -531,7 +667,7 @@ export function QueryPage() {
                     type="button"
                     onClick={() => setPlanTab('json')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
                       planTab === 'json'
                         ? 'bg-violet text-white'
                         : 'text-muted hover:text-ink',
@@ -543,35 +679,237 @@ export function QueryPage() {
               )}
             </div>
 
-            {rawPlan && (
-              <button
-                type="button"
-                onClick={handleCopyPlan}
-                className="flex items-center gap-1 text-[11px] text-muted hover:text-ink transition-colors cursor-pointer"
-              >
-                <Icon
-                  name={copied ? 'check' : 'copy'}
-                  className={cn('size-3.5', copied && 'text-success')}
-                />
-                {copied ? 'Copied' : 'Copy plan'}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {activeTab === 'results' &&
+                queryResult &&
+                queryResult.rows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted hover:text-ink transition-colors cursor-pointer"
+                    title="Download as CSV"
+                  >
+                    <Icon name="save" className="size-3.5" />
+                    Export CSV
+                  </button>
+                )}
+
+              {activeTab === 'plan' && rawPlan && (
+                <button
+                  type="button"
+                  onClick={handleCopyPlan}
+                  className="flex items-center gap-1 text-[11px] text-muted hover:text-ink transition-colors cursor-pointer"
+                >
+                  <Icon
+                    name={copied ? 'check' : 'copy'}
+                    className={cn('size-3.5', copied && 'text-success')}
+                  />
+                  {copied ? 'Copied' : 'Copy plan'}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="min-h-0 overflow-auto p-4 [scrollbar-width:thin]">
-            {!rawPlan ? (
+            {activeTab === 'results' ? (
+              !queryResult ? (
+                <EmptyState
+                  icon="play"
+                  title="No query executed yet"
+                  action={
+                    <Button
+                      variant="dark"
+                      size="sm"
+                      onClick={runQuery}
+                      loading={queryBusy}
+                    >
+                      <Icon name="play" className="size-3.5" />
+                      Run query
+                    </Button>
+                  }
+                >
+                  Run your SQL statement to inspect rows, join data, and preview
+                  results.
+                </EmptyState>
+              ) : (
+                <div className="flex flex-col h-full min-h-0 space-y-3">
+                  {queryResult.rows.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center">
+                      <EmptyState
+                        icon="table"
+                        title="0 rows returned"
+                        action={
+                          queryResult.page > 1 ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={queryBusy}
+                              onClick={() => goToPage(1)}
+                            >
+                              Back to page 1
+                            </Button>
+                          ) : undefined
+                        }
+                      >
+                        {queryResult.page > 1
+                          ? `No rows found on page ${queryResult.page}.`
+                          : 'Statement executed successfully with no matching records.'}
+                      </EmptyState>
+                    </div>
+                  ) : (
+                    <div className="w-full min-w-0 max-w-full flex-1 overflow-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin] rounded-xl border border-line">
+                      <table className="w-max min-w-full table-fixed border-collapse text-xs">
+                        <thead className="sticky top-0 z-10 bg-[#fbfafd] shadow-2xs">
+                          <tr>
+                            <th className="h-10 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[10px] text-muted select-none">
+                              #
+                            </th>
+                            {queryResult.columns.map((col) => (
+                              <th
+                                key={col}
+                                className="h-10 border-r border-b border-line px-2.5 sm:px-3.5 text-left font-semibold text-ink whitespace-nowrap"
+                              >
+                                <span className="font-mono text-xs">{col}</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {queryResult.rows.map((row, rIdx) => (
+                            <tr
+                              key={rIdx}
+                              className="hover:bg-canvas/50 transition-colors"
+                            >
+                              <td className="h-9 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[10px] text-muted bg-[#fbfafd]/40 select-none">
+                                {(queryResult.page - 1) * queryResult.page_size +
+                                  rIdx +
+                                  1}
+                              </td>
+                              {row.map((cell, cIdx) => {
+                                const cellKey = `${rIdx}-${cIdx}`
+                                const isCopied = copiedCell === cellKey
+                                return (
+                                  <td
+                                    key={cIdx}
+                                    onClick={() => copyCellValue(cell, cellKey)}
+                                    title={
+                                      cell !== null
+                                        ? `${cell} (Click to copy)`
+                                        : 'NULL'
+                                    }
+                                    className={cn(
+                                      'h-9 max-w-[260px] sm:max-w-[340px] truncate border-r border-b border-line px-2.5 sm:px-3.5 font-mono text-[12px] text-ink cursor-default',
+                                      cIdx === 0 &&
+                                        'text-[#6946a1] font-semibold',
+                                    )}
+                                  >
+                                    {isCopied ? (
+                                      <span className="text-[10px] font-bold text-success flex items-center gap-1">
+                                        <Icon name="check" className="size-3" />{' '}
+                                        Copied
+                                      </span>
+                                    ) : cell === null ? (
+                                      <NullBadge />
+                                    ) : (
+                                      cell
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <footer className="flex min-w-0 flex-wrap items-center justify-between gap-2.5 rounded-xl border border-line bg-[#fbfafd] px-3.5 py-2 text-xs text-muted shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <span>
+                        Page{' '}
+                        <strong className="text-ink tabular-nums">
+                          {queryResult.page}
+                        </strong>
+                      </span>
+                      {queryResult.rows.length > 0 && (
+                        <>
+                          <span>·</span>
+                          <span className="tabular-nums">
+                            Rows{' '}
+                            <strong className="text-ink">
+                              {(queryResult.page - 1) * queryResult.page_size +
+                                1}
+                            </strong>
+                            –
+                            <strong className="text-ink">
+                              {(queryResult.page - 1) * queryResult.page_size +
+                                queryResult.rows.length}
+                            </strong>
+                          </span>
+                        </>
+                      )}
+                      <span className="hidden sm:inline">·</span>
+                      <label className="inline-flex items-center gap-1.5">
+                        <span>Per page</span>
+                        <select
+                          aria-label="Rows per page"
+                          value={pageSize}
+                          disabled={queryBusy}
+                          onChange={(e) =>
+                            handlePageSizeChange(Number(e.target.value))
+                          }
+                          className="h-7 rounded-lg border border-line bg-white px-2 font-mono text-[11px] font-semibold text-ink outline-none focus:border-violet cursor-pointer"
+                        >
+                          {[25, 50, 100].map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={queryBusy || queryResult.page <= 1}
+                        onClick={() => goToPage(queryResult.page - 1)}
+                      >
+                        <Icon name="chevron-left" className="size-3.5" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={queryBusy || !queryResult.has_next}
+                        onClick={() => goToPage(queryResult.page + 1)}
+                      >
+                        Next
+                        <Icon name="chevron" className="size-3.5" />
+                      </Button>
+                    </div>
+                  </footer>
+                </div>
+              )
+            ) : !rawPlan ? (
               <EmptyState
                 icon="code"
                 title="No query plan generated yet"
                 action={
-                  <Button variant="outline" size="sm" onClick={explain}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={explain}
+                    loading={busy}
+                  >
                     <Icon name="play" className="size-3.5" />
                     Explain current statement
                   </Button>
                 }
               >
-                Click &ldquo;Explain query&rdquo; to analyze the cost, node
-                types, and scan strategies without altering data.
+                Click &ldquo;Explain&rdquo; to analyze the cost, node types, and
+                scan strategies without altering data.
               </EmptyState>
             ) : planTab === 'json' ? (
               <pre className="m-0 font-mono text-xs leading-relaxed text-[#3b3442] bg-[#fbfafd] p-4 rounded-xl border border-line overflow-auto">

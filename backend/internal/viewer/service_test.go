@@ -70,6 +70,10 @@ var operations = map[string]func(*ViewerService) error{
 		_, err := s.Query(context.Background(), 7, 3, "SELECT 1")
 		return err
 	},
+	"QueryPage": func(s *ViewerService) error {
+		_, err := s.QueryPage(context.Background(), 7, 3, "SELECT 1", 1, 10)
+		return err
+	},
 }
 
 func TestNewViewerServiceRejectsNilDependencies(t *testing.T) {
@@ -159,6 +163,22 @@ func TestInvalidInputDoesNotConnect(t *testing.T) {
 		},
 		"query, multiple statements": func(s *ViewerService) error {
 			_, err := s.Query(ctx, 1, 1, "SELECT 1; SELECT 2")
+			return err
+		},
+		"query page, negative page": func(s *ViewerService) error {
+			_, err := s.QueryPage(ctx, 1, 1, "SELECT 1", -1, 10)
+			return err
+		},
+		"query page, negative page size": func(s *ViewerService) error {
+			_, err := s.QueryPage(ctx, 1, 1, "SELECT 1", 1, -10)
+			return err
+		},
+		"query page, page too large": func(s *ViewerService) error {
+			_, err := s.QueryPage(ctx, 1, 1, "SELECT 1", maxPage+1, 10)
+			return err
+		},
+		"query page, changing statement": func(s *ViewerService) error {
+			_, err := s.QueryPage(ctx, 1, 1, "DELETE FROM users", 1, 10)
 			return err
 		},
 	}
