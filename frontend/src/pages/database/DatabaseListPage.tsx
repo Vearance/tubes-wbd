@@ -64,7 +64,7 @@ export function DatabaseListPage() {
               value={search}
               onChange={setSearch}
               placeholder="Filter databases…"
-              className="min-w-56"
+              className="w-full sm:min-w-56"
             />
           ) : undefined
         }
@@ -132,7 +132,7 @@ export function DatabaseListPage() {
                   </div>
                   <Link
                     to={`/databases/${exec.database_id}/migrations?tab=airlock&executionId=${exec.id}`}
-                    className="inline-flex min-h-8 items-center gap-1 rounded-xl bg-[#1c1b22] px-3 text-xs font-bold text-white no-underline hover:bg-[#121116] transition-colors shrink-0 shadow-xs"
+                    className="inline-flex min-h-8 items-center justify-center gap-1 rounded-xl bg-[#1c1b22] px-3.5 text-xs font-bold text-white no-underline hover:bg-[#121116] transition-colors shrink-0 shadow-xs max-[600px]:w-full"
                   >
                     Review
                     <Icon name="chevron" className="size-3.5" />

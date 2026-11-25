@@ -13,6 +13,7 @@ import {
   Button,
   EmptyState,
   ErrorNotice,
+  Modal,
   Status,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
@@ -215,6 +216,7 @@ export function QueryPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [mobileSchemaOpen, setMobileSchemaOpen] = useState(false)
 
   const lineNumbersRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -316,6 +318,16 @@ export function QueryPage() {
         title="SQL editor"
         actions={
           <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMobileSchemaOpen(true)}
+              className="min-[901px]:hidden"
+              title="View schema tables and columns"
+            >
+              <Icon name="table" className="size-3.5" />
+              Tables
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -465,7 +477,7 @@ export function QueryPage() {
           </div>
         </aside>
 
-        <section className="grid min-w-0 grid-rows-[44px_280px_44px_minmax(0,1fr)] overflow-hidden">
+        <section className="grid min-w-0 grid-rows-[44px_200px_44px_minmax(0,1fr)] sm:grid-rows-[44px_280px_44px_minmax(0,1fr)] overflow-hidden">
           <div className="flex min-w-0 items-center justify-between border-b border-line bg-canvas/40 px-4 text-xs font-medium text-muted">
             <span className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-violet" />
@@ -577,6 +589,88 @@ export function QueryPage() {
           </div>
         </section>
       </div>
+
+      <Modal
+        open={mobileSchemaOpen}
+        onOpenChange={setMobileSchemaOpen}
+        title="Schema Reference"
+        description={`Tables in ${schema} schema`}
+        size="md"
+      >
+        <div className="space-y-3">
+          {(tables.data?.length ?? 0) > 4 && (
+            <input
+              type="text"
+              placeholder="Filter tables…"
+              value={tableFilter}
+              onChange={(e) => setTableFilter(e.target.value)}
+              className="h-10 w-full rounded-xl border border-line bg-canvas px-3 text-xs text-ink outline-none focus:border-violet"
+            />
+          )}
+          <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1 [scrollbar-width:thin]">
+            {visibleTables.map((t) => {
+              const isOpen = expandedTable === t.name
+              const st = structuresByTable[t.name]
+              return (
+                <div
+                  key={t.name}
+                  className="rounded-xl border border-line bg-white overflow-hidden shadow-2xs"
+                >
+                  <button
+                    type="button"
+                    onClick={() => void toggleTableReference(t.name)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Icon name="table" className="size-4 text-violet shrink-0" />
+                      <span className="truncate font-mono">{t.name}</span>
+                    </span>
+                    <Icon
+                      name={isOpen ? 'chevron-down' : 'chevron'}
+                      className="size-3.5 text-muted shrink-0"
+                    />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <m.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden border-t border-line bg-[#fcfbfd] px-3 py-2 space-y-1"
+                      >
+                        {st ? (
+                          st.columns.map((c) => (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => {
+                                insertSnippet(c.name)
+                                setMobileSchemaOpen(false)
+                              }}
+                              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-mono text-xs text-ink hover:bg-white transition-colors cursor-pointer"
+                            >
+                              <span className="truncate">{c.name}</span>
+                              <span className="text-[10px] text-muted">{c.type}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted block py-1">Loading columns…</span>
+                        )}
+                      </m.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            })}
+            {!tables.loading && visibleTables.length === 0 && (
+              <p className="m-0 py-4 text-center text-xs text-muted">
+                No tables found in {schema}
+              </p>
+            )}
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }

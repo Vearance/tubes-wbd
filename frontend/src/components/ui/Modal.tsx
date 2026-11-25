@@ -34,33 +34,33 @@ export function Modal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-200" />
-        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-4 sm:p-6">
+        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-3 sm:p-6">
           <Dialog.Popup
             className={cn(
-              'relative rounded-[22px] border border-line/80 bg-white shadow-2xl overflow-hidden',
+              'relative rounded-[20px] sm:rounded-[22px] border border-line/80 bg-white shadow-2xl overflow-hidden w-full max-w-[calc(100vw-24px)] sm:max-w-none',
               sizeClasses[size],
               className,
             )}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-line/80 px-7 py-6 sm:px-8 sm:py-6.5 bg-canvas/30">
+            <div className="flex items-start justify-between gap-3 sm:gap-4 border-b border-line/80 px-5 py-4 sm:px-8 sm:py-6.5 bg-canvas/30">
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="m-0 text-xl font-bold tracking-tight text-ink sm:text-[23px]">
+                <Dialog.Title className="m-0 text-lg sm:text-[23px] font-bold tracking-tight text-ink">
                   {title}
                 </Dialog.Title>
                 {description && (
-                  <Dialog.Description className="mt-1.5 text-xs sm:text-sm text-muted leading-relaxed">
+                  <Dialog.Description className="mt-1 sm:mt-1.5 text-xs sm:text-sm text-muted leading-relaxed">
                     {description}
                   </Dialog.Description>
                 )}
               </div>
               <Dialog.Close
-                className="grid size-9 shrink-0 place-items-center rounded-xl border border-transparent bg-transparent text-muted hover:border-line hover:bg-canvas hover:text-ink transition-all cursor-pointer"
+                className="grid size-8 sm:size-9 shrink-0 place-items-center rounded-xl border border-transparent bg-transparent text-muted hover:border-line hover:bg-canvas hover:text-ink transition-all cursor-pointer"
                 aria-label="Close dialog"
               >
-                <Icon name="close" className="size-4.5" />
+                <Icon name="close" className="size-4 sm:size-4.5" />
               </Dialog.Close>
             </div>
-            <div className="p-7 sm:p-8 max-h-[calc(100dvh-150px)] overflow-y-auto [scrollbar-width:thin]">
+            <div className="p-5 sm:p-8 max-h-[calc(100dvh-120px)] overflow-y-auto [scrollbar-width:thin]">
               {children}
             </div>
           </Dialog.Popup>

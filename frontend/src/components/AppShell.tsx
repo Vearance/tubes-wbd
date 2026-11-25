@@ -60,6 +60,7 @@ export function AppShell({
   const isAdminRoute = location.pathname.startsWith('/admin')
   const [tableSearch, setTableSearch] = useState('')
   const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const switcherRef = useRef<HTMLDivElement>(null)
 
   const databases = useResource(
@@ -77,6 +78,13 @@ export function AppShell({
         : Promise.resolve([]),
     [user.is_admin, databaseId, schema],
   )
+
+  // Close mobile drawer on route navigation
+  const [prevPathname, setPrevPathname] = useState(location.pathname)
+  if (prevPathname !== location.pathname) {
+    setPrevPathname(location.pathname)
+    setMobileMenuOpen(false)
+  }
 
   useEffect(() => {
     if (!switcherOpen) return
@@ -126,8 +134,9 @@ export function AppShell({
   }
 
   return (
-    <div className="grid min-h-dvh grid-cols-[240px_minmax(0,1fr)] max-[900px]:grid-cols-[minmax(0,1fr)]">
-      <aside className="sticky top-0 flex h-dvh flex-col border-r border-line/70 bg-white/85 backdrop-blur-md px-3.5 pt-5 pb-4 max-[900px]:z-20 max-[900px]:grid max-[900px]:h-auto max-[900px]:w-full max-[900px]:grid-cols-[minmax(0,1fr)_auto] max-[900px]:grid-rows-[auto] max-[900px]:gap-x-3 max-[900px]:gap-y-2 max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:px-4 max-[900px]:py-3 max-[600px]:gap-2">
+    <div className="min-h-dvh min-[901px]:grid min-[901px]:grid-cols-[240px_minmax(0,1fr)]">
+      {/* ─── DESKTOP SIDEBAR (>= 901px) ─── */}
+      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-line/70 bg-white/85 backdrop-blur-md px-3.5 pt-5 pb-4 min-[901px]:flex">
         <NavLink
           className={brandClasses}
           to={user.is_admin ? '/admin/users' : '/databases'}
@@ -141,7 +150,7 @@ export function AppShell({
         </NavLink>
 
         {isAdminRoute ? (
-          <div className={cn(pickerClasses, 'my-4 max-[900px]:col-span-full max-[900px]:m-0')}>
+          <div className={cn(pickerClasses, 'my-4')}>
             <span className={glyphClasses}>
               <Icon name="users" />
             </span>
@@ -157,7 +166,7 @@ export function AppShell({
         ) : (
           <div
             ref={switcherRef}
-            className="relative my-4 max-[900px]:col-span-full max-[900px]:m-0 max-[900px]:w-full"
+            className="relative my-4"
           >
             <button
               className={cn(
@@ -255,7 +264,7 @@ export function AppShell({
         )}
 
         {!isAdminRoute && databaseId && (
-          <div className="flex flex-col min-h-0 flex-1 my-1 max-[900px]:col-span-full">
+          <div className="flex flex-col min-h-0 flex-1 my-1">
             <div className="flex items-center justify-between mx-1 mb-1.5">
               <p className={cn(navLabelClasses, 'm-0')}>
                 Tables ({tables.data?.length ?? 0})
@@ -274,7 +283,7 @@ export function AppShell({
               </div>
             )}
 
-            <nav className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] max-[900px]:flex max-[900px]:max-h-12 max-[900px]:overflow-x-auto max-[900px]:overflow-y-hidden max-[900px]:overscroll-x-contain">
+            <nav className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin]">
               {tables.loading && !tables.data && (
                 <div className="px-3 py-2 text-[11px] text-muted">
                   Loading tables…
@@ -285,7 +294,7 @@ export function AppShell({
                   key={`${entry.schema}.${entry.name}`}
                   className={({ isActive }) =>
                     cn(
-                      'my-0.5 flex min-h-[34px] w-full items-center gap-2 rounded-lg px-2.5 font-mono text-[11px] text-muted no-underline transition-colors hover:bg-canvas hover:text-ink max-[900px]:w-auto max-[900px]:min-w-[130px] max-[900px]:shrink-0',
+                      'my-0.5 flex min-h-[34px] w-full items-center gap-2 rounded-lg px-2.5 font-mono text-[11px] text-muted no-underline transition-colors hover:bg-canvas hover:text-ink',
                       isActive &&
                         'bg-violet-soft font-semibold text-[#6c3eaa] shadow-xs',
                     )
@@ -313,19 +322,19 @@ export function AppShell({
             <p
               className={cn(
                 navLabelClasses,
-                !isAdminRoute && databaseId && 'mt-4 max-[900px]:mt-1',
+                !isAdminRoute && databaseId && 'mt-4',
               )}
             >
               {isAdminRoute ? 'Manage' : 'Workspace'}
             </p>
-            <nav className="max-[900px]:col-span-full max-[900px]:flex max-[900px]:overflow-x-auto max-[900px]:overscroll-x-contain max-[900px]:[scrollbar-width:thin] gap-1">
+            <nav className="space-y-1">
               {nav.map((item) => (
                 <NavLink
                   key={item.to}
                   end={item.end}
                   className={({ isActive }) =>
                     cn(
-                      'my-1 flex min-h-[42px] items-center gap-3 rounded-xl px-3 text-xs font-semibold text-[#736e7a] no-underline hover:bg-violet-soft/40 hover:text-ink max-[900px]:min-h-10 max-[900px]:shrink-0 max-[900px]:whitespace-nowrap transition-colors',
+                      'my-1 flex min-h-[42px] items-center gap-3 rounded-xl px-3 text-xs font-semibold text-[#736e7a] no-underline hover:bg-violet-soft/40 hover:text-ink transition-colors',
                       isActive &&
                         'bg-violet text-white hover:bg-violet hover:text-white shadow-xs',
                     )
@@ -358,11 +367,11 @@ export function AppShell({
           <div className="flex-1" />
         )}
 
-        <div className="mt-auto grid min-h-[60px] grid-cols-[36px_minmax(0,1fr)_32px] items-center gap-2.5 border-t border-line pt-3 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:min-h-11 max-[900px]:min-w-[190px] max-[900px]:border-t-0 max-[900px]:border-l max-[900px]:pt-0 max-[900px]:pr-0 max-[900px]:pl-3 max-[600px]:min-w-[80px] max-[600px]:grid-cols-[36px_32px]">
+        <div className="mt-auto grid min-h-[60px] grid-cols-[36px_minmax(0,1fr)_32px] items-center gap-2.5 border-t border-line pt-3">
           <span className="grid size-9 place-items-center rounded-full bg-violet-soft text-xs font-black text-violet shadow-xs">
             {user.username.slice(0, 2).toUpperCase()}
           </span>
-          <span className="min-w-0 max-[600px]:hidden">
+          <span className="min-w-0">
             <strong className="block truncate text-xs font-bold text-ink">
               {user.username}
             </strong>
@@ -381,7 +390,344 @@ export function AppShell({
         </div>
       </aside>
 
-      <main className="min-w-0 px-6 pt-5 pb-10 [font-variant-numeric:tabular-nums] [&_h1]:text-balance [&_h2]:text-balance [&_h3]:text-balance [&_p]:text-pretty max-[900px]:w-full max-[900px]:p-4 max-[600px]:p-3">
+      {/* ─── MOBILE STICKY TOP APP BAR (< 901px) ─── */}
+      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-line/80 bg-white/92 px-3.5 backdrop-blur-md min-[901px]:hidden shadow-2xs">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <NavLink
+            className="inline-flex items-center gap-2 text-base font-black tracking-tight text-ink no-underline shrink-0"
+            to={user.is_admin ? '/admin/users' : '/databases'}
+          >
+            <img
+              src="/bibi.png"
+              alt="BScheme mascot"
+              className="size-7 object-contain"
+            />
+            <span className="font-black">BScheme</span>
+          </NavLink>
+
+          {!isAdminRoute && activeDatabase && (
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-line bg-canvas/70 px-2.5 py-1 text-[11px] font-semibold text-ink max-w-[150px] sm:max-w-[220px] truncate cursor-pointer hover:bg-canvas"
+            >
+              <span className="size-1.5 rounded-full bg-success shrink-0" />
+              <span className="truncate">{activeDatabase.name}</span>
+              <Icon name="chevrons-up-down" className="size-3 text-muted shrink-0" />
+            </button>
+          )}
+
+          {isAdminRoute && (
+            <span className="rounded-full border border-violet/20 bg-violet-soft/60 px-2 py-0.5 text-[10px] font-bold text-violet">
+              Admin
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {dbPendingCount > 0 && !isAdminRoute && (
+            <Link
+              to={`/databases/${databaseId}/migrations`}
+              className="relative grid size-8.5 place-items-center rounded-xl bg-warning-soft/70 text-warning border border-warning/20 no-underline"
+              aria-label={`${dbPendingCount} pending approvals`}
+            >
+              <Icon name="migration" className="size-4" />
+              <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-warning text-[9px] font-black text-white shadow-xs">
+                {dbPendingCount}
+              </span>
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            className="grid size-9 place-items-center rounded-xl border border-line/80 bg-white text-ink hover:bg-canvas transition-colors cursor-pointer shadow-2xs"
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          >
+            <Icon name={mobileMenuOpen ? 'close' : 'grid'} className="size-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* ─── MOBILE DRAWER MENU OVERLAY (< 901px) ─── */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <m.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs min-[901px]:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <m.div
+              initial={reduceMotion ? { opacity: 0 } : { y: -12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { y: -12, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-x-0 top-14 z-50 max-h-[calc(100dvh-60px)] overflow-y-auto border-b border-line-strong bg-white p-4 shadow-2xl min-[901px]:hidden flex flex-col space-y-4 [scrollbar-width:thin]"
+            >
+              {/* Database Switcher in Mobile Drawer */}
+              {!isAdminRoute && allDatabases.length > 0 && (
+                <div className="space-y-1.5 rounded-2xl border border-line bg-canvas/40 p-3">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">
+                      Target Database
+                    </span>
+                    <Link
+                      to="/databases"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="text-[11px] font-bold text-violet hover:underline"
+                    >
+                      All databases →
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                    {allDatabases.map((db) => {
+                      const isCurrent = String(db.id) === databaseId
+                      return (
+                        <button
+                          key={db.id}
+                          type="button"
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            navigate(`/databases/${db.id}/public/tables`)
+                          }}
+                          className={cn(
+                            'flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer border',
+                            isCurrent
+                              ? 'border-violet bg-violet-soft/60 text-violet font-bold'
+                              : 'border-line/70 bg-white text-ink hover:bg-canvas',
+                          )}
+                        >
+                          <DatabaseMark
+                            connected={isCurrent}
+                            className="relative grid size-6 shrink-0 place-items-center rounded-lg bg-violet-soft text-violet"
+                          />
+                          <span className="truncate flex-1 font-semibold">{db.name}</span>
+                          {isCurrent && (
+                            <Icon name="check" className="size-3.5 text-violet shrink-0" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Workspace Navigation Links */}
+              {nav.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="px-1 text-[10px] font-extrabold uppercase tracking-wider text-muted block">
+                    {isAdminRoute ? 'Admin Management' : 'Workspace Views'}
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {nav.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        end={item.end}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={({ isActive }) =>
+                          cn(
+                            'flex min-h-11 items-center gap-2.5 rounded-xl px-3 text-xs font-semibold no-underline transition-colors border',
+                            isActive
+                              ? 'bg-violet text-white border-violet shadow-xs'
+                              : 'border-line/80 bg-canvas/30 text-ink hover:bg-violet-soft/30',
+                          )
+                        }
+                        to={item.to}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <Icon name={item.icon} className="size-4 shrink-0" />
+                            <span className="truncate flex-1">{item.label}</span>
+                            {item.badge !== undefined && item.badge > 0 && (
+                              <span
+                                className={cn(
+                                  'inline-flex min-w-4.5 items-center justify-center rounded-full px-1 text-[9px] font-black',
+                                  isActive
+                                    ? 'bg-white/20 text-white'
+                                    : 'bg-warning text-white',
+                                )}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tables Reference List (if inside database) */}
+              {!isAdminRoute && databaseId && (
+                <div className="space-y-2 rounded-2xl border border-line bg-[#fbfafd] p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">
+                      Tables ({tables.data?.length ?? 0})
+                    </span>
+                    <span className="font-mono text-[10px] text-violet">{schema}</span>
+                  </div>
+
+                  {(tables.data?.length ?? 0) > 4 && (
+                    <input
+                      type="text"
+                      placeholder="Filter tables…"
+                      value={tableSearch}
+                      onChange={(e) => setTableSearch(e.target.value)}
+                      className="w-full rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink placeholder:text-muted/60 outline-none focus:border-violet"
+                    />
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-48 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                    {filteredTables.map((entry) => (
+                      <NavLink
+                        key={`${entry.schema}.${entry.name}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={({ isActive }) =>
+                          cn(
+                            'flex min-h-[34px] items-center gap-2 rounded-lg px-2.5 font-mono text-xs text-muted no-underline transition-colors hover:bg-canvas hover:text-ink',
+                            isActive &&
+                              'bg-violet-soft font-semibold text-violet shadow-2xs',
+                          )
+                        }
+                        to={`/databases/${databaseId}/${entry.schema}/${entry.name}`}
+                      >
+                        <span className="size-1.5 shrink-0 rounded-full bg-violet" />
+                        <span className="truncate flex-1">{entry.name}</span>
+                        {entry.kind === 'view' && (
+                          <b className="font-sans text-[9px] font-bold text-muted uppercase">
+                            View
+                          </b>
+                        )}
+                      </NavLink>
+                    ))}
+                    {!tables.loading && filteredTables.length === 0 && (
+                      <div className="col-span-full py-2 text-center text-xs text-muted italic">
+                        No tables match
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* User Profile & Logout in Drawer */}
+              <div className="flex items-center justify-between border-t border-line pt-3 px-1">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="grid size-9 place-items-center rounded-full bg-violet-soft text-xs font-black text-violet shadow-xs shrink-0">
+                    {user.username.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <strong className="block truncate text-xs font-bold text-ink">
+                      {user.username}
+                    </strong>
+                    <small className="block truncate text-[10px] text-muted">
+                      {user.is_admin ? 'Administrator' : 'Database user'}
+                    </small>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="flex items-center gap-1.5 rounded-xl border border-danger/20 bg-danger-soft/40 px-3 py-1.5 text-xs font-bold text-danger hover:bg-danger-soft cursor-pointer transition-colors"
+                >
+                  <Icon name="logout" className="size-3.5" />
+                  <span>Log out</span>
+                </button>
+              </div>
+            </m.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MOBILE BOTTOM NAVIGATION BAR (< 901px) ─── */}
+      {!isAdminRoute && databaseId ? (
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex h-14 items-center justify-around border-t border-line/80 bg-white/95 px-2 backdrop-blur-md min-[901px]:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
+          <NavLink
+            to={`/databases/${databaseId}/${schema}/query`}
+            className={({ isActive }) =>
+              cn(
+                'flex flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-3 text-[10px] font-semibold transition-colors no-underline',
+                isActive
+                  ? 'text-violet font-bold'
+                  : 'text-muted hover:text-ink',
+              )
+            }
+          >
+            <Icon name="code" className="size-4.5" />
+            <span>Editor</span>
+          </NavLink>
+
+          <NavLink
+            to={`/databases/${databaseId}/${schema}/schema`}
+            className={({ isActive }) =>
+              cn(
+                'flex flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-3 text-[10px] font-semibold transition-colors no-underline',
+                isActive
+                  ? 'text-violet font-bold'
+                  : 'text-muted hover:text-ink',
+              )
+            }
+          >
+            <Icon name="schema" className="size-4.5" />
+            <span>Schema</span>
+          </NavLink>
+
+          <NavLink
+            to={`/databases/${databaseId}/migrations`}
+            className={({ isActive }) =>
+              cn(
+                'relative flex flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-3 text-[10px] font-semibold transition-colors no-underline',
+                isActive
+                  ? 'text-violet font-bold'
+                  : 'text-muted hover:text-ink',
+              )
+            }
+          >
+            <Icon name="migration" className="size-4.5" />
+            <span>Migrations</span>
+            {dbPendingCount > 0 && (
+              <span className="absolute top-1 right-2 size-2 rounded-full bg-warning ring-2 ring-white" />
+            )}
+          </NavLink>
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-3 text-[10px] font-semibold text-muted hover:text-ink transition-colors cursor-pointer"
+          >
+            <Icon name="table" className="size-4.5" />
+            <span>Tables</span>
+          </button>
+        </nav>
+      ) : isAdminRoute ? (
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex h-14 items-center justify-around border-t border-line/80 bg-white/95 px-2 backdrop-blur-md min-[901px]:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
+          {adminNav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                cn(
+                  'flex flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-3 text-[10px] font-semibold transition-colors no-underline',
+                  isActive
+                    ? 'text-violet font-bold'
+                    : 'text-muted hover:text-ink',
+                )
+              }
+            >
+              <Icon name={item.icon} className="size-4.5" />
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      ) : null}
+
+      {/* ─── MAIN CONTENT VIEWPORT ─── */}
+      <main className="min-w-0 px-3.5 pt-4 pb-20 sm:px-6 sm:pt-5 sm:pb-10 [font-variant-numeric:tabular-nums] [&_h1]:text-balance [&_h2]:text-balance [&_h3]:text-balance [&_p]:text-pretty max-[900px]:w-full">
         <Outlet
           context={
             {
@@ -410,32 +756,32 @@ export function UtilityHeader({
   backTo?: string
 }) {
   return (
-    <header className="mb-4 flex min-h-[58px] items-center gap-4 border-b border-line/60 pb-3 max-[900px]:flex-col max-[900px]:items-start max-[900px]:pb-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-3 max-[900px]:w-full">
+    <header className="mb-4 flex flex-col gap-3 border-b border-line/60 pb-3 min-[901px]:flex-row min-[901px]:items-center min-[901px]:justify-between min-[901px]:min-h-[58px]">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
         {backTo && (
           <Link
             to={backTo}
-            className="size-8.5 rounded-xl border border-line/80 bg-white/90 shadow-2xs grid place-items-center text-muted hover:text-ink hover:border-line-strong transition-colors"
+            className="size-8 sm:size-8.5 rounded-xl border border-line/80 bg-white/90 shadow-2xs grid place-items-center text-muted hover:text-ink hover:border-line-strong transition-colors shrink-0"
             aria-label="Go back"
           >
             <Icon name="chevron-left" className="size-4" />
           </Link>
         )}
-        <span className="inline-flex min-h-[30px] items-center gap-2 rounded-full border border-line/70 bg-white/75 px-3 font-mono text-[11px] text-muted shadow-2xs max-[600px]:min-h-7 max-[600px]:w-full max-[600px]:border-r-0 max-[600px]:pr-0">
-          <i className="size-2 rounded-full bg-success shadow-[0_0_0_3px_var(--green-soft)] shrink-0" />
+        <span className="inline-flex min-h-7 sm:min-h-[30px] items-center gap-1.5 sm:gap-2 rounded-full border border-line/70 bg-white/75 px-2.5 sm:px-3 font-mono text-[10px] sm:text-[11px] text-muted shadow-2xs max-w-full">
+          <i className="size-1.5 sm:size-2 rounded-full bg-success shadow-[0_0_0_3px_var(--green-soft)] shrink-0" />
           <span className="truncate">{path}</span>
         </span>
-        <h1 className="m-0 text-xl font-bold tracking-tight text-ink max-[600px]:text-lg">
+        <h1 className="m-0 text-lg sm:text-xl font-bold tracking-tight text-ink">
           {title}
         </h1>
         {status && (
-          <span className="rounded-full bg-white/80 border border-line/70 px-2.5 py-0.5 text-[10px] font-semibold text-muted shadow-2xs">
+          <span className="rounded-full bg-white/80 border border-line/70 px-2 sm:px-2.5 py-0.5 text-[9px] sm:text-[10px] font-semibold text-muted shadow-2xs">
             {status}
           </span>
         )}
       </div>
       {actions && (
-        <div className="ml-auto flex flex-wrap items-center gap-2 max-[900px]:ml-0 max-[900px]:w-full max-[900px]:justify-start max-[600px]:[&_button]:flex-1">
+        <div className="flex flex-wrap items-center gap-2 min-[901px]:ml-auto [&_button]:flex-1 min-[901px]:[&_button]:flex-initial [&_a]:flex-1 min-[901px]:[&_a]:flex-initial">
           {actions}
         </div>
       )}

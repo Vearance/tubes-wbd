@@ -480,7 +480,7 @@ export function EditPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-line/80">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-line/80 [&_button]:flex-1 sm:[&_button]:flex-initial">
               <Button variant="outline" size="sm" onClick={testInQueryEditor}>
                 <Icon name="code" className="size-3.5" />
                 Explain Up SQL

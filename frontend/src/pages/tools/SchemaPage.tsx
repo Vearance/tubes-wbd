@@ -223,6 +223,42 @@ function ConnectedSchemaDiagram({
     window.addEventListener('mouseup', handleMouseUp)
   }
 
+  const handleTouchStart = (tableName: string, e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    if (!touch) return
+    const current = positions[tableName] || { x: 50, y: 50 }
+    dragRef.current = {
+      tableName,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialX: current.x,
+      initialY: current.y,
+    }
+
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      if (!dragRef.current || !moveEvent.touches[0]) return
+      const t = moveEvent.touches[0]
+      const deltaX = t.clientX - dragRef.current.startX
+      const deltaY = t.clientY - dragRef.current.startY
+      const nextX = Math.max(20, dragRef.current.initialX + deltaX)
+      const nextY = Math.max(20, dragRef.current.initialY + deltaY)
+
+      setCustomPositions((prev) => ({
+        ...prev,
+        [dragRef.current!.tableName]: { x: nextX, y: nextY },
+      }))
+    }
+
+    const handleTouchEnd = () => {
+      dragRef.current = null
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+    }
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: true })
+    window.addEventListener('touchend', handleTouchEnd)
+  }
+
   const CARD_WIDTH = 270
 
   const maxX = Math.max(
@@ -269,7 +305,7 @@ function ConnectedSchemaDiagram({
 
       <div
         ref={containerRef}
-        className="relative h-[720px] w-full overflow-auto overscroll-contain [scrollbar-width:thin] cursor-grab active:cursor-grabbing"
+        className="relative h-[calc(100dvh-220px)] min-h-[460px] sm:min-h-[640px] w-full overflow-auto overscroll-contain [scrollbar-width:thin] touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
       >
         <svg
           className="absolute inset-0 pointer-events-none"
@@ -385,8 +421,9 @@ function ConnectedSchemaDiagram({
               onMouseLeave={() => setHoveredTable(null)}
             >
               <div
-                className="flex items-center gap-2 border-b border-line bg-canvas/60 px-3.5 py-2.5 rounded-t-[12px] cursor-grab active:cursor-grabbing"
+                className="flex items-center gap-2 border-b border-line bg-canvas/60 px-3.5 py-2.5 rounded-t-[12px] cursor-grab active:cursor-grabbing touch-none"
                 onMouseDown={(e) => handleMouseDown(table.name, e)}
+                onTouchStart={(e) => handleTouchStart(table.name, e)}
               >
                 <Icon name="table" className="size-4 text-violet shrink-0" />
                 <strong className="truncate text-xs font-bold text-ink flex-1">
@@ -556,13 +593,13 @@ export function SchemaPage() {
             : `${tables.data?.length ?? 0} tables · ${relationships.length} relations`
         }
         actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2 w-full min-[901px]:w-auto">
+            <div className="flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode('diagram')}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                   viewMode === 'diagram'
                     ? 'bg-ink text-white shadow-2xs'
                     : 'text-muted hover:text-ink',
@@ -575,7 +612,7 @@ export function SchemaPage() {
                 type="button"
                 onClick={() => setViewMode('cards')}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                   viewMode === 'cards'
                     ? 'bg-ink text-white shadow-2xs'
                     : 'text-muted hover:text-ink',
@@ -590,7 +627,7 @@ export function SchemaPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Find table…"
-                className="min-w-48"
+                className="flex-1 sm:min-w-48"
               />
             )}
           </div>

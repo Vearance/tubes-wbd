@@ -47,7 +47,7 @@ function DataGrid({
   }
 
   const cellClass =
-    'h-10 overflow-hidden border-r border-b border-line px-3 text-left whitespace-nowrap text-ellipsis max-w-[340px]'
+    'h-10 overflow-hidden border-r border-b border-line px-2.5 sm:px-3 text-left whitespace-nowrap text-ellipsis max-w-[280px] sm:max-w-[340px]'
 
   if (rows.length === 0) {
     return (
@@ -72,7 +72,7 @@ function DataGrid({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin]">
+    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin] touch-pan-x">
       <table className="w-max min-w-[max(100%,1000px)] table-fixed border-collapse text-xs">
         <thead className="sticky top-0 z-10">
           <tr>
@@ -183,7 +183,7 @@ function DefinitionTable({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin]">
+    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin] touch-pan-x">
       <table className="w-full min-w-[720px] border-collapse">
         <thead>
           <tr>
@@ -429,12 +429,12 @@ export function TablePage() {
       <section className="min-w-0 max-w-full overflow-hidden rounded-[18px] border border-line/80 bg-white shadow-2xs">
         {tab === 'data' && (
           <div className="flex min-h-[54px] max-w-full flex-wrap items-center gap-2.5 border-b border-line px-3 py-2">
-            <div className="shrink-0 max-[600px]:w-full">
+            <div className="w-full sm:w-auto shrink-0">
               <Search
                 value={search}
                 onChange={setSearch}
                 placeholder="Search rows in table…"
-                className="min-w-64"
+                className="w-full sm:min-w-64"
               />
             </div>
             {search && (

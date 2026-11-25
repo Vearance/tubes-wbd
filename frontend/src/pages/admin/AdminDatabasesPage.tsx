@@ -247,6 +247,11 @@ export function AdminDatabasesPage() {
     setMessage("");
     setAccessError("");
     navigate(`/admin/databases/${db.id}`);
+    if (typeof window !== "undefined" && window.innerWidth <= 900) {
+      setTimeout(() => {
+        document.getElementById("db-detail-view")?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
   }
 
   async function test(id: number) {
@@ -477,11 +482,22 @@ export function AdminDatabasesPage() {
           )}
         </section>
 
-        <section className={cn(surfaceClass, "relative min-w-0 overflow-auto shadow-xs")}>
+        <section id="db-detail-view" className={cn(surfaceClass, "relative min-w-0 overflow-auto shadow-xs")}>
           {selected ? (
             <div>
               <div className="flex flex-wrap items-center gap-4 border-b border-line p-5">
-                <div className="flex-1 min-w-[240px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+                  title="Back to databases list"
+                >
+                  <Icon name="chevron-left" className="size-3.5" />
+                  <span>List</span>
+                </button>
+                <div className="flex-1 min-w-[200px]">
 
                   <h2 className="my-1 text-xl font-bold">{selected.name}</h2>
                   <p className="text-xs text-muted m-0">

@@ -125,6 +125,17 @@ function UserAccessDetail({
   return (
     <>
       <header className="flex min-h-[84px] items-center gap-3.5 border-b border-line p-5">
+        <button
+          type="button"
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+          title="Back to users list"
+        >
+          <Icon name="chevron-left" className="size-3.5" />
+          <span>List</span>
+        </button>
         <span className={cn(avatarClass, "size-11 text-sm")}>
           {user.username.slice(0, 2).toUpperCase()}
         </span>
@@ -372,6 +383,11 @@ export function AdminUsersPage() {
   function selectUser(user: AdminUser) {
     setSelectedState(user);
     navigate(`/admin/users/${user.id}`);
+    if (typeof window !== "undefined" && window.innerWidth <= 900) {
+      setTimeout(() => {
+        document.getElementById("user-detail-view")?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
   }
 
   const shown =
@@ -559,7 +575,7 @@ export function AdminUsersPage() {
             </div>
           )}
         </section>
-        <section className={cn(surfaceClass, "relative min-w-0")}>
+        <section id="user-detail-view" className={cn(surfaceClass, "relative min-w-0")}>
           {selected ? (
             <UserAccessDetail
               key={selected.id}

@@ -306,11 +306,24 @@ function GroupDetail({
   return (
     <>
       <header className="flex flex-wrap min-h-[84px] items-center justify-between gap-3 border-b border-line p-5">
-        <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
-            Group #{group.id}
-          </span>
-          <h2 className="mt-1 mb-0 text-lg font-bold text-ink">{group.name}</h2>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+            title="Back to groups list"
+          >
+            <Icon name="chevron-left" className="size-3.5" />
+            <span>List</span>
+          </button>
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+              Group #{group.id}
+            </span>
+            <h2 className="mt-1 mb-0 text-lg font-bold text-ink">{group.name}</h2>
+          </div>
         </div>
         {hasLeader ? (
           <Status tone="violet" className="gap-1.5 px-3 py-1 text-[11px]">
@@ -643,6 +656,11 @@ export function AdminGroupsPage() {
   function selectGroup(group: Group) {
     setSelectedState(group);
     navigate(`/admin/groups/${group.id}`);
+    if (typeof window !== "undefined" && window.innerWidth <= 900) {
+      setTimeout(() => {
+        document.getElementById("group-detail-view")?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
   }
 
   async function createGroup(event: FormEvent) {
@@ -798,7 +816,7 @@ export function AdminGroupsPage() {
             );
           })}
         </section>
-        <section className={cn(surfaceClass, "relative min-w-0 overflow-auto")}>
+        <section id="group-detail-view" className={cn(surfaceClass, "relative min-w-0 overflow-auto")}>
           {selected ? (
             <GroupDetail
               key={selected.id}

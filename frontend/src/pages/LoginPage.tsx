@@ -86,6 +86,16 @@ export function LoginPage() {
           className="w-[min(100%,410px)] max-[600px]:w-full"
           onSubmit={submit}
         >
+          <div className="mb-6 flex items-center gap-2.5 min-[901px]:hidden">
+            <img
+              src="/bibi.png"
+              alt="BScheme mascot"
+              className="size-8 object-contain"
+            />
+            <span className="text-xl font-black tracking-tight text-ink">
+              BScheme
+            </span>
+          </div>
           <div className="mb-2">
             <h2 className="my-1 text-[32px] font-extrabold tracking-tight text-ink">
               Welcome!
