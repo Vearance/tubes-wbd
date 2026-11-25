@@ -42,13 +42,13 @@ export function Modal({
               className,
             )}
           >
-            <div className="flex items-start justify-between gap-3 border-b border-line px-6 py-4.5 bg-canvas/30">
+            <div className="flex items-start justify-between gap-3 border-b border-line px-6 py-5 bg-canvas/30">
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="m-0 text-base font-bold text-ink truncate">
+                <Dialog.Title className="m-0 text-xl font-bold tracking-tight text-ink sm:text-[22px]">
                   {title}
                 </Dialog.Title>
                 {description && (
-                  <Dialog.Description className="mt-0.5 text-xs text-muted">
+                  <Dialog.Description className="mt-1 text-xs sm:text-sm text-muted">
                     {description}
                   </Dialog.Description>
                 )}

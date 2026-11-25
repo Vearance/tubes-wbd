@@ -697,7 +697,7 @@ export function AdminGroupsPage() {
         size="sm"
       >
         <form onSubmit={createGroup} className="space-y-4">
-          <label className="block text-xs font-bold text-ink">
+          <label className="block text-sm font-bold text-ink">
             <span>Group name</span>
             <input
               className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"

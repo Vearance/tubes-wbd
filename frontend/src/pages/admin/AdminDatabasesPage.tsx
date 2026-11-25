@@ -93,7 +93,7 @@ function ConnectionForm({
   }
 
   const fieldClass =
-    "grid gap-1.5 text-xs font-semibold text-ink [&_input]:h-11 [&_input]:w-full [&_input]:rounded-[10px] [&_input]:border [&_input]:border-line-strong [&_input]:bg-white [&_input]:px-3 [&_input]:text-xs [&_input]:text-ink [&_input]:focus:border-violet [&_select]:h-11 [&_select]:w-full [&_select]:rounded-[10px] [&_select]:border [&_select]:border-line-strong [&_select]:bg-white [&_select]:px-3 [&_select]:text-xs [&_select]:text-ink [&_select]:focus:border-violet";
+    "grid gap-1.5 text-sm font-bold text-ink [&_input]:h-11 [&_input]:w-full [&_input]:rounded-[10px] [&_input]:border [&_input]:border-line-strong [&_input]:bg-white [&_input]:px-3 [&_input]:text-xs [&_input]:font-normal [&_input]:text-ink [&_input]:focus:border-violet [&_select]:h-11 [&_select]:w-full [&_select]:rounded-[10px] [&_select]:border [&_select]:border-line-strong [&_select]:bg-white [&_select]:px-3 [&_select]:text-xs [&_select]:font-normal [&_select]:text-ink [&_select]:focus:border-violet";
 
   return (
     <form className="space-y-4" onSubmit={save}>

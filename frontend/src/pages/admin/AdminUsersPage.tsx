@@ -430,7 +430,7 @@ export function AdminUsersPage() {
       >
         <form onSubmit={handleCreateUser} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block text-xs font-bold text-ink">
+            <label className="block text-sm font-bold text-ink">
               <span>Username</span>
               <input
                 type="text"
@@ -442,7 +442,7 @@ export function AdminUsersPage() {
                 className="mt-1.5 h-11 w-full rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
               />
             </label>
-            <label className="block text-xs font-bold text-ink">
+            <label className="block text-sm font-bold text-ink">
               <span>Password</span>
               <input
                 type="password"
