@@ -108,7 +108,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
   if (!node || typeof node !== 'object') return null
 
   return (
-    <div className="rounded-xl border border-line bg-[#fdfcfe] p-4 shadow-2xs">
+    <div className="rounded-xl border border-line bg-surface-subtle p-4 shadow-2xs">
       <div className="flex items-center gap-2 mb-3">
         <Status tone="violet">Step #{index}</Status>
         <span className="font-bold text-sm text-ink">{node['Node Type'] ?? 'Scan Node'}</span>
@@ -121,7 +121,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Total Cost
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -129,7 +129,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
           </span>
         </div>
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Startup Cost
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -137,7 +137,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
           </span>
         </div>
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Est. Rows
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -145,7 +145,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
           </span>
         </div>
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Plan Width
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -155,20 +155,20 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
       </div>
 
       {node['Filter'] && (
-        <div className="mt-3 rounded-lg bg-amber-soft/60 border border-warning/20 p-2.5 text-xs">
-          <span className="text-[10px] font-bold text-warning uppercase block mb-0.5">
+        <div className="mt-3 rounded-lg bg-warning-soft/60 border border-warning/25 p-2.5 text-xs">
+          <span className="text-[11px] font-bold text-warning-fg uppercase block mb-0.5">
             Filter Condition
           </span>
-          <code className="font-mono text-[11px] text-ink">{node['Filter']}</code>
+          <code className="font-mono text-xs text-ink">{node['Filter']}</code>
         </div>
       )}
 
       {node['Index Cond'] && (
-        <div className="mt-3 rounded-lg bg-success-soft/60 border border-success/20 p-2.5 text-xs">
-          <span className="text-[10px] font-bold text-success uppercase block mb-0.5">
+        <div className="mt-3 rounded-lg bg-success-soft/60 border border-success/25 p-2.5 text-xs">
+          <span className="text-[11px] font-bold text-success-fg uppercase block mb-0.5">
             Index Condition ({node['Index Name']})
           </span>
-          <code className="font-mono text-[11px] text-ink">{node['Index Cond']}</code>
+          <code className="font-mono text-xs text-ink">{node['Index Cond']}</code>
         </div>
       )}
     </div>
@@ -439,23 +439,24 @@ export function QueryPage() {
 
       {error && <ErrorNotice message={error} onDismiss={() => setError('')} />}
 
-      <div className="grid min-h-[calc(100dvh-130px)] min-w-0 max-w-full grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-[18px] border border-line bg-white shadow-xs max-[900px]:grid-cols-[minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col justify-between border-r border-line bg-[#fbfafd] p-4 text-xs text-muted max-[900px]:hidden">
+      <div className="grid min-h-[calc(100dvh-130px)] min-w-0 max-w-full grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-line bg-white shadow-xs max-[900px]:grid-cols-[minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col justify-between border-r border-line bg-surface-subtle p-4 text-xs text-muted max-[900px]:hidden">
           <div className="flex min-h-0 flex-1 flex-col">
             <header className="mb-2.5 flex items-center justify-between">
-              <span className="font-bold text-[11px] uppercase tracking-wider text-ink">
+              <span className="font-bold text-xs uppercase tracking-wider text-ink">
                 Schema Reference
               </span>
-              <span className="font-mono text-[10px] text-violet">{schema}</span>
+              <span className="font-mono text-[11px] font-semibold text-violet-fg">{schema}</span>
             </header>
 
             {(tables.data?.length ?? 0) > 6 && (
               <input
                 type="text"
+                aria-label="Filter tables"
                 placeholder="Filter tables…"
                 value={tableFilter}
                 onChange={(e) => setTableFilter(e.target.value)}
-                className="mb-2 h-8 w-full rounded-lg border border-line bg-white px-2.5 text-[11px] text-ink outline-none focus:border-violet"
+                className="mb-2 h-8 w-full rounded-lg border border-line bg-white px-2.5 text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
               />
             )}
 
@@ -471,10 +472,10 @@ export function QueryPage() {
                     <button
                       type="button"
                       onClick={() => void toggleTableReference(t.name)}
-                      className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-[11px] font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
+                      className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-xs font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
                     >
                       <span className="flex items-center gap-1.5 min-w-0">
-                        <Icon name="table" className="size-3.5 text-violet shrink-0" />
+                        <Icon name="table" className="size-3.5 text-violet-fg shrink-0" />
                         <span className="truncate font-mono">{t.name}</span>
                       </span>
                       <Icon
@@ -490,7 +491,7 @@ export function QueryPage() {
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                          className="overflow-hidden border-t border-line bg-[#fcfbfd]"
+                          className="overflow-hidden border-t border-line bg-surface-subtle"
                         >
                           <div className="px-2.5 py-2 space-y-1.5">
                             {st ? (
@@ -501,17 +502,17 @@ export function QueryPage() {
                                     type="button"
                                     onClick={() => insertSnippet(c.name)}
                                     title={`Insert "${c.name}" at cursor`}
-                                    className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left font-mono text-[10px] text-ink hover:bg-white transition-colors cursor-pointer"
+                                    className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-ink hover:bg-white transition-colors cursor-pointer"
                                   >
                                     <span className="truncate">{c.name}</span>
-                                    <span className="shrink-0 text-[9px] text-muted">
+                                    <span className="shrink-0 text-[11px] text-muted">
                                       {c.type}
                                     </span>
                                   </button>
                                 ))}
                               </div>
                             ) : (
-                              <span className="block py-1 text-[10px] text-muted">
+                              <span className="block py-1 text-[11px] text-muted">
                                 Loading columns…
                               </span>
                             )}
@@ -523,7 +524,7 @@ export function QueryPage() {
                 )
               })}
               {!tables.loading && visibleTables.length === 0 && (
-                <p className="m-0 py-3 text-center text-[11px] text-muted">
+                <p className="m-0 py-3 text-center text-xs text-muted">
                   No tables found in {schema}
                 </p>
               )}
@@ -531,23 +532,23 @@ export function QueryPage() {
           </div>
 
           <div className="mt-6 border-t border-line/70 pt-4 space-y-3.5">
-            <p className="m-0 text-[11px] leading-relaxed text-muted">
+            <p className="m-0 text-xs leading-relaxed text-muted">
               Press{' '}
-              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink shadow-2xs">
+              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink shadow-2xs">
                 Ctrl+Enter
               </kbd>{' '}
               to run query, or{' '}
-              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink shadow-2xs">
+              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink shadow-2xs">
                 Ctrl+Shift+Enter
               </kbd>{' '}
               to explain cost.
             </p>
             <div className="rounded-2xl border border-line/80 bg-white p-3.5 text-ink shadow-2xs">
               <div className="flex items-center gap-1.5 font-bold text-xs">
-                <Icon name="shield" className="size-4 text-violet" />
+                <Icon name="shield" className="size-4 text-violet-fg" />
                 Read-Only Execution
               </div>
-              <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-muted">
+              <p className="mt-1.5 mb-0 text-xs leading-relaxed text-muted">
                 Executes in a safe read-only transaction with statement timeout
                 and paginated results (up to 100 rows per page).
               </p>
@@ -560,7 +561,7 @@ export function QueryPage() {
             <span className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-violet" />
               <span className="font-semibold text-ink">SQL</span>
-              <span className="text-[11px] text-muted">
+              <span className="text-xs text-muted">
                 · {lineCount} {lineCount === 1 ? 'line' : 'lines'}
               </span>
             </span>
@@ -568,16 +569,16 @@ export function QueryPage() {
               <button
                 type="button"
                 onClick={() => setMobileSchemaOpen(true)}
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[11px] font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer min-[901px]:hidden"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer min-[901px]:hidden"
                 title="Insert column or table from schema"
               >
-                <Icon name="columns" className="size-3.5 text-violet" />
+                <Icon name="columns" className="size-3.5 text-violet-fg" />
                 Columns
               </button>
               <button
                 type="button"
                 onClick={handleFormat}
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[11px] font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer"
                 title="Format SQL keywords"
               >
                 <Icon name="code" className="size-3.5 text-muted" />
@@ -586,10 +587,10 @@ export function QueryPage() {
             </div>
           </div>
 
-          <div className="grid min-h-0 min-w-0 grid-cols-[46px_minmax(0,1fr)] overflow-hidden bg-[#242227]">
+          <div className="grid min-h-0 min-w-0 grid-cols-[46px_minmax(0,1fr)] overflow-hidden bg-editor-bg focus-within:ring-2 focus-within:ring-inset focus-within:ring-violet/70">
             <div
               ref={lineNumbersRef}
-              className="overflow-hidden border-r border-[#3a3740] bg-[#1d1b20] py-3 text-right font-mono text-xs leading-6 text-[#77717c] select-none pr-3"
+              className="overflow-hidden border-r border-editor-border bg-editor-gutter py-3 text-right font-mono text-xs leading-6 text-editor-muted select-none pr-3"
             >
               {Array.from({ length: lineCount }, (_, i) => (
                 <div key={i}>{i + 1}</div>
@@ -597,7 +598,7 @@ export function QueryPage() {
             </div>
             <textarea
               ref={textareaRef}
-              className="h-full w-full min-w-0 resize-none overflow-auto border-0 bg-transparent p-3 font-mono text-[13px] leading-6 text-[#f2edf4] outline-none [scrollbar-width:thin]"
+              className="h-full w-full min-w-0 resize-none overflow-auto border-0 bg-transparent p-3 font-mono text-base sm:text-[13px] leading-6 text-editor-fg outline-none [scrollbar-width:thin]"
               value={sql}
               onChange={(e) => setEditedSql(e.target.value)}
               onScroll={handleScroll}
@@ -623,7 +624,7 @@ export function QueryPage() {
                 {queryResult && (
                   <span
                     className={cn(
-                      'rounded-full px-1.5 py-0.2 font-mono text-[10px]',
+                      'rounded-full px-1.5 py-0.5 font-mono text-[11px]',
                       activeTab === 'results'
                         ? 'bg-white/20 text-white'
                         : 'bg-canvas text-ink border border-line',
@@ -650,14 +651,14 @@ export function QueryPage() {
               </button>
 
               {activeTab === 'plan' && rawPlan && (
-                <div className="flex items-center gap-1 sm:ml-2 sm:border-l sm:border-line sm:pl-3">
+                <div className="inline-flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs sm:ml-2">
                   <button
                     type="button"
                     onClick={() => setPlanTab('visual')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
                       planTab === 'visual'
-                        ? 'bg-violet text-white'
+                        ? 'bg-ink/10 font-semibold text-ink'
                         : 'text-muted hover:text-ink',
                     )}
                   >
@@ -667,9 +668,9 @@ export function QueryPage() {
                     type="button"
                     onClick={() => setPlanTab('json')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer',
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
                       planTab === 'json'
-                        ? 'bg-violet text-white'
+                        ? 'bg-ink/10 font-semibold text-ink'
                         : 'text-muted hover:text-ink',
                     )}
                   >
@@ -686,7 +687,7 @@ export function QueryPage() {
                   <button
                     type="button"
                     onClick={handleExportCsv}
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted hover:text-ink transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted hover:text-ink transition-colors cursor-pointer"
                     title="Download as CSV"
                   >
                     <Icon name="save" className="size-3.5" />
@@ -698,11 +699,11 @@ export function QueryPage() {
                 <button
                   type="button"
                   onClick={handleCopyPlan}
-                  className="flex items-center gap-1 text-[11px] text-muted hover:text-ink transition-colors cursor-pointer"
+                  className="flex items-center gap-1 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
                 >
                   <Icon
                     name={copied ? 'check' : 'copy'}
-                    className={cn('size-3.5', copied && 'text-success')}
+                    className={cn('size-3.5', copied && 'text-success-fg')}
                   />
                   {copied ? 'Copied' : 'Copy plan'}
                 </button>
@@ -758,10 +759,13 @@ export function QueryPage() {
                     </div>
                   ) : (
                     <div className="w-full min-w-0 max-w-full flex-1 overflow-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin] rounded-xl border border-line">
+                      <div className="sr-only" role="status" aria-live="polite">
+                        {copiedCell ? 'Cell value copied to clipboard' : ''}
+                      </div>
                       <table className="w-max min-w-full table-fixed border-collapse text-xs">
-                        <thead className="sticky top-0 z-10 bg-[#fbfafd] shadow-2xs">
+                        <thead className="sticky top-0 z-10 bg-surface-subtle shadow-2xs">
                           <tr>
-                            <th className="h-10 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[10px] text-muted select-none">
+                            <th className="h-10 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[11px] text-muted select-none">
                               #
                             </th>
                             {queryResult.columns.map((col) => (
@@ -780,7 +784,7 @@ export function QueryPage() {
                               key={rIdx}
                               className="hover:bg-canvas/50 transition-colors"
                             >
-                              <td className="h-9 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[10px] text-muted bg-[#fbfafd]/40 select-none">
+                              <td className="h-9 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[11px] text-muted bg-surface-subtle/40 select-none">
                                 {(queryResult.page - 1) * queryResult.page_size +
                                   rIdx +
                                   1}
@@ -791,27 +795,33 @@ export function QueryPage() {
                                 return (
                                   <td
                                     key={cIdx}
-                                    onClick={() => copyCellValue(cell, cellKey)}
-                                    title={
-                                      cell !== null
-                                        ? `${cell} (Click to copy)`
-                                        : 'NULL'
-                                    }
-                                    className={cn(
-                                      'h-9 max-w-[260px] sm:max-w-[340px] truncate border-r border-b border-line px-2.5 sm:px-3.5 font-mono text-[12px] text-ink cursor-default',
-                                      cIdx === 0 &&
-                                        'text-[#6946a1] font-semibold',
-                                    )}
+                                    className="h-9 max-w-[260px] sm:max-w-[340px] border-r border-b border-line p-0 font-mono text-xs text-ink"
                                   >
-                                    {isCopied ? (
-                                      <span className="text-[10px] font-bold text-success flex items-center gap-1">
-                                        <Icon name="check" className="size-3" />{' '}
-                                        Copied
+                                    {cell === null ? (
+                                      <span className="flex h-full items-center px-2.5 sm:px-3.5">
+                                        <NullBadge />
                                       </span>
-                                    ) : cell === null ? (
-                                      <NullBadge />
                                     ) : (
-                                      cell
+                                      <button
+                                        type="button"
+                                        onClick={() => copyCellValue(cell, cellKey)}
+                                        title={`${cell} (Click to copy)`}
+                                        aria-label={`Copy ${queryResult.columns[cIdx]} value`}
+                                        className={cn(
+                                          'flex h-full w-full items-center truncate px-2.5 sm:px-3.5 text-left cursor-copy active:scale-100 hover:bg-violet-soft/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet/60',
+                                          cIdx === 0 &&
+                                            'text-violet-fg font-semibold',
+                                        )}
+                                      >
+                                        {isCopied ? (
+                                          <span className="text-[11px] font-bold text-success-fg flex items-center gap-1">
+                                            <Icon name="check" className="size-3" />{' '}
+                                            Copied
+                                          </span>
+                                        ) : (
+                                          <span className="truncate">{cell}</span>
+                                        )}
+                                      </button>
                                     )}
                                   </td>
                                 )
@@ -823,7 +833,7 @@ export function QueryPage() {
                     </div>
                   )}
 
-                  <footer className="flex min-w-0 flex-wrap items-center justify-between gap-2.5 rounded-xl border border-line bg-[#fbfafd] px-3.5 py-2 text-xs text-muted shrink-0">
+                  <footer className="flex min-w-0 flex-wrap items-center justify-between gap-2.5 rounded-xl border border-line bg-surface-subtle px-3.5 py-2 text-xs text-muted shrink-0">
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                       <span>
                         Page{' '}
@@ -858,7 +868,7 @@ export function QueryPage() {
                           onChange={(e) =>
                             handlePageSizeChange(Number(e.target.value))
                           }
-                          className="h-7 rounded-lg border border-line bg-white px-2 font-mono text-[11px] font-semibold text-ink outline-none focus:border-violet cursor-pointer"
+                          className="h-8 rounded-lg border border-line bg-white px-2 font-mono text-base sm:text-xs font-semibold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
                         >
                           {[25, 50, 100].map((size) => (
                             <option key={size} value={size}>
@@ -912,7 +922,7 @@ export function QueryPage() {
                 scan strategies without altering data.
               </EmptyState>
             ) : planTab === 'json' ? (
-              <pre className="m-0 font-mono text-xs leading-relaxed text-[#3b3442] bg-[#fbfafd] p-4 rounded-xl border border-line overflow-auto">
+              <pre className="m-0 font-mono text-xs leading-relaxed text-ink bg-surface-subtle p-4 rounded-xl border border-line overflow-auto">
                 {rawPlan}
               </pre>
             ) : (
@@ -940,10 +950,11 @@ export function QueryPage() {
           {(tables.data?.length ?? 0) > 4 && (
             <input
               type="text"
+              aria-label="Filter tables"
               placeholder="Filter tables…"
               value={tableFilter}
               onChange={(e) => setTableFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-line bg-canvas px-3 text-xs text-ink outline-none focus:border-violet"
+              className="h-10 w-full rounded-xl border border-line bg-canvas px-3 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
             />
           )}
           <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1 [scrollbar-width:thin]">
@@ -961,7 +972,7 @@ export function QueryPage() {
                     className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
                   >
                     <span className="flex items-center gap-2 min-w-0">
-                      <Icon name="table" className="size-4 text-violet shrink-0" />
+                      <Icon name="table" className="size-4 text-violet-fg shrink-0" />
                       <span className="truncate font-mono">{t.name}</span>
                     </span>
                     <Icon
@@ -976,7 +987,7 @@ export function QueryPage() {
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.18 }}
-                        className="overflow-hidden border-t border-line bg-[#fcfbfd] px-3 py-2 space-y-1"
+                        className="overflow-hidden border-t border-line bg-surface-subtle px-3 py-2 space-y-1"
                       >
                         {st ? (
                           st.columns.map((c) => (
@@ -990,7 +1001,7 @@ export function QueryPage() {
                               className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-mono text-xs text-ink hover:bg-white transition-colors cursor-pointer"
                             >
                               <span className="truncate">{c.name}</span>
-                              <span className="text-[10px] text-muted">{c.type}</span>
+                              <span className="text-[11px] text-muted">{c.type}</span>
                             </button>
                           ))
                         ) : (

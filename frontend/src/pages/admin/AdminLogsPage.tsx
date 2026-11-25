@@ -14,7 +14,7 @@ import {
   Button,
   EmptyState,
   ErrorNotice,
-  Loading,
+  PageSkeleton,
   Status,
   baseButtonClasses,
   buttonSizes,
@@ -116,9 +116,8 @@ export function AdminLogsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="py-16"
           >
-            <Loading label="Loading governance and consensus matrix…" />
+            <PageSkeleton variant="metrics" label="Loading governance and consensus matrix…" />
           </m.div>
         ) : (
           <m.div
@@ -133,7 +132,7 @@ export function AdminLogsPage() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className={cn(surfaceClass, "p-4")}>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted">
             Active Users
           </span>
           <div className="mt-2 flex items-baseline justify-between">
@@ -145,11 +144,11 @@ export function AdminLogsPage() {
         </div>
 
         <div className={cn(surfaceClass, "p-4")}>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted">
             Keyholder Coverage
           </span>
           <div className="mt-2 flex items-baseline justify-between">
-            <strong className="text-2xl font-black text-violet tabular-nums">
+            <strong className="text-2xl font-black text-violet-fg tabular-nums">
               {leaderCoverage}%
             </strong>
             <span className="text-xs text-muted">
@@ -159,7 +158,7 @@ export function AdminLogsPage() {
         </div>
 
         <div className={cn(surfaceClass, "p-4")}>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted">
             Managed Databases
           </span>
           <div className="mt-2 flex items-baseline justify-between">
@@ -171,7 +170,7 @@ export function AdminLogsPage() {
         </div>
 
         <div className={cn(surfaceClass, "p-4")}>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
+          <span className="text-xs font-bold uppercase tracking-wider text-muted">
             Consensus Readiness
           </span>
           <div className="mt-2 flex items-baseline justify-between">
@@ -179,8 +178,8 @@ export function AdminLogsPage() {
               className={cn(
                 "text-2xl font-black tabular-nums",
                 readyDatabasesCount === databases.length && databases.length > 0
-                  ? "text-success"
-                  : "text-warning",
+                  ? "text-success-fg"
+                  : "text-warning-fg",
               )}
             >
               {readyDatabasesCount}/{databases.length}
@@ -217,7 +216,12 @@ export function AdminLogsPage() {
               action={
                 <Link
                   to="/admin/databases"
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#292929] px-4 text-xs font-bold text-white no-underline"
+                  className={cn(
+                    baseButtonClasses,
+                    buttonVariants.dark,
+                    buttonSizes.sm,
+                    "no-underline",
+                  )}
                 >
                   Register first database
                 </Link>
@@ -234,13 +238,13 @@ export function AdminLogsPage() {
                 <article key={db.id} className="p-5 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet-fg">
                         <Icon name="database" className="size-4" />
                       </span>
                       <div className="min-w-0">
                         <Link
                           to={`/admin/databases/${db.id}`}
-                          className="text-sm font-bold text-ink no-underline hover:text-violet hover:underline"
+                          className="text-sm font-bold text-ink no-underline hover:text-violet-fg hover:underline"
                         >
                           {db.name}
                         </Link>
@@ -289,15 +293,15 @@ export function AdminLogsPage() {
                               <strong className="block truncate text-xs font-bold text-ink">
                                 {group.name}
                               </strong>
-                              <span className="mt-0.5 block text-[11px] text-muted">
+                              <span className="mt-0.5 block text-xs text-muted">
                                 {membersCount} member
                                 {membersCount === 1 ? "" : "s"} ·{" "}
                                 {hasLeader ? (
-                                  <span className="font-semibold text-violet">
+                                  <span className="font-semibold text-violet-fg">
                                     @{group.leader_username ?? `user #${group.leader_user_id}`}
                                   </span>
                                 ) : (
-                                  <span className="font-semibold text-warning">
+                                  <span className="font-semibold text-warning-fg">
                                     Needs Keyholder →
                                   </span>
                                 )}
@@ -323,7 +327,7 @@ export function AdminLogsPage() {
                       <span>No access groups assigned to this database.</span>
                       <Link
                         to={`/admin/databases/${db.id}`}
-                        className="font-bold text-violet no-underline hover:underline"
+                        className="font-bold text-violet-fg no-underline hover:underline"
                       >
                         Grant access →
                       </Link>

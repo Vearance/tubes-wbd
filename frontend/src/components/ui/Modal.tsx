@@ -37,7 +37,7 @@ export function Modal({
         <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-3 sm:p-6">
           <Dialog.Popup
             className={cn(
-              'relative rounded-[20px] sm:rounded-[22px] border border-line/80 bg-white shadow-2xl overflow-hidden w-full max-w-[calc(100vw-24px)] sm:max-w-none',
+              'relative rounded-2xl border border-line/80 bg-white shadow-2xl overflow-hidden w-full max-w-[calc(100vw-24px)] sm:max-w-none',
               sizeClasses[size],
               className,
             )}
@@ -54,10 +54,10 @@ export function Modal({
                 )}
               </div>
               <Dialog.Close
-                className="grid size-8 sm:size-9 shrink-0 place-items-center rounded-xl border border-transparent bg-transparent text-muted hover:border-line hover:bg-canvas hover:text-ink transition-all cursor-pointer"
+                className="grid size-10 sm:size-9 shrink-0 place-items-center rounded-xl border border-transparent bg-transparent text-muted hover:border-line hover:bg-canvas hover:text-ink transition-all cursor-pointer"
                 aria-label="Close dialog"
               >
-                <Icon name="close" className="size-4 sm:size-4.5" />
+                <Icon name="close" className="size-4.5" />
               </Dialog.Close>
             </div>
             <div className="p-5 sm:p-8 max-h-[calc(100dvh-120px)] overflow-y-auto [scrollbar-width:thin]">

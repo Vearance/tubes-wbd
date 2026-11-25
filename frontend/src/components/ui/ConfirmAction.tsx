@@ -64,7 +64,7 @@ export function ConfirmAction({
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs" />
         <AlertDialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-auto p-4 sm:p-6">
-          <AlertDialog.Popup className="w-[min(100%,480px)] rounded-[20px] sm:rounded-[22px] border border-line/80 bg-white p-5 sm:p-8 shadow-2xl">
+          <AlertDialog.Popup className="w-[min(100%,480px)] rounded-2xl border border-line/80 bg-white p-5 sm:p-8 shadow-2xl">
             <AlertDialog.Title className="m-0 text-balance text-xl font-bold tracking-tight text-ink sm:text-[22px]">
               {title}
             </AlertDialog.Title>

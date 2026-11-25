@@ -17,6 +17,7 @@ import {
   ErrorNotice,
   Loading,
   Modal,
+  PageSkeleton,
   Search,
   Status,
 } from "../../components/ui";
@@ -76,7 +77,7 @@ function PermissionChoice({
         className={cn(
           choiceClass,
           shown === "view_only"
-            ? "border-accent bg-accent-soft text-accent"
+            ? "border-accent bg-accent-soft text-accent-fg"
             : "border-line bg-white text-muted hover:text-ink",
         )}
         onClick={() => void choose("view_only")}
@@ -89,7 +90,7 @@ function PermissionChoice({
         className={cn(
           choiceClass,
           shown === "view_edit"
-            ? "border-violet bg-violet-soft text-violet"
+            ? "border-violet bg-violet-soft text-violet-fg"
             : "border-line bg-white text-muted hover:text-ink",
         )}
         onClick={() => void choose("view_edit")}
@@ -157,7 +158,7 @@ function LeaderChoice({
           pillClass,
           "inline-flex items-center gap-1",
           isLeader
-            ? "border-violet bg-violet-soft text-violet"
+            ? "border-violet bg-violet-soft text-violet-fg"
             : "border-line bg-white text-muted hover:text-ink",
         )}
         onClick={() => void choose(true)}
@@ -312,7 +313,7 @@ function GroupDetail({
             onClick={() => {
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+            className="min-[901px]:hidden flex items-center gap-1 text-xs font-bold text-violet-fg bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
             title="Back to groups list"
           >
             <Icon name="chevron-left" className="size-3.5" />
@@ -326,12 +327,12 @@ function GroupDetail({
           </div>
         </div>
         {hasLeader ? (
-          <Status tone="violet" className="gap-1.5 px-3 py-1 text-[11px]">
+          <Status tone="violet" className="gap-1.5 px-3 py-1">
             <Icon name="crown" className="size-3.5" />
             Keyholder: @{leaderName}
           </Status>
         ) : (
-          <Status tone="amber" className="gap-1.5 px-3 py-1 text-[11px]">
+          <Status tone="amber" className="gap-1.5 px-3 py-1">
             <Icon name="alert" className="size-3.5" />
             No Keyholder
           </Status>
@@ -369,7 +370,7 @@ function GroupDetail({
                   <strong>@{leaderName}</strong> holds the group approval key
                 </>
               ) : hasDatabases ? (
-                <span className="font-semibold text-warning">
+                <span className="font-semibold text-warning-fg">
                   Assign a Keyholder to unblock migrations
                 </span>
               ) : (
@@ -438,7 +439,7 @@ function GroupDetail({
                     <b className="flex items-center gap-1.5">
                       <span className="truncate">{member.username}</span>
                       {member.disabled && (
-                        <Status tone="red" className="text-[10px]">
+                        <Status tone="red">
                           Disabled
                         </Status>
                       )}
@@ -455,7 +456,7 @@ function GroupDetail({
                   </div>
                   {isLeader ? (
                     <span
-                      className="grid size-8 place-items-center rounded-lg text-violet/70 max-[600px]:col-start-3 max-[600px]:row-start-1"
+                      className="grid size-8 place-items-center rounded-lg text-violet-fg/80 max-[600px]:col-start-3 max-[600px]:row-start-1"
                       title="Reassign or clear Keyholder before removing"
                     >
                       <Icon name="lock" className="size-4" />
@@ -497,7 +498,7 @@ function GroupDetail({
                   key={user.id}
                   onClick={() => addMember(user.id)}
                 >
-                  <span className={cn(avatarClass, "size-8 rounded-[9px]")}>
+                  <span className={cn(avatarClass, "size-8 rounded-lg")}>
                     {user.username.slice(0, 2).toUpperCase()}
                   </span>
                   <span>
@@ -507,7 +508,7 @@ function GroupDetail({
                       {user.disabled ? " · Disabled" : ""}
                     </small>
                   </span>
-                  <em className="text-right text-xs font-bold not-italic text-violet">
+                  <em className="text-right text-xs font-bold not-italic text-violet-fg">
                     Add
                   </em>
                 </button>
@@ -605,10 +606,10 @@ function GroupDetail({
             <div className="mt-2 max-h-[210px] overflow-auto">
               {availableDatabases.map((database) => (
                 <StaggerRow
-                  className="grid min-h-[52px] w-full grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg p-2 text-left text-ink max-[600px]:grid-cols-[34px_minmax(0,1fr)] [&_b]:block [&_b]:text-xs [&_b]:font-bold [&_small]:mt-0.5 [&_small]:block [&_small]:text-[11px] [&_small]:text-muted"
+                  className="grid min-h-[52px] w-full grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg p-2 text-left text-ink max-[600px]:grid-cols-[34px_minmax(0,1fr)] [&_b]:block [&_b]:text-xs [&_b]:font-bold [&_small]:mt-0.5 [&_small]:block [&_small]:text-xs [&_small]:text-muted"
                   key={database.id}
                 >
-                  <span className={cn(glyphClass, "size-8 rounded-[9px]")}>
+                  <span className={cn(glyphClass, "size-8 rounded-lg")}>
                     <Icon name="database" className="size-4" />
                   </span>
                   <span>
@@ -718,7 +719,7 @@ export function AdminGroupsPage() {
           <label className="block text-sm font-bold text-ink">
             <span>Group name</span>
             <input
-              className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 text-xs outline-none focus:border-violet"
+              className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
@@ -743,9 +744,8 @@ export function AdminGroupsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="py-16"
           >
-            <Loading label="Loading access groups and governance…" />
+            <PageSkeleton variant="admin-split" label="Loading access groups and governance…" />
           </m.div>
         ) : (
           <m.div
@@ -777,7 +777,7 @@ export function AdminGroupsPage() {
                 className={cn(
                   "grid min-h-[72px] w-full grid-cols-[38px_minmax(0,1fr)_auto_18px] items-center gap-3 border-0 border-b border-line bg-white px-4 py-3 text-left hover:bg-violet-soft/20 cursor-pointer transition-colors duration-150",
                   selected?.id === group.id &&
-                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--violet)]",
+                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--color-violet)]",
                 )}
                 key={group.id}
                 onClick={() => selectGroup(group)}
@@ -789,7 +789,7 @@ export function AdminGroupsPage() {
                   <b className="block truncate text-xs font-bold text-ink">
                     {group.name}
                   </b>
-                  <span className="mt-1 flex items-center gap-1.5 text-[11px]">
+                  <span className="mt-1 flex items-center gap-1.5 text-xs">
                     <span
                       className={cn(
                         "size-1.5 rounded-full shrink-0",
@@ -799,7 +799,7 @@ export function AdminGroupsPage() {
                     <span
                       className={cn(
                         "truncate",
-                        hasLeader ? "text-violet font-semibold" : "text-warning font-medium",
+                        hasLeader ? "text-violet-fg font-semibold" : "text-warning-fg font-medium",
                       )}
                     >
                       {hasLeader
@@ -808,7 +808,7 @@ export function AdminGroupsPage() {
                     </span>
                   </span>
                 </span>
-                <em className="text-[11px] font-semibold not-italic text-violet">
+                <em className="text-xs font-semibold not-italic text-violet-fg">
                   Manage
                 </em>
                 <Icon name="chevron" className="size-4 text-muted" />

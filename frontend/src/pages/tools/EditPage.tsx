@@ -8,7 +8,7 @@ import { useWorkspaceContext } from '../../components/workspaceContext'
 import {
   Button,
   ErrorNotice,
-  Loading,
+  PageSkeleton,
   Status,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
@@ -198,20 +198,6 @@ export function EditPage() {
               ? `${structure.data.table.kind} · ${columns.length} columns`
               : undefined
         }
-        actions={
-          <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
-            <Button variant="outline" size="sm" onClick={testInQueryEditor}>
-              <Icon name="code" className="size-3.5" />
-              Explain Up SQL
-            </Button>
-            {canEdit && (
-              <Button variant="dark" size="sm" onClick={openInWorkbench}>
-                <Icon name="migration" className="size-3.5" />
-                Stage Draft
-              </Button>
-            )}
-          </div>
-        }
       />
 
       <AnimatePresence mode="wait">
@@ -222,9 +208,8 @@ export function EditPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="py-16"
           >
-            <Loading label={`Inspecting ${schema}.${table} structure…`} />
+            <PageSkeleton variant="split" label={`Inspecting ${schema}.${table} structure…`} />
           </m.div>
         ) : (
           <m.div
@@ -238,9 +223,9 @@ export function EditPage() {
             {structure.error && <ErrorNotice message={structure.error} />}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-[20px] border border-line bg-white shadow-xs overflow-hidden">
+        <section className="rounded-2xl border border-line bg-white shadow-xs overflow-hidden">
           {/* Operation Selector */}
-          <div className="border-b border-line bg-[#fbfafd] p-3.5 sm:p-4">
+          <div className="border-b border-line bg-surface-subtle p-3.5 sm:p-4">
             <div className="flex flex-wrap gap-2">
               {RECIPES.map((item) => {
                 const active = recipe === item.key
@@ -275,7 +260,7 @@ export function EditPage() {
                     value={newColName}
                     onChange={(e) => setNewColName(e.target.value)}
                     placeholder="e.g. notes"
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                   />
                 </label>
                 <label className="block text-sm font-bold text-ink">
@@ -283,7 +268,7 @@ export function EditPage() {
                   <select
                     value={newColType}
                     onChange={(e) => setNewColType(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
                   >
                     {PG_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -299,11 +284,11 @@ export function EditPage() {
                     value={defaultExpr}
                     onChange={(e) => setDefaultExpr(e.target.value)}
                     placeholder="e.g. 'pending' or NOW()"
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                   />
                 </label>
                 <div className="flex flex-col justify-end">
-                  <label className="flex h-11 items-center gap-3 rounded-[12px] border border-line bg-canvas/30 px-4 text-xs font-bold text-ink cursor-pointer hover:border-line-strong transition-colors">
+                  <label className="flex h-11 items-center gap-3 rounded-xl border border-line bg-canvas/30 px-4 text-xs font-bold text-ink cursor-pointer hover:border-line-strong transition-colors">
                     <input
                       type="checkbox"
                       checked={nullable}
@@ -323,7 +308,7 @@ export function EditPage() {
                   <select
                     value={activeColName}
                     onChange={(e) => setSelectedCol(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
                   >
                     {columns.map((col) => (
                       <option key={col.name} value={col.name}>
@@ -339,7 +324,7 @@ export function EditPage() {
                     value={renameTarget}
                     onChange={(e) => setRenameTarget(e.target.value)}
                     placeholder={`${activeColName}_v2`}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                   />
                 </label>
               </div>
@@ -352,7 +337,7 @@ export function EditPage() {
                   <select
                     value={activeColName}
                     onChange={(e) => setSelectedCol(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
                   >
                     {columns.map((col) => (
                       <option key={col.name} value={col.name}>
@@ -366,7 +351,7 @@ export function EditPage() {
                   <select
                     value={newColType}
                     onChange={(e) => setNewColType(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
                   >
                     {PG_TYPES.map((t) => (
                       <option key={t} value={t}>
@@ -385,7 +370,7 @@ export function EditPage() {
                   <select
                     value={activeColName}
                     onChange={(e) => setSelectedCol(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet cursor-pointer"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
                   >
                     {columns.map((col) => (
                       <option key={col.name} value={col.name}>
@@ -401,11 +386,11 @@ export function EditPage() {
                     value={indexName}
                     onChange={(e) => setIndexName(e.target.value)}
                     placeholder={`idx_${table}_${activeColName}`}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-line-strong px-3.5 font-mono text-xs outline-none focus:border-violet"
+                    className="mt-2 h-11 w-full rounded-xl border border-line-strong px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                   />
                 </label>
                 <div className="sm:col-span-2">
-                  <label className="flex h-11 max-w-xs items-center gap-3 rounded-[12px] border border-line bg-canvas/30 px-4 text-xs font-bold text-ink cursor-pointer hover:border-line-strong transition-colors">
+                  <label className="flex h-11 max-w-xs items-center gap-3 rounded-xl border border-line bg-canvas/30 px-4 text-xs font-bold text-ink cursor-pointer hover:border-line-strong transition-colors">
                     <input
                       type="checkbox"
                       checked={indexUnique}
@@ -420,12 +405,12 @@ export function EditPage() {
 
             {recipe === 'drop_column' && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <label className="block text-sm font-bold text-danger sm:col-span-2">
+                <label className="block text-sm font-bold text-danger-fg sm:col-span-2">
                   <span>Target column</span>
                   <select
                     value={activeColName}
                     onChange={(e) => setSelectedCol(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-danger/40 bg-white px-3.5 font-mono text-xs text-danger outline-none focus:border-danger cursor-pointer"
+                    className="mt-2 h-11 w-full rounded-xl border border-danger/40 bg-white px-3.5 font-mono text-base sm:text-xs text-danger-fg outline-none focus:border-danger focus:ring-2 focus:ring-danger/25 cursor-pointer"
                   >
                     {columns.map((col) => (
                       <option key={col.name} value={col.name}>
@@ -434,13 +419,13 @@ export function EditPage() {
                     ))}
                   </select>
                 </label>
-                <label className="block text-sm font-bold text-warning sm:col-span-2">
+                <label className="block text-sm font-bold text-warning-fg sm:col-span-2">
                   <span>Reason</span>
                   <input
                     type="text"
                     value={dropReason}
                     onChange={(e) => setDropReason(e.target.value)}
-                    className="mt-2 h-11 w-full rounded-[12px] border border-warning/40 px-3.5 text-xs text-ink outline-none focus:border-warning"
+                    className="mt-2 h-11 w-full rounded-xl border border-warning/40 px-3.5 text-base sm:text-xs text-ink outline-none focus:border-warning focus:ring-2 focus:ring-warning/25"
                   />
                 </label>
               </div>
@@ -448,7 +433,7 @@ export function EditPage() {
           </div>
 
           {/* Blueprint SQL Preview */}
-          <div className="border-t border-line bg-[#fbfafd]/60 p-6 sm:p-7 space-y-5">
+          <div className="border-t border-line bg-surface-subtle/60 p-6 sm:p-7 space-y-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-muted">
                 Blueprint SQL
@@ -488,7 +473,7 @@ export function EditPage() {
               {canEdit ? (
                 <Button variant="dark" size="sm" onClick={openInWorkbench}>
                   <Icon name="migration" className="size-3.5" />
-                  Stage in Workbench
+                  Stage Draft
                   <Icon name="chevron" className="size-3.5" />
                 </Button>
               ) : (
@@ -504,14 +489,14 @@ export function EditPage() {
         </section>
 
         {/* Sidebar: Table Columns */}
-        <aside className="h-fit rounded-[20px] border border-line bg-white shadow-xs overflow-hidden">
-          <div className="flex items-center justify-between border-b border-line bg-[#fbfafd] px-5 py-4">
+        <aside className="h-fit rounded-2xl border border-line bg-white shadow-xs overflow-hidden">
+          <div className="flex items-center justify-between border-b border-line bg-surface-subtle px-5 py-4">
             <h2 className="m-0 font-mono text-sm font-bold text-ink">
               {schema}.{table}
             </h2>
             <Link
               to={`/databases/${id}/${schema}/${encodeURIComponent(table)}`}
-              className="text-xs font-bold text-violet no-underline hover:underline flex items-center gap-1"
+              className="text-xs font-bold text-violet-fg no-underline hover:underline flex items-center gap-1"
             >
               <span>View table</span>
               <Icon name="chevron" className="size-3" />
@@ -529,21 +514,21 @@ export function EditPage() {
                   className={cn(
                     "flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors cursor-pointer text-xs",
                     isSelected
-                      ? "bg-violet-soft/60 shadow-[inset_3px_0_var(--violet)]"
+                      ? "bg-violet-soft/60 shadow-[inset_3px_0_var(--color-violet)]"
                       : "bg-white hover:bg-canvas/60"
                   )}
                   title={`Select ${col.name} as target`}
                 >
                   <div className="min-w-0 flex-1">
-                    <strong className={cn("block truncate font-mono text-xs", isSelected ? "text-violet font-bold" : "text-ink font-semibold")}>
+                    <strong className={cn("block truncate font-mono text-xs", isSelected ? "text-violet-fg font-bold" : "text-ink font-semibold")}>
                       {col.name}
                     </strong>
-                    <span className="text-[10px] text-muted">
+                    <span className="text-[11px] text-muted">
                       {col.nullable ? 'NULL' : 'NOT NULL'}
                       {col.default ? ` · ${col.default}` : ''}
                     </span>
                   </div>
-                  <span className="shrink-0 rounded-md border border-line bg-canvas/80 px-2 py-0.5 font-mono text-[11px] text-violet font-semibold">
+                  <span className="shrink-0 rounded-md border border-line bg-canvas/80 px-2 py-0.5 font-mono text-[11px] text-violet-fg font-semibold">
                     {col.type}
                   </span>
                 </button>

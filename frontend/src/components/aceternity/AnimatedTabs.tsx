@@ -22,7 +22,7 @@ export function AnimatedTabs({ tabs, value, onValueChange, className }: Animated
     <LayoutGroup id={groupId}>
       <div
         className={cn(
-          'flex min-h-12 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-[18px] border border-line/80 bg-white p-1.5 shadow-2xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          'flex min-h-12 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain rounded-2xl border border-line/80 bg-white p-1.5 shadow-2xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           className,
         )}
         role="tablist"
@@ -32,8 +32,8 @@ export function AnimatedTabs({ tabs, value, onValueChange, className }: Animated
           return (
             <button
               className={cn(
-                'relative min-h-9 min-w-20 shrink-0 whitespace-nowrap rounded-xl border-0 bg-transparent px-4 text-xs font-semibold text-muted outline-none transition-colors duration-150 ease-out hover:text-ink focus-visible:ring-2 focus-visible:ring-violet/30 cursor-pointer',
-                active ? 'font-bold text-violet' : 'hover:text-ink',
+                'relative min-h-9 min-w-20 shrink-0 whitespace-nowrap rounded-xl border-0 bg-transparent px-4 text-xs font-semibold text-muted outline-none transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:ring-violet/30 cursor-pointer',
+                active ? 'font-bold text-white' : 'hover:text-ink',
               )}
               type="button"
               role="tab"
@@ -43,7 +43,7 @@ export function AnimatedTabs({ tabs, value, onValueChange, className }: Animated
             >
               {active && (
                 <m.span
-                  className="absolute inset-0 rounded-xl bg-violet-soft border border-violet/25 shadow-2xs"
+                  className="absolute inset-0 rounded-xl bg-ink shadow-2xs"
                   layoutId={`${groupId}-indicator`}
                   initial={false}
                   transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: 'easeInOut' }}

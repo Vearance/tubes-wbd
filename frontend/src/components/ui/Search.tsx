@@ -27,7 +27,7 @@ export function Search({
       />
       <span className="sr-only">{placeholder}</span>
       <input
-        className="w-full min-w-0 border-0 bg-transparent text-xs text-ink placeholder:text-[#a59ea9] outline-none"
+        className="w-full min-w-0 border-0 bg-transparent text-base sm:text-xs text-ink placeholder:text-muted/75 outline-none"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

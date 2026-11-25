@@ -51,37 +51,46 @@ function DraftCard({
   const hasDownSql = Boolean(draft.down_sql && !draft.irreversible)
 
   return (
-    <article className="overflow-hidden rounded-[18px] border border-line bg-white shadow-2xs transition-colors hover:border-line-strong">
+    <article className="overflow-hidden rounded-2xl border border-line bg-white shadow-2xs transition-colors hover:border-line-strong">
       <div className="flex flex-wrap items-center justify-between gap-3 p-4.5">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-line bg-canvas px-2 py-0.5 font-mono text-[11px] font-bold text-violet">
-              #{draft.id}
-            </span>
             <h3 className="m-0 truncate text-sm font-bold text-ink">
               {draft.name}
             </h3>
             <Status tone={draftStatusTone(draft.status)}>
               {draft.status.replace('_', ' ')}
             </Status>
+          </div>
+          <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            <span className="font-mono font-semibold text-violet-fg">
+              #{draft.id}
+            </span>
+            <span>·</span>
             {hasDownSql ? (
-              <Status tone="green" className="gap-1">
+              <span className="inline-flex items-center gap-1 font-semibold text-success-fg">
                 <Icon name="undo" className="size-3" />
                 Reversible
-              </Status>
+              </span>
             ) : (
-              <Status tone="amber" className="gap-1">
+              <span className="inline-flex items-center gap-1 font-semibold text-warning-fg">
                 <Icon name="alert" className="size-3" />
                 Irreversible
-              </Status>
+              </span>
             )}
             {draft.applied_version != null && (
-              <Status tone="violet">v{draft.applied_version}</Status>
+              <>
+                <span>·</span>
+                <span className="font-mono font-semibold text-violet-fg">
+                  v{draft.applied_version}
+                </span>
+              </>
             )}
-          </div>
-          <p className="mt-1 mb-0 text-[11px] text-muted">
-            Created by user #{draft.created_by} · Updated{' '}
-            {new Date(draft.updated_at).toLocaleString()}
+            <span>·</span>
+            <span>
+              Created by user #{draft.created_by} · Updated{' '}
+              {new Date(draft.updated_at).toLocaleString()}
+            </span>
           </p>
         </div>
 
@@ -135,9 +144,9 @@ function DraftCard({
       </div>
 
       {showSql && (
-        <div className="border-t border-line bg-[#fbfafd] px-4.5 py-3.5 space-y-2.5">
+        <div className="border-t border-line bg-surface-subtle px-4.5 py-3.5 space-y-2.5">
           <div>
-            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
               Forward Schema Change (Up SQL)
             </span>
             <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
@@ -146,7 +155,7 @@ function DraftCard({
           </div>
           {draft.down_sql && !draft.irreversible && (
             <div>
-              <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-success">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
                 Paired Down SQL (Rollback)
               </span>
               <pre className="m-0 max-h-32 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
@@ -155,7 +164,7 @@ function DraftCard({
             </div>
           )}
           {draft.irreversible && draft.irreversible_reason && (
-            <p className="m-0 text-xs text-warning font-medium">
+            <p className="m-0 text-xs text-warning-fg font-medium">
               Marked irreversible: {draft.irreversible_reason}
             </p>
           )}
@@ -365,10 +374,10 @@ export function DraftWorkbench({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-line/80 bg-white p-4.5 shadow-2xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
         <div className="flex items-center gap-3">
           <h2 className="m-0 text-base font-bold text-ink">Schema Workbench</h2>
-          <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-[11px] font-bold text-violet">
+          <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg">
             {drafts.length} {drafts.length === 1 ? 'draft' : 'drafts'}
           </span>
         </div>
@@ -403,7 +412,7 @@ export function DraftWorkbench({
       >
         <form onSubmit={handleSubmitForm} className="space-y-6">
           {editingDraft?.status === 'failed' && (
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning-soft/30 px-3.5 py-2 text-xs font-semibold text-warning">
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-warning/30 bg-warning-soft/30 px-3.5 py-2 text-xs font-semibold text-warning-fg">
               <span>Reopening failed draft for revision</span>
             </div>
           )}
@@ -425,7 +434,7 @@ export function DraftWorkbench({
               placeholder="e.g. 003_add_orders_status_index"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 font-mono text-xs outline-none focus:border-violet"
+              className="h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
             />
           </label>
 
@@ -452,7 +461,7 @@ export function DraftWorkbench({
               placeholder="ALTER TABLE public.orders ADD COLUMN status text NOT NULL DEFAULT 'pending';"
               value={sql}
               onChange={(e) => setSql(e.target.value)}
-              className="w-full rounded-[12px] border border-line-strong bg-white p-4 font-mono text-xs leading-6 text-ink outline-none focus:border-violet resize-y"
+              className="w-full rounded-xl border border-line-strong bg-white p-4 font-mono text-base sm:text-xs leading-6 text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 resize-y"
             />
           </div>
 
@@ -515,7 +524,7 @@ export function DraftWorkbench({
           {explainResult && (
             <div className="rounded-xl border border-success/30 bg-success-soft/35 p-3.5 text-xs">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 font-bold text-success">
+                <span className="inline-flex items-center gap-1.5 font-bold text-success-fg">
                   <Icon name="check" className="size-4" />
                   EXPLAIN check passed ({explainResult.statements.length}{' '}
                   statement{explainResult.statements.length === 1 ? '' : 's'})
@@ -523,18 +532,18 @@ export function DraftWorkbench({
                 <button
                   type="button"
                   onClick={() => setExplainResult(null)}
-                  className="text-[11px] font-semibold text-muted hover:text-ink"
+                  className="text-xs font-semibold text-muted hover:text-ink"
                 >
                   Dismiss
                 </button>
               </div>
-              <pre className="m-0 max-h-36 overflow-auto rounded-lg border border-line bg-white p-2.5 font-mono text-[11px] text-ink">
+              <pre className="m-0 max-h-36 overflow-auto rounded-lg border border-line bg-white p-2.5 font-mono text-xs text-ink">
                 {JSON.stringify(explainResult.statements, null, 2)}
               </pre>
             </div>
           )}
 
-          <div className="rounded-[16px] border border-line/90 bg-[#fbfafd] p-4 sm:p-6 space-y-4">
+          <div className="rounded-2xl border border-line/90 bg-surface-subtle p-4 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-sm font-bold text-ink">
                 Rollback Strategy
@@ -547,7 +556,7 @@ export function DraftWorkbench({
                     onClick={() => setIrreversible(false)}
                     className={cn(
                       'relative flex-1 justify-center rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors cursor-pointer sm:flex-initial sm:px-3.5 inline-flex items-center',
-                      !irreversible ? 'text-violet' : 'text-muted hover:text-ink',
+                      !irreversible ? 'text-violet-fg' : 'text-muted hover:text-ink',
                     )}
                   >
                     {!irreversible && (
@@ -571,7 +580,7 @@ export function DraftWorkbench({
                     onClick={() => setIrreversible(true)}
                     className={cn(
                       'relative flex-1 justify-center rounded-lg px-2.5 py-1.5 text-xs font-bold transition-colors cursor-pointer sm:flex-initial sm:px-3.5 inline-flex items-center',
-                      irreversible ? 'text-warning' : 'text-muted hover:text-ink',
+                      irreversible ? 'text-warning-fg' : 'text-muted hover:text-ink',
                     )}
                   >
                     {irreversible && (
@@ -614,7 +623,7 @@ export function DraftWorkbench({
                         placeholder="ALTER TABLE public.orders DROP COLUMN status;"
                         value={downSql}
                         onChange={(e) => setDownSql(e.target.value)}
-                        className="w-full rounded-[12px] border border-line-strong bg-white p-3.5 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-none"
+                        className="w-full rounded-xl border border-line-strong bg-white p-3.5 font-mono text-base sm:text-xs leading-5 text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 resize-none"
                       />
                     </label>
                   </m.div>
@@ -627,7 +636,7 @@ export function DraftWorkbench({
                     transition={{ duration: 0.14 }}
                   >
                     <label className="block">
-                      <span className="mb-2 block text-xs font-bold text-warning">
+                      <span className="mb-2 block text-xs font-bold text-warning-fg">
                         Irreversible Justification (Required)
                       </span>
                       <textarea
@@ -636,7 +645,7 @@ export function DraftWorkbench({
                         placeholder="e.g. Drops deprecated legacy column; data cannot be reconstructed without manual backup."
                         value={irreversibleReason}
                         onChange={(e) => setIrreversibleReason(e.target.value)}
-                        className="w-full rounded-[12px] border border-warning/40 bg-white p-3.5 text-xs leading-5 text-ink outline-none focus:border-warning resize-none"
+                        className="w-full rounded-xl border border-warning/40 bg-white p-3.5 text-base sm:text-xs leading-5 text-ink outline-none focus:border-warning focus:ring-2 focus:ring-warning/25 resize-none"
                       />
                     </label>
                   </m.div>
@@ -671,7 +680,7 @@ export function DraftWorkbench({
         ))}
 
         {drafts.length === 0 && (
-          <div className="rounded-[18px] border border-line bg-white py-12 shadow-2xs">
+          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
             <EmptyState
               icon="migration"
               title="No migration drafts yet"

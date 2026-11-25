@@ -3,14 +3,14 @@ export const baseButtonClasses =
 
 export const buttonVariants = {
   default:
-    'border border-line/80 bg-white text-ink hover:bg-canvas shadow-2xs disabled:border-line disabled:bg-[#f0edf5] disabled:text-[#aaa4ad]',
-  dark: 'border-[#1c1b22] bg-[#1c1b22] text-white hover:bg-[#121116] shadow-xs disabled:border-line disabled:bg-[#f0edf5] disabled:text-[#aaa4ad]',
+    'border border-line/80 bg-white text-ink hover:bg-canvas shadow-2xs disabled:border-line disabled:bg-disabled-bg disabled:text-disabled-fg',
+  dark: 'border-ink bg-ink text-white hover:bg-ink-strong shadow-xs disabled:border-line disabled:bg-disabled-bg disabled:text-disabled-fg',
   danger:
-    'border-danger bg-danger text-white hover:bg-[#c93445] disabled:border-line disabled:bg-[#f0edf5] disabled:text-[#aaa4ad]',
+    'border-danger bg-danger text-white hover:bg-danger-strong disabled:border-line disabled:bg-disabled-bg disabled:text-disabled-fg',
   ghost:
-    'border-transparent bg-transparent text-muted hover:bg-violet-soft/40 hover:text-ink disabled:text-[#aaa4ad]',
+    'border-transparent bg-transparent text-muted hover:bg-violet-soft/40 hover:text-ink disabled:text-disabled-fg',
   outline:
-    'border border-line bg-white/90 text-ink hover:bg-white hover:border-line-strong shadow-2xs disabled:border-line disabled:text-[#aaa4ad]',
+    'border border-line bg-white/90 text-ink hover:bg-white hover:border-line-strong shadow-2xs disabled:border-line disabled:text-disabled-fg',
 } as const
 
 export const buttonSizes = {

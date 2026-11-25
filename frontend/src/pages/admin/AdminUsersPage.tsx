@@ -17,6 +17,7 @@ import {
   ErrorNotice,
   Loading,
   Modal,
+  PageSkeleton,
   Search,
   Status,
 } from "../../components/ui";
@@ -130,7 +131,7 @@ function UserAccessDetail({
           onClick={() => {
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
-          className="min-[901px]:hidden flex items-center gap-1 text-[11px] font-bold text-violet bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+          className="min-[901px]:hidden flex items-center gap-1 text-xs font-bold text-violet-fg bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
           title="Back to users list"
         >
           <Icon name="chevron-left" className="size-3.5" />
@@ -149,7 +150,7 @@ function UserAccessDetail({
         </span>
         <Status
           tone={user.disabled ? "red" : "green"}
-          className="px-3 py-1 text-[11px]"
+          className="px-3 py-1"
         >
           {user.disabled ? "Disabled" : "Active"}
         </Status>
@@ -193,7 +194,7 @@ function UserAccessDetail({
                         <b className="flex items-center gap-1.5">
                           <Link
                             to={`/admin/groups/${entry.group.id}`}
-                            className="truncate text-ink no-underline hover:text-violet hover:underline"
+                            className="truncate text-ink no-underline hover:text-violet-fg hover:underline"
                           >
                             {entry.group.name}
                           </Link>
@@ -204,19 +205,19 @@ function UserAccessDetail({
                         </small>
                       </span>
                       {isLeader ? (
-                        <Status tone="violet" className="gap-1 text-[10px]">
+                        <Status tone="violet" className="gap-1">
                           <Icon name="crown" className="size-3" />
                           Keyholder
                         </Status>
                       ) : (
-                        <span className="text-[11px] font-medium text-muted">
+                        <span className="text-xs font-medium text-muted">
                           Member
                         </span>
                       )}
                       {isLeader ? (
                         <Link
                           to={`/admin/groups/${entry.group.id}`}
-                          className="grid size-8 place-items-center rounded-lg text-violet hover:bg-violet-soft"
+                          className="grid size-8 place-items-center rounded-lg text-violet-fg hover:bg-violet-soft"
                           title="Reassign Keyholder in group before removing"
                           aria-label={`Manage Keyholder in ${entry.group.name}`}
                         >
@@ -252,7 +253,7 @@ function UserAccessDetail({
                       onClick={() => addMembership(group.id)}
                     >
                       <span
-                        className={cn(glyphClass, "size-8 rounded-[9px]")}
+                        className={cn(glyphClass, "size-8 rounded-lg")}
                       >
                         <Icon name="groups" className="size-4" />
                       </span>
@@ -264,7 +265,7 @@ function UserAccessDetail({
                             : `Group #${group.id}`}
                         </small>
                       </span>
-                      <em className="text-right text-xs font-bold not-italic text-violet">
+                      <em className="text-right text-xs font-bold not-italic text-violet-fg">
                         Add
                       </em>
                     </button>
@@ -455,7 +456,7 @@ export function AdminUsersPage() {
                 placeholder="e.g. alex"
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 text-xs outline-none focus:border-violet"
+                className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
               />
             </label>
             <label className="block text-sm font-bold text-ink">
@@ -467,7 +468,7 @@ export function AdminUsersPage() {
                 placeholder="••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-2 h-11 w-full rounded-[12px] border border-line-strong bg-white px-3.5 text-xs outline-none focus:border-violet"
+                className="mt-2 h-11 w-full rounded-xl border border-line-strong bg-white px-3.5 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
               />
             </label>
           </div>
@@ -489,9 +490,8 @@ export function AdminUsersPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="py-16"
           >
-            <Loading label="Loading registered users…" />
+            <PageSkeleton variant="admin-split" label="Loading registered users…" />
           </m.div>
         ) : (
           <m.div
@@ -529,7 +529,7 @@ export function AdminUsersPage() {
                 className={cn(
                   "grid min-h-[72px] w-full grid-cols-[38px_minmax(0,1fr)_auto_18px] items-center gap-3 border-0 border-b border-line bg-white px-4 py-3 text-left hover:bg-violet-soft/20 cursor-pointer transition-colors duration-150",
                   selected?.id === user.id &&
-                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--violet)]",
+                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--color-violet)]",
                 )}
                 key={user.id}
                 onClick={() => selectUser(user)}
@@ -547,10 +547,10 @@ export function AdminUsersPage() {
                     <span
                       className={cn(
                         user.disabled
-                          ? "text-danger font-semibold"
+                          ? "text-danger-fg font-semibold"
                           : user.is_admin
-                            ? "text-violet font-semibold"
-                            : "text-success font-medium",
+                            ? "text-violet-fg font-semibold"
+                            : "text-success-fg font-medium",
                       )}
                     >
                       {user.disabled ? "Disabled" : user.is_admin ? "Admin" : "Active"}
@@ -558,7 +558,7 @@ export function AdminUsersPage() {
                   </span>
                 </span>
                 {ledCount > 0 ? (
-                  <Status tone="violet" className="gap-1 text-[10px]">
+                  <Status tone="violet" className="gap-1">
                     <Icon name="crown" className="size-3" />
                     {ledCount}
                   </Status>
