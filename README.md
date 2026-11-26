@@ -217,9 +217,45 @@ The script prints statement coverage per package and writes `coverage.txt` (per 
 
 ## observability
 
-Centralized logs (Grafana Loki), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Grafana Tempo via OpenTelemetry Collector), Prometheus metrics (`/metrics` on API `:8080`, worker `:9091`, RabbitMQ `:15692`), and auto-provisioned Grafana dashboards (`:3000`) are included in the Compose stack.
+Centralized logs (Grafana Loki `:3100`), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Grafana Tempo `:3200` via OpenTelemetry Collector), Prometheus metrics (`:9090`, scraping `bscheme-api` `:8080/metrics`, `bscheme-worker` `:9091/metrics`, and RabbitMQ `:15692/metrics`), and auto-provisioned Grafana dashboards (`:3000`, default `admin` / `admin`) are included in the Compose stack:
 
-See [`observability/README.md`](observability/README.md) for architecture details, label cardinality guardrails, dashboard descriptions, and verified log/trace correlation and `/metrics` output examples.
+```bash
+docker compose up --build -d
+bash scripts/test-observability.sh   # generate API, auth, viewer, migration & DB pool traffic
+```
+
+### Queue & Migration Metrics (Prometheus -> Grafana)
+
+| Requirement | Prometheus Metric(s) & Labels | Source | Grafana Panel (`bscheme-migrations`) |
+| --- | --- | --- | --- |
+| Job menunggu (`queued` / `pending_review` / `approved` / outbox / RabbitMQ) | `bscheme_migration_jobs{status="queued\|pending_review\|approved\|..."}` (gauge), `bscheme_migration_outbox_pending` (gauge), `rabbitmq_queue_messages_ready` | `bscheme-api`, `rabbitmq` | **Queued / Waiting Jobs**, **Pending Review**, **Outbox Pending**, **Migration Jobs per Status Over Time**, **Worker In-Flight, Outbox & RabbitMQ Depth** |
+| Job berjalan (`running` / worker in-flight) | `bscheme_migration_jobs{status="running"}` (gauge), `bscheme_migration_worker_in_flight{type}` (gauge), `rabbitmq_queue_messages_unacked` | `bscheme-api`, `bscheme-worker`, `rabbitmq` | **Running Jobs**, **Migration Jobs per Status Over Time**, **Worker In-Flight, Outbox & RabbitMQ Depth** |
+| Job selesai (`success` / `compensated`) | `bscheme_migration_jobs{status="success\|compensated"}` (gauge), `bscheme_migration_executions_total{type,status="success"}` (counter) | `bscheme-api`, `bscheme-worker` | **Succeeded Jobs**, **Completed Executions (5m count)** |
+| Job gagal / parsial (`failed` / `partial` / `rejected`) | `bscheme_migration_jobs{status="failed\|partial\|rejected"}` (gauge), `bscheme_migration_executions_total{type,status="failed\|partial"}` (counter) | `bscheme-api`, `bscheme-worker` | **Failed / Partial Jobs**, **Completed Executions (5m count)** |
+| Retry & delivery outcomes | `bscheme_migration_retries_total{type,reason}` (`retryable_error`, `stale_recovery`, `execution_busy`), `bscheme_migration_worker_messages_total{outcome}`, `bscheme_migration_outbox_published_total{result}` | `bscheme-api`, `bscheme-worker` | **Retries & Queue Outcomes (5m count)** |
+| Waktu tunggu queue | `bscheme_migration_queue_wait_duration_seconds_{bucket,sum,count}{type}` (histogram) | `bscheme-worker` | **Queue Wait Duration (p50 / p95 / p99)** |
+| Waktu tunggu lock | `bscheme_migration_lock_wait_duration_seconds_{bucket,sum,count}{type,lock_scope}` (`advisory`, `history_table`) | `bscheme-worker` | **Lock Wait Duration (p50 / p95 by Scope)** |
+| Durasi migration | `bscheme_migration_execution_duration_seconds_{bucket,sum,count}{type,status}` (histogram) | `bscheme-worker` | **Migration Execution Duration (p50 / p95 / p99)** |
+| Batch & row diproses | `bscheme_migration_batches_processed_total{type}` (counter), `bscheme_migration_batch_rows_processed_total{type}` (counter) | `bscheme-worker` | **Batches & Rows Processed (5m count)** |
+
+### Database Connection Pool Metrics (Prometheus -> Grafana)
+
+| Requirement | Prometheus Metric(s) & Labels | Source | Grafana Panel (`bscheme-migrations`) |
+| --- | --- | --- | --- |
+| Koneksi aktif / idle Platform DB | `bscheme_db_pool_connections{db_role="platform",state="active\|idle\|open\|max_open"}` | `bscheme-api`, `bscheme-worker` | **Platform DB Pool — Active vs Idle Connections** |
+| Koneksi aktif / idle Target DB | `bscheme_db_pool_connections{db_role="target",state="active\|idle\|total\|max_conns"}`, `bscheme_targetdb_pools_active` | `bscheme-api`, `bscheme-worker` | **Target DB Pool — Active vs Idle Connections**, **Open Target DB Pools** |
+| Waktu tunggu & jumlah tunggu koneksi | `bscheme_db_pool_wait_duration_seconds_total{db_role}`, `bscheme_db_pool_wait_count_total{db_role}` | `bscheme-api`, `bscheme-worker` | **Connection Pool Wait Time & Acquisitions** |
+| Latensi & error query DB | `bscheme_db_query_duration_seconds_{bucket,sum,count}{db_role,operation}`, `bscheme_db_queries_total{db_role,operation,status}` | `bscheme-api`, `bscheme-worker` | **Database Query Latency (p95) & Errors (5m count)** |
+
+### Grafana Provisioning & Dashboard Files
+
+- **Datasource provisioning** (Prometheus, Tempo, Loki): [`observability/grafana/provisioning/datasources/datasources.yml`](observability/grafana/provisioning/datasources/datasources.yml)
+- **Dashboard auto-provisioning** (`BScheme` folder in Grafana): [`observability/grafana/provisioning/dashboards/dashboards.yml`](observability/grafana/provisioning/dashboards/dashboards.yml)
+- **Queue, Migrations & DB Pool Dashboard** (`http://localhost:3000/d/bscheme-migrations`): [`observability/grafana/dashboards/bscheme-migrations.json`](observability/grafana/dashboards/bscheme-migrations.json)
+- **API, Auth, Viewer & Runtime Overview Dashboard** (`http://localhost:3000/d/bscheme-overview`): [`observability/grafana/dashboards/bscheme-overview.json`](observability/grafana/dashboards/bscheme-overview.json)
+- **Smoke / Load Test Script**: [`scripts/test-observability.sh`](scripts/test-observability.sh)
+
+See [`observability/README.md`](observability/README.md) for architecture details, label cardinality guardrails, alert rules ([`observability/prometheus/alerts.yml`](observability/prometheus/alerts.yml)), and verified log/trace correlation and `/metrics` output examples.
 
 ## contributors
 

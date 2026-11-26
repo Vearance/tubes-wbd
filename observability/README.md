@@ -97,6 +97,21 @@ High-cardinality identifiers (`execution_id`, `database_id`, `attempt`, `batch_n
 
 ## Exposed Metrics Reference
 
+### Quick Navigation: Spec -> Prometheus Metric -> Grafana Panel
+
+| Area | What It Tracks | Prometheus Metric(s) | Grafana Panel (`grafana/dashboards/bscheme-migrations.json`) |
+| --- | --- | --- | --- |
+| Jobs Waiting | `queued`, `pending_review`, `approved`, outbox backlog, RabbitMQ ready | `bscheme_migration_jobs{status}`, `bscheme_migration_outbox_pending`, `rabbitmq_queue_messages_ready` | **Queued / Waiting Jobs**, **Pending Review**, **Outbox Pending**, **Migration Jobs per Status Over Time**, **Worker In-Flight, Outbox & RabbitMQ Depth** |
+| Jobs Running | `running` state & active worker deliveries | `bscheme_migration_jobs{status="running"}`, `bscheme_migration_worker_in_flight{type}`, `rabbitmq_queue_messages_unacked` | **Running Jobs**, **Migration Jobs per Status Over Time**, **Worker In-Flight, Outbox & RabbitMQ Depth** |
+| Jobs Succeeded / Failed | Live status counts & completed execution totals (`success`, `failed`, `partial`, `rejected`) | `bscheme_migration_jobs{status}`, `bscheme_migration_executions_total{type,status}` | **Succeeded Jobs**, **Failed / Partial Jobs**, **Completed Executions (5m count)** |
+| Retries | Retry count (`retryable_error`, `stale_recovery`, `execution_busy`) & worker/outbox outcomes | `bscheme_migration_retries_total{type,reason}`, `bscheme_migration_worker_messages_total{outcome}`, `bscheme_migration_outbox_published_total{result}` | **Retries & Queue Outcomes (5m count)** |
+| Queue Wait | Time from queue/available timestamp until worker claim | `bscheme_migration_queue_wait_duration_seconds_{bucket,sum,count}{type}` | **Queue Wait Duration (p50 / p95 / p99)** |
+| Lock Wait | Advisory & `_dbm.migration_history` lock acquisition wait | `bscheme_migration_lock_wait_duration_seconds_{bucket,sum,count}{type,lock_scope}` | **Lock Wait Duration (p50 / p95 by Scope)** |
+| Migration Duration | Total execution duration by `type` and `status` | `bscheme_migration_execution_duration_seconds_{bucket,sum,count}{type,status}` | **Migration Execution Duration (p50 / p95 / p99)** |
+| Batches & Rows | Committed batch chunks & affected rows | `bscheme_migration_batches_processed_total{type}`, `bscheme_migration_batch_rows_processed_total{type}` | **Batches & Rows Processed (5m count)** |
+| DB Pool Active / Idle | Active, idle, open/total, max connections & open target pools | `bscheme_db_pool_connections{db_role,state}`, `bscheme_targetdb_pools_active` | **Platform DB Pool — Active vs Idle Connections**, **Target DB Pool — Active vs Idle Connections**, **Open Target DB Pools** |
+| DB Pool Wait Time | Cumulative waits & seconds spent waiting for a DB connection | `bscheme_db_pool_wait_duration_seconds_total{db_role}`, `bscheme_db_pool_wait_count_total{db_role}` | **Connection Pool Wait Time & Acquisitions** |
+
 ### Queue & Migration Metrics
 - `bscheme_migration_jobs{status}` — current executions per bounded status (`pending_review`, `rejected`, `approved`, `queued`, `running`, `success`, `failed`, `partial`, `compensation_pending`, `compensating`, `compensated`), emitted by `bscheme-api` from Platform DB.
 - `bscheme_migration_outbox_pending` — unpublished records in `migration_execution_outbox`.
