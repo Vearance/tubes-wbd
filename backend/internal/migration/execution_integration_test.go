@@ -95,6 +95,55 @@ func TestIntegrationMigrationHistoryIncludesFailedAttempts(t *testing.T) {
 	require.Equal(t, uint(502), latestActive.ExecutionID, "failed history entries must not alter active migration state")
 }
 
+func TestIntegrationFailedRollbackLeavesHistoryPositionActive(t *testing.T) {
+	env := newDraftEnv(t, "")
+	svc := env.service(t, stubAuthorizer{})
+	ctx := context.Background()
+
+	up := &Execution{
+		ID:                601,
+		ManagedDatabaseID: env.dbID,
+		Type:              ExecutionTypeUp,
+		Name:              "rollback target",
+		SQL:               "CREATE TABLE failed_rollback_target (id bigint PRIMARY KEY)",
+		DownSQL:           "DROP TABLE missing_rollback_target",
+		ExecutedBy:        42,
+		Attempt:           1,
+	}
+	_, err := svc.runExecution(ctx, up)
+	require.NoError(t, err)
+
+	rollback := &Execution{
+		ID:                602,
+		ManagedDatabaseID: env.dbID,
+		Type:              ExecutionTypeRollback,
+		Name:              up.Name,
+		SQL:               up.DownSQL,
+		DownSQL:           up.SQL,
+		TargetExecutionID: &up.ID,
+		ExecutedBy:        42,
+		Attempt:           1,
+	}
+	_, err = svc.runExecution(ctx, rollback)
+	require.Error(t, err)
+
+	history, err := svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	require.Len(t, history.Entries, 2)
+	require.Equal(t, RunStatusFailed, history.Entries[0].Status)
+	require.Equal(t, ExecutionTypeRollback, history.Entries[0].Type)
+	require.Equal(t, RunStatusSuccess, history.Entries[1].Status)
+	require.True(t, history.Entries[1].Active)
+
+	var latestActive *HistoryEntry
+	require.NoError(t, svc.readOnly(ctx, env.dbID, func(tx pgx.Tx) error {
+		var err error
+		latestActive, err = latestActiveExecutionHistory(ctx, tx)
+		return err
+	}))
+	require.Equal(t, up.ID, latestActive.ExecutionID, "failed rollback must not change active migration state")
+}
+
 func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})
@@ -152,4 +201,10 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	require.False(t, history.Entries[1].Active)
 	require.Equal(t, ExecutionTypeUp, history.Entries[2].Type)
 	require.False(t, history.Entries[2].Active)
+
+	hiddenHistory, err := svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	require.Len(t, hiddenHistory.Entries, 1)
+	require.Equal(t, forward.ID, *hiddenHistory.Entries[0].ExecutionID)
+	require.Equal(t, ExecutionTypeForward, hiddenHistory.Entries[0].Type)
 }

@@ -1009,7 +1009,8 @@ paths:
       - $ref: '#/components/parameters/DatabaseId'
     get:
       operationId: listMigrationHistory
-      summary: List applied migrations, newest first
+      summary: List migration history, newest first
+      description: When hide_rollback is true, successful rollback executions and the successful executions they target are omitted from this response only. History records and audit data are retained.
       tags:
         - migrations
       security:
@@ -1017,6 +1018,13 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
+        - name: hide_rollback
+          in: query
+          required: false
+          description: Hide successful rollback executions and their targets, matched by execution ID.
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: One page of migration history.

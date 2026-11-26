@@ -19,7 +19,7 @@ func historyExists(ctx context.Context, tx pgx.Tx) (bool, error) {
 	return exists, nil
 }
 
-func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int) (*HistoryPage, error) {
+func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int, hideRollback bool) (*HistoryPage, error) {
 	result := &HistoryPage{Entries: []HistorySummary{}, Page: page, PageSize: pageSize}
 
 	exists, err := historyExists(ctx, tx)
@@ -29,11 +29,23 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int) (*HistoryPa
 
 	offset := int64(page-1) * int64(pageSize)
 	rows, err := tx.Query(ctx,
-		`SELECT version, execution_id, attempt_number, status, error_code, error_message,
-			execution_type, target_execution_id, active, name, executed_by, executed_at, duration_ms
-		FROM _dbm.migration_history
-		ORDER BY version DESC
-		LIMIT $1 OFFSET $2`, pageSize+1, offset)
+		`SELECT h.version, h.execution_id, h.attempt_number, h.status, h.error_code, h.error_message,
+			h.execution_type, h.target_execution_id, h.active, h.name, h.executed_by, h.executed_at, h.duration_ms
+		FROM _dbm.migration_history h
+		WHERE NOT $1::boolean OR (
+			NOT (h.status = 'success' AND h.execution_type = 'rollback')
+			AND NOT (
+				h.status = 'success'
+				AND EXISTS (
+					SELECT 1 FROM _dbm.migration_history rollback
+					WHERE rollback.status = 'success'
+						AND rollback.execution_type = 'rollback'
+						AND rollback.target_execution_id = h.execution_id
+				)
+			)
+		)
+		ORDER BY h.version DESC
+		LIMIT $2 OFFSET $3`, hideRollback, pageSize+1, offset)
 	if err != nil {
 		return nil, fmt.Errorf("migration: list history: %w", err)
 	}

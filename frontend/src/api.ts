@@ -287,6 +287,15 @@ const qs = (values: Record<string, string | number | undefined>) => {
 	return `?${p}`;
 };
 
+const requestHistoryPage = (id: number, page: number, hideRollback: boolean) =>
+	request<MigrationHistoryPage>(
+		`/databases/${id}/migrations/history${qs({
+			page,
+			page_size: 100,
+			hide_rollback: String(hideRollback),
+		})}`,
+	);
+
 export const api = {
 	login: (username: string, password: string) =>
 		request<LoginResponse>("/auth/login", {
@@ -318,10 +327,20 @@ export const api = {
 			method: "POST",
 			body: { sql },
 		}),
-	history: (id: number, page = 1) =>
-		request<MigrationHistoryPage>(
-			`/databases/${id}/migrations/history${qs({ page, page_size: 50 })}`,
-		),
+	history: (id: number, page = 1, hideRollback = false) =>
+		requestHistoryPage(id, page, hideRollback),
+	historyAll: async (id: number, hideRollback = false) => {
+		const entries: MigrationHistoryEntry[] = [];
+		let page = 1;
+		let hasNext = true;
+		while (hasNext) {
+			const result = await requestHistoryPage(id, page, hideRollback);
+			entries.push(...result.entries);
+			hasNext = result.has_next;
+			page += 1;
+		}
+		return entries;
+	},
 	historyEntry: (id: number, version: number) =>
 		request<MigrationHistoryDetail>(
 			`/databases/${id}/migrations/history/${version}`,

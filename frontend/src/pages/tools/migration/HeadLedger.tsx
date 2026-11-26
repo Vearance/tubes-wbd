@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   api,
+  type MigrationExecution,
   type MigrationHistoryDetail,
   type MigrationHistoryEntry,
 } from '../../../api'
@@ -66,6 +67,10 @@ function HistoryEntryRow({
               <h3 className="m-0 truncate text-sm font-bold text-ink">
                 {entry.name}
               </h3>
+              <Status tone={entry.status === 'failed' ? 'red' : 'green'}>
+                {entry.status.toUpperCase()}
+              </Status>
+              <Status tone="gray">Attempt {entry.attempt_number}</Status>
               {isHead && (
                 <Status tone="violet" className="gap-1">
                   <span className="size-1.5 rounded-full bg-violet animate-pulse" />
@@ -104,6 +109,13 @@ function HistoryEntryRow({
           </Button>
         </div>
       </div>
+
+      {entry.status === 'failed' && (
+        <p className="mt-3 mb-0 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger">
+          {entry.error_code ? `${entry.error_code}: ` : ''}
+          {entry.error_message || 'This migration attempt failed.'}
+        </p>
+      )}
 
       {open && (
         <div className="mt-3 rounded-xl border border-line bg-[#fbfafd] p-4 space-y-3">
@@ -148,6 +160,9 @@ export function HeadLedger({
   databaseId,
   canEdit,
   entries,
+  hideRollback,
+  onHideRollbackChange,
+  latestSuccessfulExecution,
   onRollbackProposed,
   onForwardProposed,
 }: {
@@ -155,22 +170,35 @@ export function HeadLedger({
   databaseName: string
   canEdit: boolean
   entries: MigrationHistoryEntry[]
+  hideRollback: boolean
+  onHideRollbackChange: (hide: boolean) => void
+  latestSuccessfulExecution: MigrationExecution | undefined
   onRollbackProposed: (executionId: number) => Promise<void>
   onForwardProposed: (executionId: number) => Promise<void>
 }) {
-  const latest = entries[0]
   const latestActive = entries.find((e) => e.active !== false)
   const canProposeRollback = Boolean(latestActive)
-  const canProposeForward = latest?.execution_type === 'rollback'
+  const canProposeForward = latestSuccessfulExecution?.type === 'rollback'
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-line/80 bg-white p-4.5 shadow-2xs">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h2 className="m-0 text-base font-bold text-ink">Live HEAD Ledger</h2>
           <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-[11px] font-bold text-violet">
             {latestActive ? `v${latestActive.version} HEAD` : 'Empty schema'}
           </span>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted">
+            <input
+              type="checkbox"
+              checked={hideRollback}
+              onChange={(event) => onHideRollbackChange(event.currentTarget.checked)}
+              className="size-4 accent-violet"
+            />
+            <span title="Hide successful rollback entries and the executions they cancel">
+              Hide rollback
+            </span>
+          </label>
         </div>
 
         {canEdit && (
@@ -197,7 +225,7 @@ export function HeadLedger({
             {canProposeForward && (
               <ConfirmAction
                 title="Propose Forward of Latest Rollback?"
-                description={`This submits a Forward execution to re-apply "${latest?.name}" into Pending Review for team leader approval.`}
+                description={`This submits a Forward execution to re-apply "${latestSuccessfulExecution?.name}" into Pending Review for team leader approval.`}
                 confirmLabel="Submit Forward for Review"
                 tone="primary"
                 onConfirm={async () => {
@@ -228,10 +256,15 @@ export function HeadLedger({
 
         {entries.length === 0 && (
           <div className="rounded-[14px] border border-line bg-white py-12 shadow-2xs">
-            <EmptyState icon="migration" title="No applied migrations yet">
-              Executed and approved migrations will appear in the Live HEAD
-              Ledger once completed by the worker.
-            </EmptyState>
+            {hideRollback ? (
+              <EmptyState icon="migration" title="No visible history entries">
+                Turn off Hide rollback to show the complete migration history.
+              </EmptyState>
+            ) : (
+              <EmptyState icon="migration" title="No migration history yet">
+                Migration attempts will appear here after they are run.
+              </EmptyState>
+            )}
           </div>
         )}
       </div>

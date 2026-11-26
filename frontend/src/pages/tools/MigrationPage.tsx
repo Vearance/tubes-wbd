@@ -29,8 +29,12 @@ export function MigrationPage() {
   const activeDb = databases.find((database) => database.id === id)
   const databaseName = activeDb?.name ?? `Database #${id}`
   const canEdit = activeDb?.permission === 'view_edit'
+  const [hideRollback, setHideRollback] = useState(false)
 
-  const history = useResource(() => api.history(id), [id])
+  const history = useResource(
+    () => api.historyAll(id, hideRollback),
+    [id, hideRollback],
+  )
   const drafts = useResource(() => api.drafts(id), [id])
   const executions = useResource(() => api.executions(id), [id])
   const { reload: reloadHistory } = history
@@ -68,7 +72,10 @@ export function MigrationPage() {
 
   const draftList = drafts.data ?? []
   const executionList = executions.data ?? []
-  const historyList = history.data?.entries ?? []
+  const historyList = history.data ?? []
+  const latestSuccessfulExecution = executionList.find(
+    (execution) => execution.status === 'success',
+  )
 
   const hasLiveQueueOrRunning = executionList.some(
     (e) => e.status === 'queued' || e.status === 'running',
@@ -84,7 +91,11 @@ export function MigrationPage() {
     return () => window.clearInterval(timer)
   }, [hasLiveQueueOrRunning, reloadExecutions, reloadDrafts, reloadHistory])
 
-  const isLoading = history.loading && drafts.loading && executions.loading
+  const isLoading =
+    (history.loading || drafts.loading || executions.loading) &&
+    history.data === null &&
+    drafts.data === null &&
+    executions.data === null
 
   const pendingReviewCount = executionList.filter(
     (e) => e.status === 'pending_review',
@@ -128,7 +139,7 @@ export function MigrationPage() {
         status={
           isLoading
             ? 'Loading migrations…'
-            : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} applied`
+            : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} history entries`
         }
         actions={
           <div className="flex items-center gap-2">
@@ -288,6 +299,9 @@ export function MigrationPage() {
               databaseName={databaseName}
               canEdit={canEdit}
               entries={historyList}
+              hideRollback={hideRollback}
+              onHideRollbackChange={setHideRollback}
+              latestSuccessfulExecution={latestSuccessfulExecution}
               onRollbackProposed={async (executionId) => {
                 setFocusedExecutionId(executionId)
                 setAirlockFilter('pending_review')
