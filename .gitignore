@@ -33,3 +33,7 @@ go.work.sum
 # .idea/
 # .vscode/
 .agents/
+
+tasks/
+spek.md
+spek2.md

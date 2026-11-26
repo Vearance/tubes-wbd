@@ -185,7 +185,29 @@ func (s *MigrationService) HistoryFiltered(ctx context.Context, userID, dbID uin
 	var result *HistoryPage
 	err = s.readOnly(ctx, dbID, func(tx pgx.Tx) (err error) {
 		result, err = listHistory(ctx, tx, page, pageSize, hideRollback)
-		return err
+		if err != nil {
+			return err
+		}
+		rollback, err := forwardCandidate(ctx, tx)
+		if errors.Is(err, ErrInvalidForward) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if rollback.TargetExecutionID == nil {
+			return nil
+		}
+		target, err := getExecutionHistoryByID(ctx, tx, *rollback.TargetExecutionID)
+		if err != nil {
+			return err
+		}
+		result.Forward = &ForwardCandidate{
+			RollbackExecutionID: rollback.ExecutionID,
+			TargetExecutionID:   target.ExecutionID,
+			Name:                target.Name,
+		}
+		return nil
 	})
 	return result, err
 }

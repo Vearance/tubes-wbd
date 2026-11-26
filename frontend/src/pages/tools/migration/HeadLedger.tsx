@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   api,
-  type MigrationExecution,
+  type MigrationForwardCandidate,
   type MigrationHistoryDetail,
   type MigrationHistoryEntry,
 } from '../../../api'
@@ -167,7 +167,7 @@ export function HeadLedger({
   entries,
   hideRollback,
   onHideRollbackChange,
-  latestSuccessfulExecution,
+  forwardCandidate,
   onRollbackProposed,
   onForwardProposed,
 }: {
@@ -177,13 +177,13 @@ export function HeadLedger({
   entries: MigrationHistoryEntry[]
   hideRollback: boolean
   onHideRollbackChange: (hide: boolean) => void
-  latestSuccessfulExecution: MigrationExecution | undefined
+  forwardCandidate: MigrationForwardCandidate | undefined
   onRollbackProposed: (executionId: number) => Promise<void>
   onForwardProposed: (executionId: number) => Promise<void>
 }) {
   const latestActive = entries.find((e) => e.active !== false)
   const canProposeRollback = Boolean(latestActive)
-  const canProposeForward = latestSuccessfulExecution?.type === 'rollback'
+  const canProposeForward = Boolean(forwardCandidate)
 
   return (
     <div className="space-y-4">
@@ -230,7 +230,7 @@ export function HeadLedger({
             {canProposeForward && (
               <ConfirmAction
                 title="Propose Forward of Latest Rollback?"
-                description={`This submits a Forward execution to re-apply "${latestSuccessfulExecution?.name}" into Pending Review for team leader approval.`}
+                description={`This submits a Forward execution to re-apply "${forwardCandidate?.name}" into Pending Review for team leader approval.`}
                 confirmLabel="Submit Forward for Review"
                 tone="primary"
                 onConfirm={async () => {
