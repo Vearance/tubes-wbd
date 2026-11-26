@@ -200,19 +200,6 @@ export type MigrationHistoryPage = {
 	page_size: number;
 	has_next: boolean;
 };
-export type MigrationRun = {
-	id: number;
-	draft_id: number;
-	database_id: number;
-	status: "success" | "failed";
-	version?: number | null;
-	sql: string;
-	executed_by: number;
-	started_at: string;
-	finished_at: string;
-	error_code?: string;
-	error_message?: string;
-};
 export type ExplainResponse = {
 	statements: Array<{ sql: string; plan: Record<string, unknown>[] }>;
 };
@@ -343,8 +330,6 @@ export const api = {
 		request<MigrationDraft[]>(`/databases/${id}/migrations/drafts`),
 	draft: (draftId: number) =>
 		request<MigrationDraft>(`/migrations/drafts/${draftId}`),
-	draftRuns: (draftId: number) =>
-		request<MigrationRun[]>(`/migrations/drafts/${draftId}/runs`),
 	createDraft: (
 		id: number,
 		input: MigrationDraftInput | string,

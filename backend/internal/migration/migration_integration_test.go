@@ -181,6 +181,24 @@ func newIntegrationServiceWithAuthorizer(t *testing.T, targets staticSource, man
 	return svc
 }
 
+func applyForTest(ctx context.Context, svc *MigrationService, userID, dbID uint, m Migration) (*HistoryEntry, error) {
+	m, err := validate(m)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := svc.pools.Pool(ctx, dbID)
+	if err != nil {
+		return nil, err
+	}
+	return applyExecution(ctx, pool, &Execution{
+		Type:       ExecutionTypeUp,
+		Name:       m.Name,
+		SQL:        m.SQL,
+		DownSQL:    m.DownSQL,
+		ExecutedBy: userID,
+	}, svc.opts)
+}
+
 func tableExists(t *testing.T, pool *pgxpool.Pool, name string) bool {
 	t.Helper()
 	var exists bool
@@ -217,13 +235,13 @@ func historyVersions(t *testing.T, pool *pgxpool.Pool) []int64 {
 	return versions
 }
 
-func TestIntegrationExecuteCommitsAndRecordsHistory(t *testing.T) {
+func TestIntegrationApplyCommitsAndRecordsHistory(t *testing.T) {
 	cfg, pool := newTarget(t, "CREATE TABLE customers (id int PRIMARY KEY)")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 	ctx := context.Background()
 
 	before := time.Now()
-	entry, err := svc.Execute(ctx, 42, 1, Migration{
+	entry, err := applyForTest(ctx, svc, 42, 1, Migration{
 		Name: "add phone",
 		SQL:  "ALTER TABLE customers ADD COLUMN phone_number text",
 	})
@@ -250,7 +268,7 @@ func TestIntegrationVersionsAreLinear(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 1; i <= 3; i++ {
-		entry, err := svc.Execute(ctx, 1, 1, Migration{
+		entry, err := applyForTest(ctx, svc, 1, 1, Migration{
 			Name: fmt.Sprintf("create t%d", i),
 			SQL:  fmt.Sprintf("CREATE TABLE t%d (id int)", i),
 		})
@@ -265,10 +283,10 @@ func TestIntegrationMultiStatementMigrationIsAtomic(t *testing.T) {
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 	ctx := context.Background()
 
-	_, err := svc.Execute(ctx, 1, 1, Migration{Name: "first", SQL: "CREATE TABLE kept (id int)"})
+	_, err := applyForTest(ctx, svc, 1, 1, Migration{Name: "first", SQL: "CREATE TABLE kept (id int)"})
 	require.NoError(t, err)
 
-	_, err = svc.Execute(ctx, 1, 1, Migration{
+	_, err = applyForTest(ctx, svc, 1, 1, Migration{
 		Name: "half broken",
 		SQL: `CREATE TABLE orders (id int);
 			ALTER TABLE customers ADD COLUMN email text;
@@ -286,7 +304,7 @@ func TestIntegrationMultiStatementMigrationIsAtomic(t *testing.T) {
 	require.True(t, tableExists(t, pool, "kept"), "a previous migration must not be affected")
 	require.Equal(t, []int64{1, 2}, historyVersions(t, pool), "the failed migration attempt must be recorded")
 
-	entry, err := svc.Execute(ctx, 1, 1, Migration{Name: "after failure", SQL: "CREATE TABLE next (id int)"})
+	entry, err := applyForTest(ctx, svc, 1, 1, Migration{Name: "after failure", SQL: "CREATE TABLE next (id int)"})
 	require.NoError(t, err)
 	require.Equal(t, int64(3), entry.Version, "a failed attempt must occupy a history version")
 }
@@ -295,7 +313,7 @@ func TestIntegrationFailedFirstMigrationCreatesHistoryEntry(t *testing.T) {
 	cfg, pool := newTarget(t, "")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 
-	_, err := svc.Execute(context.Background(), 1, 1, Migration{Name: "typo", SQL: "CREAT TABLE x (id int)"})
+	_, err := applyForTest(context.Background(), svc, 1, 1, Migration{Name: "typo", SQL: "CREAT TABLE x (id int)"})
 
 	var execErr *ExecutionError
 	require.ErrorAs(t, err, &execErr)
@@ -313,7 +331,7 @@ func TestIntegrationTransactionControlIsRejectedBeforeRunning(t *testing.T) {
 	cfg, pool := newTarget(t, "")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 
-	_, err := svc.Execute(context.Background(), 1, 1, Migration{
+	_, err := applyForTest(context.Background(), svc, 1, 1, Migration{
 		Name: "sneaky",
 		SQL:  "CREATE TABLE committed_early (id int); COMMIT; CREATE TABLE after (id int)",
 	})
@@ -333,16 +351,16 @@ func TestIntegrationConcurrentMigrationIsRejected(t *testing.T) {
 	_, err = holder.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", lockName)
 	require.NoError(t, err)
 
-	_, err = svc.Execute(ctx, 1, 1, Migration{Name: "blocked", SQL: "CREATE TABLE blocked (id int)"})
+	_, err = applyForTest(ctx, svc, 1, 1, Migration{Name: "blocked", SQL: "CREATE TABLE blocked (id int)"})
 	require.ErrorIs(t, err, ErrMigrationInProgress)
 	require.False(t, tableExists(t, pool, "blocked"))
 
 	require.NoError(t, holder.Rollback(ctx))
-	_, err = svc.Execute(ctx, 1, 1, Migration{Name: "unblocked", SQL: "CREATE TABLE unblocked (id int)"})
+	_, err = applyForTest(ctx, svc, 1, 1, Migration{Name: "unblocked", SQL: "CREATE TABLE unblocked (id int)"})
 	require.NoError(t, err)
 }
 
-func TestIntegrationSimultaneousExecuteOnlyOneWins(t *testing.T) {
+func TestIntegrationSimultaneousApplyOnlyOneWins(t *testing.T) {
 	cfg, pool := newTarget(t, "")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
 
@@ -351,7 +369,7 @@ func TestIntegrationSimultaneousExecuteOnlyOneWins(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := range callers {
 		wg.Go(func() {
-			_, errs[i] = svc.Execute(context.Background(), 1, 1, Migration{
+			_, errs[i] = applyForTest(context.Background(), svc, 1, 1, Migration{
 				Name: fmt.Sprintf("slow %d", i),
 				SQL:  fmt.Sprintf("SELECT pg_sleep(1); CREATE TABLE slow_%d (id int)", i),
 			})
@@ -377,7 +395,7 @@ func TestIntegrationTargetsAreIsolated(t *testing.T) {
 	svc := newIntegrationService(t, staticSource{1: cfgA, 2: cfgB}, Options{})
 	ctx := context.Background()
 
-	_, err := svc.Execute(ctx, 1, 1, Migration{Name: "only A", SQL: "CREATE TABLE only_a (id int)"})
+	_, err := applyForTest(ctx, svc, 1, 1, Migration{Name: "only A", SQL: "CREATE TABLE only_a (id int)"})
 	require.NoError(t, err)
 
 	require.True(t, tableExists(t, poolA, "only_a"))
@@ -390,7 +408,7 @@ func TestIntegrationTargetsAreIsolated(t *testing.T) {
 	_, err = holder.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", lockName)
 	require.NoError(t, err)
 
-	entry, err := svc.Execute(ctx, 1, 2, Migration{Name: "B while A is locked", SQL: "CREATE TABLE only_b (id int)"})
+	entry, err := applyForTest(ctx, svc, 1, 2, Migration{Name: "B while A is locked", SQL: "CREATE TABLE only_b (id int)"})
 	require.NoError(t, err, "a migration on one database must not block another")
 	require.Equal(t, int64(1), entry.Version)
 }
@@ -399,7 +417,7 @@ func TestIntegrationStatementTimeoutRollsBack(t *testing.T) {
 	cfg, pool := newTarget(t, "")
 	svc := newIntegrationService(t, staticSource{1: cfg}, Options{StatementTimeout: 300 * time.Millisecond})
 
-	_, err := svc.Execute(context.Background(), 1, 1, Migration{
+	_, err := applyForTest(context.Background(), svc, 1, 1, Migration{
 		Name: "too slow",
 		SQL:  "CREATE TABLE created_before_timeout (id int); SELECT pg_sleep(3)",
 	})
@@ -416,7 +434,7 @@ func TestIntegrationMigrationIsNotBoundByPoolStatementTimeout(t *testing.T) {
 		targetdb.Options{StatementTimeout: 200 * time.Millisecond},
 		Options{StatementTimeout: 10 * time.Second})
 
-	_, err := svc.Execute(context.Background(), 1, 1, Migration{
+	_, err := applyForTest(context.Background(), svc, 1, 1, Migration{
 		Name: "slower than the pool limit",
 		SQL:  "SELECT pg_sleep(1); CREATE TABLE survived (id int)",
 	})
@@ -437,7 +455,7 @@ func TestIntegrationLockTimeoutRollsBack(t *testing.T) {
 	require.NoError(t, err)
 
 	start := time.Now()
-	_, err = svc.Execute(ctx, 1, 1, Migration{Name: "waits", SQL: "ALTER TABLE busy ADD COLUMN c int"})
+	_, err = applyForTest(ctx, svc, 1, 1, Migration{Name: "waits", SQL: "ALTER TABLE busy ADD COLUMN c int"})
 
 	var execErr *ExecutionError
 	require.ErrorAs(t, err, &execErr)
@@ -445,25 +463,10 @@ func TestIntegrationLockTimeoutRollsBack(t *testing.T) {
 	require.Less(t, time.Since(start), 5*time.Second)
 }
 
-func TestIntegrationClientDisconnectDoesNotAbortMigration(t *testing.T) {
-	cfg, pool := newTarget(t, "")
-	svc := newIntegrationService(t, staticSource{1: cfg}, Options{})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	_, err := svc.Execute(ctx, 1, 1, Migration{
-		Name: "outlives the request",
-		SQL:  "SELECT pg_sleep(0.5); CREATE TABLE finished (id int)",
-	})
-
-	require.NoError(t, err)
-	require.True(t, tableExists(t, pool, "finished"))
-}
-
 func TestIntegrationUnknownDatabase(t *testing.T) {
 	svc := newIntegrationService(t, staticSource{}, Options{})
 
-	_, err := svc.Execute(context.Background(), 1, 99, Migration{Name: "x", SQL: "SELECT 1"})
+	_, err := applyForTest(context.Background(), svc, 1, 99, Migration{Name: "x", SQL: "SELECT 1"})
 
 	require.ErrorIs(t, err, targetdb.ErrUnknownDatabase)
 }
@@ -471,7 +474,7 @@ func TestIntegrationUnknownDatabase(t *testing.T) {
 func applyMigrations(t *testing.T, svc *MigrationService, dbID uint, count int) {
 	t.Helper()
 	for i := 1; i <= count; i++ {
-		_, err := svc.Execute(context.Background(), uint(10+i), dbID, Migration{
+		_, err := applyForTest(context.Background(), svc, uint(10+i), dbID, Migration{
 			Name: fmt.Sprintf("migration %d", i),
 			SQL:  fmt.Sprintf("CREATE TABLE h%d (id int)", i),
 		})
@@ -556,7 +559,7 @@ func TestIntegrationHistoryEntryDetail(t *testing.T) {
 	ctx := context.Background()
 
 	sql := "ALTER TABLE customers ADD COLUMN phone text;\nCREATE INDEX customers_phone_idx ON customers (phone);"
-	applied, err := svc.Execute(ctx, 42, 1, Migration{Name: "add phone", SQL: sql})
+	applied, err := applyForTest(ctx, svc, 42, 1, Migration{Name: "add phone", SQL: sql})
 	require.NoError(t, err)
 
 	entry, err := svc.HistoryEntry(ctx, 1, 1, applied.Version)
@@ -577,7 +580,7 @@ func TestIntegrationFailedMigrationIsInHistory(t *testing.T) {
 	ctx := context.Background()
 	applyMigrations(t, svc, 1, 1)
 
-	_, err := svc.Execute(ctx, 1, 1, Migration{Name: "broken", SQL: "ALTER TABLE nope ADD x int"})
+	_, err := applyForTest(ctx, svc, 1, 1, Migration{Name: "broken", SQL: "ALTER TABLE nope ADD x int"})
 	require.ErrorIs(t, err, ErrExecutionFailed)
 
 	page, err := svc.History(ctx, 1, 1, 1, 10)
@@ -592,7 +595,7 @@ func TestIntegrationFailedMigrationIsInHistory(t *testing.T) {
 	require.Equal(t, "42P01", failedEntry.ErrorCode)
 }
 
-func TestIntegrationViewOnlyCanReadHistoryButNotExecute(t *testing.T) {
+func TestIntegrationViewOnlyCanReadHistoryButNotChangeIt(t *testing.T) {
 	cfg, pool := newTarget(t, "")
 	ctx := context.Background()
 
@@ -610,7 +613,9 @@ func TestIntegrationViewOnlyCanReadHistoryButNotExecute(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "CREATE TABLE h1 (id int)", entry.SQL)
 
-	_, err = viewer.Execute(ctx, 5, 1, Migration{Name: "not allowed", SQL: "CREATE TABLE denied (id int)"})
+	_, err = viewer.CreateDraft(ctx, 5, 1, Migration{Name: "not allowed", SQL: "CREATE TABLE denied (id int)"})
+	require.ErrorIs(t, err, access.ErrInsufficientPermission)
+	_, err = viewer.SubmitRollbackForReview(ctx, 5, 1)
 	require.ErrorIs(t, err, access.ErrInsufficientPermission)
 	require.False(t, tableExists(t, pool, "denied"))
 	require.Equal(t, []int64{1, 2}, historyVersions(t, pool))

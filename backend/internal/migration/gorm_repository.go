@@ -78,64 +78,6 @@ func (r *GormRepository) UpdateDraft(ctx context.Context, d *Draft) error {
 	return nil
 }
 
-func (r *GormRepository) ClaimDraft(ctx context.Context, id uint, from DraftStatus) error {
-	result := r.db.WithContext(ctx).
-		Model(&Draft{}).
-		Where("id = ? AND status = ?", id, from).
-		Updates(map[string]any{"status": DraftStatusRunning, "updated_at": time.Now()})
-	if result.Error != nil {
-		return fmt.Errorf("claiming migration draft: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		if _, err := r.FindDraft(ctx, id); err != nil {
-			return err
-		}
-		return ErrDraftNotExecutable
-	}
-	return nil
-}
-
-func (r *GormRepository) ReleaseDraft(ctx context.Context, id uint, to DraftStatus) error {
-	err := r.db.WithContext(ctx).
-		Model(&Draft{}).
-		Where("id = ? AND status = ?", id, DraftStatusRunning).
-		Updates(map[string]any{"status": to, "updated_at": time.Now()}).Error
-	if err != nil {
-		return fmt.Errorf("releasing migration draft: %w", err)
-	}
-	return nil
-}
-
-func (r *GormRepository) RecordRun(ctx context.Context, run *Run, status DraftStatus, appliedVersion *int64) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(run).Error; err != nil {
-			return fmt.Errorf("creating migration run: %w", err)
-		}
-		result := tx.Model(&Draft{}).
-			Where("id = ? AND status = ?", run.DraftID, DraftStatusRunning).
-			Updates(map[string]any{
-				"status":          status,
-				"applied_version": appliedVersion,
-				"updated_at":      time.Now(),
-			})
-		if result.Error != nil {
-			return fmt.Errorf("finishing migration draft: %w", result.Error)
-		}
-		if result.RowsAffected == 0 {
-			return ErrDraftNotExecutable
-		}
-		return nil
-	})
-}
-
-func (r *GormRepository) ListRuns(ctx context.Context, draftID uint) ([]Run, error) {
-	list := []Run{}
-	if err := r.db.WithContext(ctx).Where("draft_id = ?", draftID).Order("id").Find(&list).Error; err != nil {
-		return nil, fmt.Errorf("listing migration runs: %w", err)
-	}
-	return list, nil
-}
-
 func isForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == sqlstateForeignKeyViolation

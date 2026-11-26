@@ -1517,31 +1517,6 @@ paths:
                   $ref: '#/components/schemas/MigrationExecution'
         '401':
           $ref: '#/components/responses/Unauthorized'
-  /migrations/drafts/{draftId}/runs:
-    parameters:
-      - $ref: '#/components/parameters/DraftId'
-    get:
-      operationId: listMigrationRuns
-      summary: List the runs of a draft, oldest first
-      tags:
-        - migrations
-      security:
-        - sessionCookie: []
-      responses:
-        '200':
-          description: Runs of the draft.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MigrationRun'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
 components:
   responses:
     BadRequest:
@@ -2381,48 +2356,3 @@ components:
         updated_at:
           type: string
           format: date-time
-    MigrationRun:
-      type: object
-      required:
-        - id
-        - draft_id
-        - database_id
-        - status
-        - sql
-        - executed_by
-        - started_at
-        - finished_at
-      properties:
-        id:
-          type: integer
-          format: int64
-        draft_id:
-          type: integer
-          format: int64
-        database_id:
-          type: integer
-          format: int64
-        status:
-          type: string
-          enum:
-            - success
-            - failed
-        version:
-          type: integer
-          format: int64
-          nullable: true
-        sql:
-          type: string
-        executed_by:
-          type: integer
-          format: int64
-        started_at:
-          type: string
-          format: date-time
-        finished_at:
-          type: string
-          format: date-time
-        error_code:
-          type: string
-        error_message:
-          type: string

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -71,42 +70,24 @@ func (e *draftEnv) service(t *testing.T, authz Authorizer) *MigrationService {
 	return svc
 }
 
-func TestIntegrationRecordRunRollsBackWhenDraftIsNotRunning(t *testing.T) {
-	env := newDraftEnv(t, "SELECT 1")
+func runDraftThroughWorker(t *testing.T, env *draftEnv, svc *MigrationService, leaderID, submitterID, draftID uint) *Execution {
+	t.Helper()
 	ctx := context.Background()
-	draft := &Draft{
-		ManagedDatabaseID: env.dbID,
-		Name:              "draft",
-		SQL:               "SELECT 1",
-		Status:            DraftStatusDraft,
-		CreatedBy:         1,
-		UpdatedBy:         1,
-	}
-	require.NoError(t, env.repo.CreateDraft(ctx, draft))
-	require.NoError(t, env.repo.ClaimDraft(ctx, draft.ID, DraftStatusDraft))
-	require.NoError(t, env.repo.ReleaseDraft(ctx, draft.ID, DraftStatusFailed))
-
-	now := time.Now()
-	run := &Run{
-		DraftID:           draft.ID,
-		ManagedDatabaseID: env.dbID,
-		Status:            RunStatusFailed,
-		SQL:               "SELECT 1",
-		ExecutedBy:        1,
-		StartedAt:         now,
-		FinishedAt:        now,
-	}
-	err := env.repo.RecordRun(ctx, run, DraftStatusFailed, nil)
-
-	require.ErrorIs(t, err, ErrDraftNotExecutable)
-	runs, err := env.repo.ListRuns(ctx, draft.ID)
+	submitted, err := svc.SubmitDraftForReview(ctx, submitterID, draftID)
 	require.NoError(t, err)
-	require.Empty(t, runs, "the transaction must roll back the orphan run")
+	approveAndQueue(t, svc, leaderID, submitted.ID)
+	worker, err := NewExecutionWorker(svc, env.repo)
+	require.NoError(t, err)
+	require.NoError(t, worker.RunExecution(ctx, submitted.ID))
+	execution, err := svc.Execution(ctx, submitterID, submitted.ID)
+	require.NoError(t, err)
+	return execution
 }
 
 func TestIntegrationDraftLifecycle(t *testing.T) {
 	env := newDraftEnv(t, "CREATE TABLE customers (id int PRIMARY KEY)")
 	svc := env.service(t, stubAuthorizer{})
+	leaderID := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
 	ctx := context.Background()
 
 	d, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{
@@ -117,13 +98,11 @@ func TestIntegrationDraftLifecycle(t *testing.T) {
 	require.Equal(t, DraftStatusDraft, d.Status)
 	require.False(t, columnExists(t, env.target, "customers", "phone_number"), "saving a draft must not run it")
 
-	run, err := svc.ExecuteDraft(ctx, 42, d.ID)
-	require.NoError(t, err)
-	require.Equal(t, RunStatusSuccess, run.Status)
-	require.NotNil(t, run.Version)
-	require.Equal(t, int64(1), *run.Version)
-	require.Equal(t, uint(42), run.ExecutedBy)
-	require.False(t, run.FinishedAt.Before(run.StartedAt))
+	execution := runDraftThroughWorker(t, env, svc, leaderID, 42, d.ID)
+	require.Equal(t, ExecutionStatusSuccess, execution.Status)
+	require.NotNil(t, execution.Version)
+	require.Equal(t, int64(1), *execution.Version)
+	require.Equal(t, uint(42), execution.ExecutedBy)
 	require.True(t, columnExists(t, env.target, "customers", "phone_number"))
 	require.Equal(t, []int64{1}, historyVersions(t, env.target))
 
@@ -133,14 +112,9 @@ func TestIntegrationDraftLifecycle(t *testing.T) {
 	require.NotNil(t, stored.AppliedVersion)
 	require.Equal(t, int64(1), *stored.AppliedVersion)
 
-	runs, err := svc.ListRuns(ctx, 1, d.ID)
-	require.NoError(t, err)
-	require.Len(t, runs, 1)
-	require.Equal(t, run.ID, runs[0].ID)
-
 	_, err = svc.UpdateDraft(ctx, 42, d.ID, Migration{Name: "changed", SQL: "SELECT 1"})
 	require.ErrorIs(t, err, ErrDraftNotEditable, "an applied draft is history and must not change")
-	_, err = svc.ExecuteDraft(ctx, 42, d.ID)
+	_, err = svc.SubmitDraftForReview(ctx, 42, d.ID)
 	require.ErrorIs(t, err, ErrDraftNotExecutable, "an applied draft must not run twice")
 	require.Equal(t, []int64{1}, historyVersions(t, env.target))
 }
@@ -148,16 +122,15 @@ func TestIntegrationDraftLifecycle(t *testing.T) {
 func TestIntegrationFailedDraftCanBeFixedAndRetried(t *testing.T) {
 	env := newDraftEnv(t, "CREATE TABLE customers (id int PRIMARY KEY)")
 	svc := env.service(t, stubAuthorizer{})
+	leaderID := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
 	ctx := context.Background()
 
 	brokenSQL := "ALTER TABLE customer ADD COLUMN email text"
 	d, err := svc.CreateDraft(ctx, 1, env.dbID, Migration{Name: "add email", SQL: brokenSQL})
 	require.NoError(t, err)
 
-	failed, err := svc.ExecuteDraft(ctx, 1, d.ID)
-	require.ErrorIs(t, err, ErrExecutionFailed)
-	require.NotNil(t, failed, "the failed run must be returned with the error")
-	require.Equal(t, RunStatusFailed, failed.Status)
+	failed := runDraftThroughWorker(t, env, svc, leaderID, 1, d.ID)
+	require.Equal(t, ExecutionStatusFailed, failed.Status)
 	require.Equal(t, "42P01", failed.ErrorCode)
 	require.Contains(t, failed.ErrorMessage, `"customer"`)
 	require.Nil(t, failed.Version)
@@ -172,23 +145,24 @@ func TestIntegrationFailedDraftCanBeFixedAndRetried(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, DraftStatusDraft, reopened.Status)
 
-	succeeded, err := svc.ExecuteDraft(ctx, 1, d.ID)
-	require.NoError(t, err)
+	succeeded := runDraftThroughWorker(t, env, svc, leaderID, 1, d.ID)
+	require.Equal(t, ExecutionStatusSuccess, succeeded.Status)
 	require.Equal(t, int64(2), *succeeded.Version, "the failed attempt must occupy a target history version")
 	require.True(t, columnExists(t, env.target, "customers", "email"))
 
-	runs, err := svc.ListRuns(ctx, 1, d.ID)
+	executions, err := svc.Executions(ctx, 1, env.dbID)
 	require.NoError(t, err)
-	require.Len(t, runs, 2)
-	require.Equal(t, RunStatusFailed, runs[0].Status)
-	require.Equal(t, brokenSQL, runs[0].SQL, "a run keeps the SQL it actually executed")
-	require.Equal(t, RunStatusSuccess, runs[1].Status)
-	require.Equal(t, fixedSQL, runs[1].SQL)
+	require.Len(t, executions, 2)
+	require.Equal(t, ExecutionStatusSuccess, executions[0].Status)
+	require.Equal(t, fixedSQL, executions[0].SQL)
+	require.Equal(t, ExecutionStatusFailed, executions[1].Status)
+	require.Equal(t, brokenSQL, executions[1].SQL, "an execution keeps the SQL it actually ran")
 }
 
 func TestIntegrationDraftRunsOnlyOnceUnderConcurrency(t *testing.T) {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})
+	leaderID := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
 	ctx := context.Background()
 
 	d, err := svc.CreateDraft(ctx, 1, env.dbID, Migration{
@@ -198,31 +172,45 @@ func TestIntegrationDraftRunsOnlyOnceUnderConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	const callers = 5
-	runs := make([]*Run, callers)
+	submitted := make([]*Execution, callers)
 	errs := make([]error, callers)
 	var wg sync.WaitGroup
 	for i := range callers {
 		wg.Go(func() {
-			runs[i], errs[i] = svc.ExecuteDraft(ctx, 1, d.ID)
+			submitted[i], errs[i] = svc.SubmitDraftForReview(ctx, 1, d.ID)
 		})
 	}
 	wg.Wait()
 
-	succeeded := 0
+	var execution *Execution
 	for i := range callers {
 		if errs[i] == nil {
-			succeeded++
-			require.Equal(t, RunStatusSuccess, runs[i].Status)
+			require.Nil(t, execution, "only one submission may succeed")
+			execution = submitted[i]
 			continue
 		}
 		require.ErrorIs(t, errs[i], ErrDraftNotExecutable)
 	}
-	require.Equal(t, 1, succeeded)
-	require.Equal(t, []int64{1}, historyVersions(t, env.target))
+	require.NotNil(t, execution)
+	approveAndQueue(t, svc, leaderID, execution.ID)
 
-	recorded, err := svc.ListRuns(ctx, 1, d.ID)
+	worker, err := NewExecutionWorker(svc, env.repo)
 	require.NoError(t, err)
-	require.Len(t, recorded, 1)
+	for i := range callers {
+		wg.Go(func() {
+			errs[i] = worker.RunExecution(ctx, execution.ID)
+		})
+	}
+	wg.Wait()
+	for i := range callers {
+		require.NoError(t, errs[i])
+	}
+
+	require.Equal(t, []int64{1}, historyVersions(t, env.target), "duplicate deliveries must not commit twice")
+	finished, err := svc.Execution(ctx, 1, execution.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusSuccess, finished.Status)
+	require.Equal(t, 1, finished.Attempt)
 }
 
 func TestIntegrationViewOnlyCanReadDraftsButNotChangeThem(t *testing.T) {
@@ -241,14 +229,12 @@ func TestIntegrationViewOnlyCanReadDraftsButNotChangeThem(t *testing.T) {
 	list, err := viewer.ListDrafts(ctx, 5, env.dbID)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
-	_, err = viewer.ListRuns(ctx, 5, d.ID)
-	require.NoError(t, err)
 
 	_, err = viewer.CreateDraft(ctx, 5, env.dbID, Migration{Name: "x", SQL: "SELECT 1"})
 	require.ErrorIs(t, err, access.ErrInsufficientPermission)
 	_, err = viewer.UpdateDraft(ctx, 5, d.ID, Migration{Name: "x", SQL: "DROP TABLE t"})
 	require.ErrorIs(t, err, access.ErrInsufficientPermission)
-	_, err = viewer.ExecuteDraft(ctx, 5, d.ID)
+	_, err = viewer.SubmitDraftForReview(ctx, 5, d.ID)
 	require.ErrorIs(t, err, access.ErrInsufficientPermission)
 
 	require.False(t, tableExists(t, env.target, "t"))
@@ -258,25 +244,31 @@ func TestIntegrationViewOnlyCanReadDraftsButNotChangeThem(t *testing.T) {
 	require.Equal(t, "CREATE TABLE t (id int)", unchanged.SQL)
 }
 
-func TestIntegrationUnreachableTargetLeavesDraftUntouched(t *testing.T) {
+func TestIntegrationUnreachableTargetFailsExecutionWithoutStrandingDraft(t *testing.T) {
 	env := newDraftEnv(t, "")
+	svc := env.service(t, stubAuthorizer{})
+	leaderID := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
 	ctx := context.Background()
 
-	svc := env.service(t, stubAuthorizer{})
 	d, err := svc.CreateDraft(ctx, 1, env.dbID, Migration{Name: "create t", SQL: "CREATE TABLE t (id int)"})
 	require.NoError(t, err)
+	submitted, err := svc.SubmitDraftForReview(ctx, 1, d.ID)
+	require.NoError(t, err)
+	approveAndQueue(t, svc, leaderID, submitted.ID)
 
 	env.targets = staticSource{}
 	disconnected := env.service(t, stubAuthorizer{})
-	_, err = disconnected.ExecuteDraft(ctx, 1, d.ID)
-	require.ErrorIs(t, err, targetdb.ErrUnknownDatabase)
+	worker, err := NewExecutionWorker(disconnected, env.repo)
+	require.NoError(t, err)
+	require.NoError(t, worker.RunExecution(ctx, submitted.ID))
 
+	execution, err := svc.Execution(ctx, 1, submitted.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusFailed, execution.Status)
 	stored, err := svc.GetDraft(ctx, 1, d.ID)
 	require.NoError(t, err)
-	require.Equal(t, DraftStatusDraft, stored.Status, "the draft must not be stuck in running")
-	runs, err := svc.ListRuns(ctx, 1, d.ID)
-	require.NoError(t, err)
-	require.Empty(t, runs)
+	require.Equal(t, DraftStatusFailed, stored.Status, "the draft must not be stuck in running")
+	require.False(t, tableExists(t, env.target, "t"))
 }
 
 func TestIntegrationDraftForUnknownDatabase(t *testing.T) {
@@ -288,26 +280,22 @@ func TestIntegrationDraftForUnknownDatabase(t *testing.T) {
 	require.ErrorIs(t, err, manageddb.ErrNotFound)
 }
 
-func TestIntegrationDraftsAndRunsCascadeWithManagedDatabase(t *testing.T) {
+func TestIntegrationDraftsCascadeWithManagedDatabase(t *testing.T) {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})
 	ctx := context.Background()
 
 	for i := 1; i <= 2; i++ {
-		d, err := svc.CreateDraft(ctx, 1, env.dbID, Migration{
+		_, err := svc.CreateDraft(ctx, 1, env.dbID, Migration{
 			Name: fmt.Sprintf("create t%d", i),
 			SQL:  fmt.Sprintf("CREATE TABLE t%d (id int)", i),
 		})
-		require.NoError(t, err)
-		_, err = svc.ExecuteDraft(ctx, 1, d.ID)
 		require.NoError(t, err)
 	}
 
 	require.NoError(t, env.platform.Delete(&manageddb.ManagedDatabase{}, env.dbID).Error)
 
-	var drafts, runs int64
+	var drafts int64
 	require.NoError(t, env.platform.Model(&Draft{}).Count(&drafts).Error)
-	require.NoError(t, env.platform.Model(&Run{}).Count(&runs).Error)
 	require.Zero(t, drafts)
-	require.Zero(t, runs)
 }

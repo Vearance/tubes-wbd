@@ -82,18 +82,6 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 	return nil
 }
 
-func apply(ctx context.Context, pool *pgxpool.Pool, m Migration, userID uint, opts Options) (*HistoryEntry, error) {
-	return applyExecution(ctx, pool, &Execution{
-		Type:               ExecutionTypeUp,
-		Name:               m.Name,
-		SQL:                m.SQL,
-		DownSQL:            m.DownSQL,
-		Irreversible:       m.Irreversible,
-		IrreversibleReason: m.IrreversibleReason,
-		ExecutedBy:         userID,
-	}, opts)
-}
-
 func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Execution, opts Options) (*HistoryEntry, error) {
 	attemptStartedAt := time.Now()
 	if err := ensureHistorySchema(ctx, pool, true); err != nil {

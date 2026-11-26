@@ -96,29 +96,6 @@ func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, 
 	}, nil
 }
 
-// Execute runs SQL directly without a draft, so no run is recorded in the
-// Platform DB. User-facing flows should use ExecuteDraft.
-func (s *MigrationService) Execute(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
-	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
-		return nil, err
-	}
-	m, err := validate(m)
-	if err != nil {
-		return nil, err
-	}
-	return s.run(context.WithoutCancel(ctx), userID, dbID, m)
-}
-
-// run expects ctx to be detached from the request: a client that disconnects
-// must not cut a migration short; the statement timeout bounds it instead.
-func (s *MigrationService) run(ctx context.Context, userID, dbID uint, m Migration) (*HistoryEntry, error) {
-	pool, err := s.pools.Pool(ctx, dbID)
-	if err != nil {
-		return nil, err
-	}
-	return apply(ctx, pool, m, userID, s.opts)
-}
-
 func (s *MigrationService) runExecution(ctx context.Context, execution *Execution) (*HistoryEntry, error) {
 	pool, closePool, err := s.executionPool(ctx, execution)
 	if err != nil {

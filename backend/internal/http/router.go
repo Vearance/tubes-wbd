@@ -99,7 +99,6 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router.Post("/migrations/executions/{executionId}/reject", protectedWrapper.RejectMigrationExecution)
 	router.Post("/migrations/executions/{executionId}/enqueue", protectedWrapper.EnqueueMigrationExecution)
 	router.Get("/migrations/approvals/pending", protectedWrapper.ListPendingMigrationApprovals)
-	router.Get("/migrations/drafts/{draftId}/runs", protectedWrapper.ListMigrationRuns)
 
 	return router
 }

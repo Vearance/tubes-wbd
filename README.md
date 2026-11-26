@@ -116,7 +116,6 @@ None < View Only < View + Edit
 - `POST /migrations/executions/{executionId}/reject` rejects as a group leader. The body `{"note": "..."}` is required.
 - `POST /migrations/executions/{executionId}/enqueue` queues an approved execution for the worker. Requires View + Edit.
 - `GET /migrations/approvals/pending` lists executions waiting for the current user's decision.
-- `GET /migrations/drafts/{draftId}/runs` lists execution runs.
 
 ## migration approval workflow
 

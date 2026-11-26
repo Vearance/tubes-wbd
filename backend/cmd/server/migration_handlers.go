@@ -307,25 +307,6 @@ func (s apiServer) GetMigrationExecution(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, executionResponse(execution))
 }
 
-func (s apiServer) ListMigrationRuns(w http.ResponseWriter, r *http.Request, draftID httpapi.DraftId) {
-	userID, id, ok := draftIDs(w, r, draftID)
-	if !ok {
-		return
-	}
-
-	runs, err := s.migrations.ListRuns(r.Context(), userID, id)
-	if err != nil {
-		writeServiceError(w, err, "listing migration runs")
-		return
-	}
-
-	response := make([]httpapi.MigrationRun, 0, len(runs))
-	for index := range runs {
-		response = append(response, runResponse(&runs[index]))
-	}
-	writeJSON(w, http.StatusOK, response)
-}
-
 func draftIDs(w http.ResponseWriter, r *http.Request, draftID httpapi.DraftId) (uint, uint, bool) {
 	userID, ok := currentUserID(w, r)
 	if !ok {
@@ -451,25 +432,4 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &value
-}
-
-func runResponse(run *migration.Run) httpapi.MigrationRun {
-	response := httpapi.MigrationRun{
-		Id:         int64(run.ID),
-		DraftId:    int64(run.DraftID),
-		DatabaseId: int64(run.ManagedDatabaseID),
-		Status:     httpapi.MigrationRunStatus(run.Status),
-		Version:    run.Version,
-		Sql:        run.SQL,
-		ExecutedBy: int64(run.ExecutedBy),
-		StartedAt:  run.StartedAt,
-		FinishedAt: run.FinishedAt,
-	}
-	if run.ErrorCode != "" {
-		response.ErrorCode = &run.ErrorCode
-	}
-	if run.ErrorMessage != "" {
-		response.ErrorMessage = &run.ErrorMessage
-	}
-	return response
 }

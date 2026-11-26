@@ -22,7 +22,6 @@ type fakeGroup struct {
 type fakeRepo struct {
 	mu         sync.Mutex
 	drafts     map[uint]Draft
-	runs       []Run
 	executions map[uint]Execution
 	groups     map[uint]*fakeGroup
 	approvals  map[uint][]ExecutionApproval
@@ -134,43 +133,6 @@ func (r *fakeRepo) UpdateDraft(_ context.Context, d *Draft) error {
 	stored.Irreversible, stored.IrreversibleReason = d.Irreversible, d.IrreversibleReason
 	stored.UpdatedBy, stored.Status = d.UpdatedBy, d.Status
 	r.drafts[d.ID] = stored
-	return nil
-}
-
-func (r *fakeRepo) ClaimDraft(_ context.Context, id uint, from DraftStatus) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	d, ok := r.drafts[id]
-	if !ok {
-		return ErrDraftNotFound
-	}
-	if d.Status != from {
-		return ErrDraftNotExecutable
-	}
-	d.Status = DraftStatusRunning
-	r.drafts[id] = d
-	return nil
-}
-
-func (r *fakeRepo) ReleaseDraft(_ context.Context, id uint, to DraftStatus) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if d, ok := r.drafts[id]; ok && d.Status == DraftStatusRunning {
-		d.Status = to
-		r.drafts[id] = d
-	}
-	return nil
-}
-
-func (r *fakeRepo) RecordRun(_ context.Context, run *Run, status DraftStatus, appliedVersion *int64) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	run.ID = uint(len(r.runs) + 1)
-	r.runs = append(r.runs, *run)
-	if d, ok := r.drafts[run.DraftID]; ok && d.Status == DraftStatusRunning {
-		d.Status, d.AppliedVersion = status, appliedVersion
-		r.drafts[run.DraftID] = d
-	}
 	return nil
 }
 
@@ -501,18 +463,6 @@ func (r *fakeRepo) ListExecutions(_ context.Context, dbID uint) ([]Execution, er
 	for _, execution := range r.executions {
 		if execution.ManagedDatabaseID == dbID {
 			list = append(list, execution)
-		}
-	}
-	return list, nil
-}
-
-func (r *fakeRepo) ListRuns(_ context.Context, draftID uint) ([]Run, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	list := []Run{}
-	for _, run := range r.runs {
-		if run.DraftID == draftID {
-			list = append(list, run)
 		}
 	}
 	return list, nil

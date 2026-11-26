@@ -10,5 +10,5 @@ func AutoMigrate(db *gorm.DB) error {
 	if db == nil {
 		return errors.New("migration schema: db is nil")
 	}
-	return db.AutoMigrate(&Draft{}, &Run{}, &Execution{}, &ExecutionAttempt{}, &ExecutionOutbox{}, &ExecutionApproval{})
+	return db.AutoMigrate(&Draft{}, &Execution{}, &ExecutionAttempt{}, &ExecutionOutbox{}, &ExecutionApproval{})
 }
