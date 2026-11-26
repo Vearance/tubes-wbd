@@ -1,0 +1,99 @@
+groups:
+  - name: bscheme-observability
+    rules:
+      - alert: BSchemeTargetDown
+        expr: up{job=~"bscheme-api|bscheme-worker|rabbitmq|otel-collector"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }}) for more than 1 minute."
+
+      - alert: BSchemeHighHTTP5xxRate
+        expr: |
+          (
+            sum(rate(bscheme_http_requests_total{status_class="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(bscheme_http_requests_total[5m])), 0.001)
+          ) > 0.05
+          and sum(rate(bscheme_http_requests_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate on bscheme-api"
+          description: "More than 5% of API requests are failing with HTTP 5xx over the last 5 minutes."
+
+      - alert: BSchemeMigrationFailures
+        expr: sum(increase(bscheme_migration_executions_total{status=~"failed|partial"}[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Migration executions failed or completed partially"
+          description: "One or more migration executions ended in failed or partial state in the last 15 minutes."
+
+      - alert: BSchemeMigrationQueueWaitHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, type) (rate(bscheme_migration_queue_wait_duration_seconds_bucket[5m]))
+          ) > 30
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Migration queue wait latency p95 above 30s"
+          description: "Queued migration jobs ({{ $labels.type }}) are waiting longer than 30s before being claimed by a worker."
+
+      - alert: BSchemeMigrationLockWaitHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, lock_scope) (rate(bscheme_migration_lock_wait_duration_seconds_bucket[5m]))
+          ) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Target database migration lock wait p95 above 10s"
+          description: "Acquiring {{ $labels.lock_scope }} migration locks on target databases is taking longer than 10s (p95)."
+
+      - alert: BSchemeOutboxBacklog
+        expr: max(bscheme_migration_outbox_pending) > 25
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Migration outbox backlog growing"
+          description: "More than 25 unpublished migration outbox records are waiting in Platform DB."
+
+      - alert: BSchemeDBPoolSaturation
+        expr: |
+          (
+            bscheme_db_pool_connections{db_role="platform",state="active"}
+            / ignoring(state)
+            (bscheme_db_pool_connections{db_role="platform",state="max_open"} > 0)
+          ) > 0.85
+          or
+          (
+            bscheme_db_pool_connections{db_role="target",state="active"}
+            / ignoring(state)
+            (bscheme_db_pool_connections{db_role="target",state="max_conns"} > 0)
+          ) > 0.85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool utilization above 85%"
+          description: "{{ $labels.job }} {{ $labels.db_role }} connection pool is above 85% saturation."
+
+      - alert: BSchemeDBPoolWaitHigh
+        expr: sum by (job, db_role) (rate(bscheme_db_pool_wait_duration_seconds_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool wait time elevated"
+          description: "{{ $labels.job }} is spending more than 100ms/s waiting for {{ $labels.db_role }} connections."

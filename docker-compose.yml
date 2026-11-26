@@ -27,6 +27,12 @@ services:
       APP_PING_TIMEOUT: ${APP_PING_TIMEOUT:-5s}
       APP_SHUTDOWN_TIMEOUT: ${APP_SHUTDOWN_TIMEOUT:-10s}
       TARGET_DB_ENCRYPTION_KEY: ${TARGET_DB_ENCRYPTION_KEY}
+      OTEL_SERVICE_NAME: bscheme-api
+      OTEL_SERVICE_VERSION: ${APP_VERSION:-dev}
+      OTEL_ENVIRONMENT: ${APP_ENV:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
     ports:
       - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     depends_on:
@@ -47,6 +53,17 @@ services:
       APP_RABBITMQ_URL: ${APP_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
       APP_RABBITMQ_QUEUE: ${APP_RABBITMQ_QUEUE:-migration.executions}
       TARGET_DB_ENCRYPTION_KEY: ${TARGET_DB_ENCRYPTION_KEY}
+      APP_MAX_OPEN_CONNS: ${APP_MAX_OPEN_CONNS:-10}
+      APP_MAX_IDLE_CONNS: ${APP_MAX_IDLE_CONNS:-5}
+      APP_METRICS_ADDR: ${WORKER_METRICS_ADDR:-:9091}
+      OTEL_SERVICE_NAME: bscheme-worker
+      OTEL_SERVICE_VERSION: ${APP_VERSION:-dev}
+      OTEL_ENVIRONMENT: ${APP_ENV:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
+    ports:
+      - "${WORKER_METRICS_PORT:-9091}:9091"
     depends_on:
       platform-db:
         condition: service_healthy
@@ -75,6 +92,7 @@ services:
     ports:
       - "${RABBITMQ_HOST_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "${RABBITMQ_PROMETHEUS_PORT:-15692}:15692"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -116,7 +134,76 @@ services:
       timeout: 5s
       retries: 5
 
+  loki:
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./observability/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+    depends_on:
+      - loki
+      - tempo
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
 volumes:
   rabbitmq-data:
   platform-db-data:
   test-db-data:
+  loki-data:
+  tempo-data:
+  prometheus-data:
+  grafana-data:
