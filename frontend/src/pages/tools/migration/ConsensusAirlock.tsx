@@ -22,7 +22,10 @@ export type AirlockFilter =
   | 'queue_running'
   | 'completed'
 
-function statusMeta(status: MigrationExecution['status']) {
+function statusMeta(
+  status: MigrationExecution['status'],
+  type: MigrationExecution['type'],
+) {
   switch (status) {
     case 'pending_review':
       return { label: 'Pending Review', tone: 'amber' as const }
@@ -39,7 +42,10 @@ function statusMeta(status: MigrationExecution['status']) {
     case 'rejected':
       return { label: 'Rejected', tone: 'red' as const }
     case 'partial':
-      return { label: 'Partial', tone: 'amber' as const }
+      return {
+        label: type === 'rollback' ? 'Partially Reverted' : 'Partially Applied',
+        tone: 'amber' as const,
+      }
     case 'compensation_pending':
       return { label: 'Compensation Pending Review', tone: 'amber' as const }
     case 'compensating':
@@ -217,13 +223,15 @@ function ExecutionAirlockCard({
     }
   }
 
-  async function handleEnqueue() {
+  async function handleEnqueue(resumingPartial = false) {
     setActionBusy(true)
     setActionError('')
     try {
       await api.enqueueExecution(execution.id)
       await onMutated(
-        `Execution #${execution.id} released to the RabbitMQ worker queue.`,
+        resumingPartial
+          ? `Execution #${execution.id} resumed from its saved batch checkpoint.`
+          : `Execution #${execution.id} released to the RabbitMQ worker queue.`,
       )
     } catch (err) {
       setActionError(
@@ -251,7 +259,7 @@ function ExecutionAirlockCard({
     }
   }
 
-  const meta = statusMeta(execution.status)
+  const meta = statusMeta(execution.status, execution.type)
   const approvedCount =
     summary?.approvals.filter((a) => a.decision === 'approved').length ?? 0
   const totalCount = summary?.approvals.length ?? 0
@@ -521,7 +529,29 @@ function ExecutionAirlockCard({
                   )}
                 </div>
               </div>
-              {canEdit && execution.status === 'partial' && execution.type === 'up' && execution.batch && (
+              {canEdit && execution.status === 'partial' && execution.batch && (
+                <ConfirmAction
+                  title={`Resume partial execution #${execution.id}?`}
+                  description="Continues from the saved batch checkpoint; batches that already completed will not run again."
+                  confirmLabel={
+                    execution.compensation ? 'Resume Compensation' : 'Resume Execution'
+                  }
+                  tone="primary"
+                  onConfirm={() => handleEnqueue(true)}
+                  trigger={
+                    <Button variant="dark" size="sm" loading={actionBusy}>
+                      <Icon name="play" className="size-3.5" />
+                      {execution.compensation
+                        ? 'Resume Compensation'
+                        : 'Resume Partial Execution'}
+                    </Button>
+                  }
+                />
+              )}
+              {canEdit &&
+                execution.status === 'partial' &&
+                execution.type === 'up' &&
+                execution.batch && (
                 <ConfirmAction
                   title={`Compensate partial execution #${execution.id}?`}
                   description="Creates a new rollback execution using Down SQL for committed batches only, in reverse order. It must receive the same group approvals before it can run."
@@ -574,6 +604,7 @@ export function ConsensusAirlock({
       (e) =>
         e.status === 'queued' ||
         e.status === 'running' ||
+        e.status === 'partial' ||
         e.status === 'compensating',
     ).length,
     completed: executions.filter(
@@ -581,7 +612,6 @@ export function ConsensusAirlock({
         e.status === 'success' ||
         e.status === 'failed' ||
         e.status === 'rejected' ||
-        e.status === 'partial' ||
         e.status === 'compensated',
     ).length,
   }
@@ -596,6 +626,7 @@ export function ConsensusAirlock({
       return (
         e.status === 'queued' ||
         e.status === 'running' ||
+        e.status === 'partial' ||
         e.status === 'compensating'
       )
     }
@@ -603,7 +634,6 @@ export function ConsensusAirlock({
       e.status === 'success' ||
       e.status === 'failed' ||
       e.status === 'rejected' ||
-      e.status === 'partial' ||
       e.status === 'compensated'
     )
   })
@@ -615,7 +645,10 @@ export function ConsensusAirlock({
       label: `Awaiting Sign-off (${counts.pending_review})`,
     },
     { key: 'approved', label: `Ready to Queue (${counts.approved})` },
-    { key: 'queue_running', label: `Queue / Running (${counts.queue_running})` },
+    {
+      key: 'queue_running',
+      label: `Queue / Running / Partial (${counts.queue_running})`,
+    },
     { key: 'completed', label: `Completed / Rejected (${counts.completed})` },
   ]
 
