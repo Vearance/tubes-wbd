@@ -52,6 +52,7 @@
         },
         "overrides": []
       },
+      "description": "Total HTTP requests over the selected time range.",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
       "id": 2,
       "options": {
@@ -62,7 +63,7 @@
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "title": "Total Requests ($__range)",
+      "title": "Total Requests",
       "type": "stat",
       "targets": [
         {
@@ -77,6 +78,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Share of 5xx responses over the selected time range.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -97,7 +99,7 @@
       "id": 3,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
@@ -108,14 +110,17 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "(sum(rate(bscheme_http_requests_total{route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) / clamp_min(sum(rate(bscheme_http_requests_total{route=~\"$route\"}[$__rate_interval])), 1e-9)) or vector(0)",
+          "expr": "(sum(increase(bscheme_http_requests_total{route=~\"$route\",status_class=\"5xx\"}[$__range])) / clamp_min(sum(increase(bscheme_http_requests_total{route=~\"$route\"}[$__range])), 1e-9)) or vector(0)",
+          "instant": true,
           "legendFormat": "5xx_rate",
+          "range": false,
           "refId": "A"
         }
       ]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Overall p95 HTTP latency over the selected time range.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -135,7 +140,7 @@
       "id": 4,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
@@ -146,14 +151,17 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(bscheme_http_request_duration_seconds_bucket{route=~\"$route\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (increase(bscheme_http_request_duration_seconds_bucket{route=~\"$route\"}[$__range])))",
+          "instant": true,
           "legendFormat": "p95",
+          "range": false,
           "refId": "A"
         }
       ]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Non-successful authentication attempts over the selected time range.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -180,7 +188,7 @@
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "title": "Failed Logins ($__range)",
+      "title": "Failed Logins",
       "type": "stat",
       "targets": [
         {
@@ -293,6 +301,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Top 10 API routes by request count over the selected time range.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "continuous-BlPu" },
@@ -319,7 +328,7 @@
         "showUnfilled": true,
         "valueMode": "color"
       },
-      "title": "Top Routes by Requests ($__range)",
+      "title": "Top Routes by Requests",
       "type": "bargauge",
       "targets": [
         {
@@ -334,6 +343,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Top 10 slowest API routes (p95 latency) over the selected time range.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -361,7 +371,7 @@
         "showUnfilled": true,
         "valueMode": "color"
       },
-      "title": "Slowest Routes — p95 Latency ($__range)",
+      "title": "Slowest Routes — p95 Latency",
       "type": "bargauge",
       "targets": [
         {
@@ -383,16 +393,18 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Login outcomes over the selected time range.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 75,
-            "lineWidth": 1,
-            "stacking": { "group": "A", "mode": "normal" }
-          },
           "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
           "unit": "short"
         },
         "overrides": [
@@ -425,32 +437,41 @@
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
       "id": 12,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "valueMode": "color"
       },
-      "title": "Auth Login Outcomes (5m count)",
-      "type": "timeseries",
+      "title": "Auth Login Outcomes",
+      "type": "bargauge",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "round(sum by (outcome) (increase(bscheme_auth_logins_total[5m])))",
+          "expr": "round(sum by (outcome) (increase(bscheme_auth_logins_total[$__range])))",
+          "instant": true,
           "legendFormat": "{{outcome}}",
+          "range": false,
           "refId": "A"
         }
       ]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Viewer operations by action and status over the selected time range.",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 75,
-            "lineWidth": 1,
-            "stacking": { "group": "A", "mode": "normal" }
-          },
+          "color": { "mode": "continuous-BlPu" },
           "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
           "unit": "short"
         },
         "overrides": []
@@ -458,16 +479,23 @@
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
       "id": 13,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "valueMode": "color"
       },
-      "title": "Viewer Operations (5m count)",
-      "type": "timeseries",
+      "title": "Viewer Operations",
+      "type": "bargauge",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "round(sum by (operation, status) (increase(bscheme_viewer_operations_total[5m])))",
+          "expr": "round(sum by (operation, status) (increase(bscheme_viewer_operations_total[$__range]))) > 0",
+          "instant": true,
           "legendFormat": "{{operation}} ({{status}})",
+          "range": false,
           "refId": "A"
         }
       ]
@@ -583,10 +611,10 @@
       }
     ]
   },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "BScheme — API, Auth, Viewer & Runtime Overview",
   "uid": "bscheme-overview",
-  "version": 2
+  "version": 3
 }

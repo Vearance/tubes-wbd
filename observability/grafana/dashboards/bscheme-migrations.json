@@ -333,6 +333,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Time from execution queued/available timestamp until claimed by bscheme-worker (15m rolling window).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -344,7 +345,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 },
       "id": 11,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "Queue Wait Duration (p50 / p95 / p99)",
@@ -372,6 +373,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Time spent acquiring advisory and _dbm.migration_history exclusive locks on Target DBs (15m rolling window).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -383,7 +385,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 14 },
       "id": 12,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "Lock Wait Duration (p50 / p95 by Scope)",
@@ -405,6 +407,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Total end-to-end execution duration inside bscheme-worker (15m rolling window).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -416,7 +419,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 14 },
       "id": 13,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "Migration Execution Duration (p50 / p95 / p99)",
@@ -455,10 +458,10 @@
         "defaults": {
           "color": { "mode": "palette-classic" },
           "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 75,
-            "lineWidth": 1,
-            "stacking": { "group": "A", "mode": "normal" }
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2
           },
           "decimals": 0,
           "unit": "short"
@@ -468,7 +471,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 23 },
       "id": 15,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "Completed Executions (5m count)",
@@ -488,10 +491,10 @@
         "defaults": {
           "color": { "mode": "palette-classic" },
           "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 75,
-            "lineWidth": 1,
-            "stacking": { "group": "A", "mode": "normal" }
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2
           },
           "decimals": 0,
           "unit": "short"
@@ -501,7 +504,7 @@
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 23 },
       "id": 16,
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "title": "Retries & Queue Outcomes (5m count)",
@@ -607,7 +610,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "bscheme_db_pool_connections{db_role=\"platform\",state=~\"active|idle|open|max_open\"}",
+          "expr": "bscheme_db_pool_connections{db_role=\"platform\",state=~\"active|idle|max_open\"}",
           "legendFormat": "{{job}} — {{state}}",
           "refId": "A"
         }
@@ -643,7 +646,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "bscheme_db_pool_connections{db_role=\"target\",state=~\"active|idle|total|max_conns\"}",
+          "expr": "bscheme_db_pool_connections{db_role=\"target\",state=~\"active|idle|max_conns\"}",
           "legendFormat": "{{job}} — {{state}}",
           "refId": "A"
         }
@@ -685,6 +688,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Cumulative pool wait duration and wait count over a 5m rolling window.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -695,7 +699,8 @@
           {
             "matcher": { "id": "byFrameRefID", "options": "B" },
             "properties": [
-              { "id": "unit", "value": "ops" },
+              { "id": "unit", "value": "short" },
+              { "id": "decimals", "value": 0 },
               { "id": "custom.axisPlacement", "value": "right" }
             ]
           }
@@ -712,14 +717,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job, db_role) (rate(bscheme_db_pool_wait_duration_seconds_total[$__rate_interval]))",
-          "legendFormat": "wait s/s — {{job}} ({{db_role}})",
+          "expr": "sum by (job, db_role) (increase(bscheme_db_pool_wait_duration_seconds_total[5m]))",
+          "legendFormat": "wait s (5m) — {{job}} ({{db_role}})",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job, db_role) (rate(bscheme_db_pool_wait_count_total[$__rate_interval]))",
-          "legendFormat": "waits/s — {{job}} ({{db_role}})",
+          "expr": "round(sum by (job, db_role) (increase(bscheme_db_pool_wait_count_total[5m])))",
+          "legendFormat": "waits (5m) — {{job}} ({{db_role}})",
           "refId": "B"
         }
       ]
@@ -771,10 +776,10 @@
   "schemaVersion": 39,
   "tags": ["bscheme", "migrations", "database", "queue"],
   "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "BScheme — Queue, Migrations & DB Connection Pool",
   "uid": "bscheme-migrations",
-  "version": 2
+  "version": 3
 }
