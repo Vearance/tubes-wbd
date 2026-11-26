@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup, m, useReducedMotion } from 'motion/react'
 import {
   api,
   type ExplainResponse,
+  type MigrationBatchDefinition,
   type MigrationDraft,
   type MigrationDraftInput,
 } from '../../../api'
@@ -170,6 +171,7 @@ export type InitialDraftSeed = {
   sql: string
   downSql: string
   irreversibleReason?: string
+  batch?: MigrationBatchDefinition
 }
 
 export function DraftWorkbench({
@@ -204,6 +206,12 @@ export function DraftWorkbench({
   const [name, setName] = useState(initialSeed?.name ?? '')
   const [sql, setSql] = useState(initialSeed?.sql ?? '')
   const [downSql, setDownSql] = useState(initialSeed?.downSql ?? '')
+  const [batchEnabled, setBatchEnabled] = useState(Boolean(initialSeed?.batch))
+  const [batchSchema, setBatchSchema] = useState(initialSeed?.batch?.schema ?? 'public')
+  const [batchTable, setBatchTable] = useState(initialSeed?.batch?.table ?? '')
+  const [batchKeyColumn, setBatchKeyColumn] = useState(initialSeed?.batch?.key_column ?? 'id')
+  const [batchScopeSQL, setBatchScopeSQL] = useState(initialSeed?.batch?.scope_sql ?? '')
+  const [batchSize, setBatchSize] = useState(String(initialSeed?.batch?.batch_size ?? 500))
   const [irreversible, setIrreversible] = useState(
     Boolean(initialSeed?.irreversibleReason),
   )
@@ -223,6 +231,12 @@ export function DraftWorkbench({
     setName(initialSeed?.name ?? '')
     setSql(initialSeed?.sql ?? '')
     setDownSql(initialSeed?.downSql ?? '')
+    setBatchEnabled(Boolean(initialSeed?.batch))
+    setBatchSchema(initialSeed?.batch?.schema ?? 'public')
+    setBatchTable(initialSeed?.batch?.table ?? '')
+    setBatchKeyColumn(initialSeed?.batch?.key_column ?? 'id')
+    setBatchScopeSQL(initialSeed?.batch?.scope_sql ?? '')
+    setBatchSize(String(initialSeed?.batch?.batch_size ?? 500))
     setIrreversible(false)
     setIrreversibleReason('')
     setFormError('')
@@ -236,6 +250,12 @@ export function DraftWorkbench({
     setName(draft.name)
     setSql(draft.sql)
     setDownSql(draft.down_sql ?? '')
+    setBatchEnabled(Boolean(draft.batch))
+    setBatchSchema(draft.batch?.schema ?? 'public')
+    setBatchTable(draft.batch?.table ?? '')
+    setBatchKeyColumn(draft.batch?.key_column ?? 'id')
+    setBatchScopeSQL(draft.batch?.scope_sql ?? '')
+    setBatchSize(String(draft.batch?.batch_size ?? 500))
     setIrreversible(Boolean(draft.irreversible))
     setIrreversibleReason(draft.irreversible_reason ?? '')
     setFormError('')
@@ -284,6 +304,19 @@ export function DraftWorkbench({
       setFormError('Irreversible migrations require a clear justification.')
       return
     }
+    if (batchEnabled && irreversible) {
+      setFormError('Batch migrations need Down SQL so committed batches can be rolled back.')
+      return
+    }
+    if (batchEnabled && (!batchSchema.trim() || !batchTable.trim() || !batchKeyColumn.trim())) {
+      setFormError('Batch migrations require a schema, table, and key column.')
+      return
+    }
+    const parsedBatchSize = Number(batchSize)
+    if (batchEnabled && (!Number.isInteger(parsedBatchSize) || parsedBatchSize < 1 || parsedBatchSize > 10000)) {
+      setFormError('Batch size must be an integer between 1 and 10000.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -291,6 +324,17 @@ export function DraftWorkbench({
         name: name.trim(),
         sql,
         irreversible,
+        ...(batchEnabled
+          ? {
+              batch: {
+                schema: batchSchema.trim(),
+                table: batchTable.trim(),
+                key_column: batchKeyColumn.trim(),
+                scope_sql: batchScopeSQL.trim(),
+                batch_size: parsedBatchSize,
+              },
+            }
+          : {}),
         ...(irreversible
           ? { irreversible_reason: irreversibleReason.trim(), down_sql: '' }
           : { down_sql: downSql }),
@@ -411,6 +455,55 @@ export function DraftWorkbench({
               className="w-full rounded-[10px] border border-line-strong bg-white p-3.5 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-y"
             />
           </div>
+
+          <section className="rounded-xl border border-line bg-[#fbfafd] p-4 space-y-3">
+            <label className="flex items-center gap-2 text-xs font-bold text-ink">
+              <input
+                type="checkbox"
+                checked={batchEnabled}
+                onChange={(e) => setBatchEnabled(e.target.checked)}
+                className="size-4 accent-violet"
+              />
+              Run as a batch migration
+            </label>
+            {batchEnabled && (
+              <div className="space-y-3">
+                <p className="m-0 text-[11px] leading-5 text-muted">
+                  The platform snapshots matching keys before applying the first batch. The key must be a NOT NULL bigint primary key or single-column unique key.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-ink">Schema</span>
+                    <input value={batchSchema} onChange={(e) => setBatchSchema(e.target.value)} required className="h-9 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-ink">Table</span>
+                    <input value={batchTable} onChange={(e) => setBatchTable(e.target.value)} required className="h-9 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-ink">Key column</span>
+                    <input value={batchKeyColumn} onChange={(e) => setBatchKeyColumn(e.target.value)} required className="h-9 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold text-ink">Rows per batch</span>
+                    <input type="number" min={1} max={10000} value={batchSize} onChange={(e) => setBatchSize(e.target.value)} required className="h-9 w-full rounded-[10px] border border-line-strong bg-white px-3 font-mono text-xs outline-none focus:border-violet" />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-ink">Scope WHERE predicate (optional)</span>
+                  <textarea
+                    rows={2}
+                    spellCheck={false}
+                    placeholder="status = 'pending'"
+                    value={batchScopeSQL}
+                    onChange={(e) => setBatchScopeSQL(e.target.value)}
+                    className="w-full rounded-[10px] border border-line-strong bg-white p-3 font-mono text-xs leading-5 text-ink outline-none focus:border-violet resize-y"
+                  />
+                  <span className="mt-1 block text-[10px] text-muted">Leave blank to snapshot every key in the table.</span>
+                </label>
+              </div>
+            )}
+          </section>
 
           {explainError && (
             <ErrorNotice

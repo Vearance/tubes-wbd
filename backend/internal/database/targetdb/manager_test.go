@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -108,6 +109,14 @@ func TestTestInvalidConfig(t *testing.T) {
 	t.Cleanup(m.Close)
 
 	err := m.Test(context.Background(), ConnConfig{})
+	require.ErrorIs(t, err, ErrInvalidConfig)
+}
+
+func TestPoolWithConfigRejectsInvalidConfig(t *testing.T) {
+	manager := NewManager(newFakeSource(map[DatabaseID]ConnConfig{}), Options{})
+	t.Cleanup(manager.Close)
+
+	_, err := manager.PoolWithConfig(context.Background(), ConnConfig{})
 	require.ErrorIs(t, err, ErrInvalidConfig)
 }
 

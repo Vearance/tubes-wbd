@@ -86,31 +86,18 @@ func TestOptionsDefaults(t *testing.T) {
 	require.Equal(t, custom, custom.withDefaults())
 }
 
-func TestExecuteRequiresEditPermissionBeforeConnecting(t *testing.T) {
-	svc, authz, pools := newTestService(t)
+func TestCreateDraftPermissionIsCheckedBeforeInput(t *testing.T) {
+	svc, authz, pools, repo := newTestServiceWithRepo(t)
 	authz.err = access.ErrInsufficientPermission
 
-	_, err := svc.Execute(context.Background(), 7, 3, validMigration())
-
-	require.ErrorIs(t, err, access.ErrInsufficientPermission)
-	require.Equal(t, 1, authz.calls)
-	require.Equal(t, "edit", authz.method)
-	require.Equal(t, uint(7), authz.userID)
-	require.Equal(t, uint(3), authz.dbID)
-	require.Zero(t, pools.calls, "target connection must not be opened without permission")
-}
-
-func TestExecutePermissionIsCheckedBeforeInput(t *testing.T) {
-	svc, authz, pools := newTestService(t)
-	authz.err = access.ErrInsufficientPermission
-
-	_, err := svc.Execute(context.Background(), 1, 1, Migration{SQL: "COMMIT"})
+	_, err := svc.CreateDraft(context.Background(), 1, 1, Migration{SQL: "COMMIT"})
 
 	require.ErrorIs(t, err, access.ErrInsufficientPermission)
 	require.Zero(t, pools.calls)
+	require.Empty(t, repo.drafts)
 }
 
-func TestExecuteRejectsInvalidInputWithoutConnecting(t *testing.T) {
+func TestCreateDraftRejectsInvalidInputWithoutConnecting(t *testing.T) {
 	tests := []struct {
 		name string
 		m    Migration
@@ -129,34 +116,21 @@ func TestExecuteRejectsInvalidInputWithoutConnecting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, _, pools := newTestService(t)
+			svc, _, pools, repo := newTestServiceWithRepo(t)
 
-			_, err := svc.Execute(context.Background(), 1, 1, tt.m)
+			_, err := svc.CreateDraft(context.Background(), 1, 1, tt.m)
 
 			require.ErrorIs(t, err, tt.want)
 			require.Zero(t, pools.calls)
+			require.Empty(t, repo.drafts)
 		})
 	}
 }
 
-func TestExecuteTrimsName(t *testing.T) {
+func TestValidateTrimsName(t *testing.T) {
 	m, err := validate(Migration{Name: "  add phone  ", SQL: "SELECT 1"})
 	require.NoError(t, err)
 	require.Equal(t, "add phone", m.Name)
-}
-
-func TestExecutePassesPoolErrorsThrough(t *testing.T) {
-	for _, poolErr := range []error{targetdb.ErrUnknownDatabase, targetdb.ErrUnreachable, targetdb.ErrAuthFailed} {
-		t.Run(poolErr.Error(), func(t *testing.T) {
-			svc, _, pools := newTestService(t)
-			pools.err = poolErr
-
-			_, err := svc.Execute(context.Background(), 1, 1, validMigration())
-
-			require.ErrorIs(t, err, poolErr)
-			require.Equal(t, 1, pools.calls)
-		})
-	}
 }
 
 func TestExecutionErrorMatchesSentinel(t *testing.T) {

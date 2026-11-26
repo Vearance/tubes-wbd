@@ -19,8 +19,11 @@ CREATE TABLE IF NOT EXISTS _dbm.migration_batch_progress (
 	last_cursor bigint NOT NULL DEFAULT 0,
 	batch_count integer NOT NULL DEFAULT 0,
 	rows_processed bigint NOT NULL DEFAULT 0,
+	scope_complete boolean NOT NULL DEFAULT false,
 	completed boolean NOT NULL DEFAULT false
 );
+ALTER TABLE _dbm.migration_batch_progress
+	ADD COLUMN IF NOT EXISTS scope_complete boolean NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS _dbm.migration_batch_commits (
 	execution_id bigint NOT NULL,
 	batch_number integer NOT NULL,
@@ -28,6 +31,11 @@ CREATE TABLE IF NOT EXISTS _dbm.migration_batch_commits (
 	rows_processed bigint NOT NULL,
 	committed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
 	PRIMARY KEY (execution_id, batch_number)
+	);
+CREATE TABLE IF NOT EXISTS _dbm.migration_batch_scope (
+	execution_id bigint NOT NULL,
+	key bigint NOT NULL,
+	PRIMARY KEY (execution_id, key)
 );`
 
 type batchProgress struct {
@@ -37,11 +45,7 @@ type batchProgress struct {
 	Completed     bool
 }
 
-func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Execution) (*HistoryEntry, error) {
-	pool, err := s.pools.Pool(ctx, execution.ManagedDatabaseID)
-	if err != nil {
-		return nil, err
-	}
+func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Execution, pool *pgxpool.Pool) (*HistoryEntry, error) {
 	if err := ensureHistorySchema(ctx, pool, true); err != nil {
 		return nil, err
 	}
@@ -99,6 +103,29 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 		int64(execution.ID)); err != nil {
 		return nil, fmt.Errorf("initializing batch checkpoint: %w", err)
 	}
+	scopeExecutionID := execution.ID
+	switch execution.Type {
+	case ExecutionTypeUp:
+		if err := withTargetTransaction(ctx, conn, func(tx pgx.Tx) error {
+			return snapshotBatchScope(ctx, tx, execution)
+		}); err != nil {
+			return nil, recordBatchFailure(ctx, pool, execution, err, startedAt)
+		}
+	case ExecutionTypeForward:
+		if execution.TargetExecutionID == nil {
+			return nil, ErrInvalidForward
+		}
+		scopeExecutionID = *execution.TargetExecutionID
+		var scopeComplete bool
+		if err := conn.QueryRow(ctx,
+			`SELECT scope_complete FROM _dbm.migration_batch_progress WHERE execution_id = $1`,
+			int64(scopeExecutionID)).Scan(&scopeComplete); err != nil {
+			return nil, recordBatchFailure(ctx, pool, execution, fmt.Errorf("reading original batch scope: %w", err), startedAt)
+		}
+		if !scopeComplete {
+			return nil, recordBatchFailure(ctx, pool, execution, ErrInvalidForward, startedAt)
+		}
+	}
 
 	for {
 		progress, err := readBatchProgress(ctx, conn, execution.ID)
@@ -123,7 +150,7 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 				}
 				beforeBatch := progress.LastCursor
 				if beforeBatch == 0 {
-					beforeBatch = math.MaxInt64
+					beforeBatch = math.MaxInt32
 				}
 				var originalBatch int
 				err := tx.QueryRow(ctx,
@@ -139,16 +166,21 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 					nextCursor = int64(originalBatch)
 				}
 			} else {
-				slog.Info("migration SQL attempt started",
+				slog.Info("selecting keys from frozen migration batch scope",
 					"execution_id", execution.ID,
 					"database_id", execution.ManagedDatabaseID,
 					"execution_type", execution.Type,
 					"attempt", execution.Attempt,
 					"batch_number", progress.BatchCount+1,
-					"statement_type", "batch_cursor",
-					"sql", safeSQLForLog(execution.Batch.CursorSQL),
+					"schema", execution.Batch.Schema,
+					"table", execution.Batch.Table,
+					"key_column", execution.Batch.KeyColumn,
 				)
-				rows, err := tx.Query(ctx, execution.Batch.CursorSQL, progress.LastCursor, execution.Batch.BatchSize)
+				rows, err := tx.Query(ctx,
+					`SELECT key FROM _dbm.migration_batch_scope
+					 WHERE execution_id = $1 AND key > $2 ORDER BY key LIMIT $3`,
+					int64(scopeExecutionID), progress.LastCursor, execution.Batch.BatchSize,
+				)
 				if err != nil {
 					return fmt.Errorf("selecting batch cursor: %w", err)
 				}
@@ -163,7 +195,7 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 					previous := progress.LastCursor
 					for _, key := range keys {
 						if key <= previous {
-							return fmt.Errorf("batch cursor must return strictly increasing positive bigint keys")
+							return fmt.Errorf("frozen batch keys must be strictly increasing positive bigints")
 						}
 						previous = key
 					}

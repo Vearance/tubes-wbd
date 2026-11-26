@@ -47,7 +47,7 @@ func TestValidateDefinition(t *testing.T) {
 				Name:    "backfill email",
 				SQL:     "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
 				DownSQL: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
-				Batch:   &BatchDefinition{CursorSQL: "SELECT id FROM users WHERE id > $1 ORDER BY id LIMIT $2", BatchSize: 500},
+				Batch:   &BatchDefinition{Schema: "public", Table: "users", KeyColumn: "id", BatchSize: 500},
 			},
 			wantDown: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
 		},
@@ -56,7 +56,7 @@ func TestValidateDefinition(t *testing.T) {
 			migration: Migration{
 				Name: "bad batch", SQL: "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
 				DownSQL: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
-				Batch:   &BatchDefinition{CursorSQL: "DELETE FROM users WHERE id > $1", BatchSize: 500},
+				Batch:   &BatchDefinition{Schema: "public", Table: "users; DROP TABLE users", KeyColumn: "id", BatchSize: 500},
 			},
 			wantError: ErrInvalidInput,
 		},
@@ -65,7 +65,7 @@ func TestValidateDefinition(t *testing.T) {
 			migration: Migration{
 				Name: "bad size", SQL: "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
 				DownSQL: "UPDATE users SET email = NULL WHERE id = ANY($1::bigint[])",
-				Batch:   &BatchDefinition{CursorSQL: "SELECT id FROM users WHERE id > $1 ORDER BY id LIMIT $2", BatchSize: 10001},
+				Batch:   &BatchDefinition{Schema: "public", Table: "users", KeyColumn: "id", BatchSize: 10001},
 			},
 			wantError: ErrInvalidInput,
 		},
@@ -73,7 +73,7 @@ func TestValidateDefinition(t *testing.T) {
 			name: "batch requires down SQL",
 			migration: Migration{
 				Name: "no down", SQL: "UPDATE users SET email = 'x' WHERE id = ANY($1::bigint[])",
-				Batch: &BatchDefinition{CursorSQL: "SELECT id FROM users WHERE id > $1 ORDER BY id LIMIT $2", BatchSize: 500},
+				Batch: &BatchDefinition{Schema: "public", Table: "users", KeyColumn: "id", BatchSize: 500},
 			},
 			wantError: ErrInvalidInput,
 		},

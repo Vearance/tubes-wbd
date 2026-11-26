@@ -83,7 +83,10 @@ export type MigrationDraftStatus =
 	| "applied"
 	| "failed";
 export type MigrationBatchDefinition = {
-	cursor_sql: string;
+	schema: string;
+	table: string;
+	key_column: string;
+	scope_sql: string;
 	batch_size: number;
 };
 export type MigrationDraft = {
@@ -118,7 +121,10 @@ export type MigrationExecutionStatus =
 	| "running"
 	| "success"
 	| "failed"
-	| "partial";
+	| "partial"
+	| "compensation_pending"
+	| "compensating"
+	| "compensated";
 export type MigrationApprovalDecision = "pending" | "approved" | "rejected";
 export type MigrationApproval = {
 	group_id: number;
@@ -144,6 +150,7 @@ export type MigrationExecution = {
 	draft_id: number;
 	type: MigrationExecutionType;
 	status: MigrationExecutionStatus;
+	compensation: boolean;
 	name: string;
 	sql: string;
 	down_sql?: string;
@@ -192,19 +199,6 @@ export type MigrationHistoryPage = {
 	page: number;
 	page_size: number;
 	has_next: boolean;
-};
-export type MigrationRun = {
-	id: number;
-	draft_id: number;
-	database_id: number;
-	status: "success" | "failed";
-	version?: number | null;
-	sql: string;
-	executed_by: number;
-	started_at: string;
-	finished_at: string;
-	error_code?: string;
-	error_message?: string;
 };
 export type ExplainResponse = {
 	statements: Array<{ sql: string; plan: Record<string, unknown>[] }>;
@@ -336,8 +330,6 @@ export const api = {
 		request<MigrationDraft[]>(`/databases/${id}/migrations/drafts`),
 	draft: (draftId: number) =>
 		request<MigrationDraft>(`/migrations/drafts/${draftId}`),
-	draftRuns: (draftId: number) =>
-		request<MigrationRun[]>(`/migrations/drafts/${draftId}/runs`),
 	createDraft: (
 		id: number,
 		input: MigrationDraftInput | string,
@@ -382,6 +374,11 @@ export const api = {
 	enqueueExecution: (executionId: number) =>
 		request<MigrationExecution>(
 			`/migrations/executions/${executionId}/enqueue`,
+			{ method: "POST" },
+		),
+	compensateExecution: (executionId: number) =>
+		request<MigrationExecution>(
+			`/migrations/executions/${executionId}/compensate`,
 			{ method: "POST" },
 		),
 	pendingApprovals: async () => {

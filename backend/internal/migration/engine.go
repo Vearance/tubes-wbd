@@ -43,12 +43,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS migration_history_execution_attempt_key
 	WHERE execution_id IS NOT NULL;`
 
 func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning migration history schema check: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", "dbm.migration.history_schema"); err != nil {
+		return fmt.Errorf("locking migration history schema: %w", err)
+	}
+
 	var (
 		exists          bool
 		hasNewFields    bool
 		hasLegacyUnique bool
 	)
-	if err := pool.QueryRow(ctx, `SELECT
+	if err := tx.QueryRow(ctx, `SELECT
 		to_regclass('_dbm.migration_history') IS NOT NULL,
 		(SELECT count(*) = 4 FROM information_schema.columns
 		 WHERE table_schema = '_dbm' AND table_name = 'migration_history'
@@ -61,24 +71,15 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 		return fmt.Errorf("checking migration history schema: %w", err)
 	}
 	if !exists && !create || exists && hasNewFields && !hasLegacyUnique {
-		return nil
+		return tx.Commit(ctx)
 	}
-	if _, err := pool.Exec(ctx, ensureHistorySQL); err != nil {
+	if _, err := tx.Exec(ctx, ensureHistorySQL); err != nil {
 		return fmt.Errorf("ensuring migration history schema: %w", err)
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing migration history schema: %w", err)
+	}
 	return nil
-}
-
-func apply(ctx context.Context, pool *pgxpool.Pool, m Migration, userID uint, opts Options) (*HistoryEntry, error) {
-	return applyExecution(ctx, pool, &Execution{
-		Type:               ExecutionTypeUp,
-		Name:               m.Name,
-		SQL:                m.SQL,
-		DownSQL:            m.DownSQL,
-		Irreversible:       m.Irreversible,
-		IrreversibleReason: m.IrreversibleReason,
-		ExecutedBy:         userID,
-	}, opts)
 }
 
 func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Execution, opts Options) (*HistoryEntry, error) {
@@ -308,6 +309,25 @@ func validateExecutionPosition(ctx context.Context, tx pgx.Tx, execution *Execut
 		if execution.TargetExecutionID == nil {
 			return ErrInvalidInput
 		}
+		if execution.Compensation {
+			var scopeComplete, committedBatchExists bool
+			if err := tx.QueryRow(ctx,
+				`SELECT scope_complete FROM _dbm.migration_batch_progress WHERE execution_id = $1`,
+				int64(*execution.TargetExecutionID)).Scan(&scopeComplete); err != nil {
+				return executionError(err)
+			}
+			if err := tx.QueryRow(ctx,
+				`SELECT EXISTS (
+					SELECT 1 FROM _dbm.migration_batch_commits
+					WHERE execution_id = $1
+				)`, int64(*execution.TargetExecutionID)).Scan(&committedBatchExists); err != nil {
+				return executionError(err)
+			}
+			if !scopeComplete || !committedBatchExists {
+				return ErrInvalidCompensation
+			}
+			break
+		}
 		var activeID int64
 		var downSQL string
 		if err := tx.QueryRow(ctx,
@@ -349,6 +369,9 @@ func updateExecutionPosition(ctx context.Context, tx pgx.Tx, execution *Executio
 	case ExecutionTypeUp:
 		return nil
 	case ExecutionTypeRollback:
+		if execution.Compensation {
+			return nil
+		}
 		result, err := tx.Exec(ctx,
 			"UPDATE _dbm.migration_history SET active = false WHERE execution_id = $1 AND active = true",
 			int64(*execution.TargetExecutionID))

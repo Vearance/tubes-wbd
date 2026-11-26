@@ -14,6 +14,12 @@ docker compose up --build
 
 The backend runs at `http://localhost:8080`, and the frontend runs at `http://localhost:5173`.
 
+To run multiple migration workers (jobs for the same target database still run one at a time):
+
+```bash
+docker compose up -d --scale worker=3
+```
+
 ## start server and migration worker locally
 
 Run the API and the durable migration worker in separate terminals. They have separate entrypoints and share the relevant Platform DB and RabbitMQ settings:
@@ -110,7 +116,6 @@ None < View Only < View + Edit
 - `POST /migrations/executions/{executionId}/reject` rejects as a group leader. The body `{"note": "..."}` is required.
 - `POST /migrations/executions/{executionId}/enqueue` queues an approved execution for the worker. Requires View + Edit.
 - `GET /migrations/approvals/pending` lists executions waiting for the current user's decision.
-- `GET /migrations/drafts/{draftId}/runs` lists execution runs.
 
 ## migration approval workflow
 

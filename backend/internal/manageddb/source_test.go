@@ -35,6 +35,35 @@ func TestSourceConnConfig(t *testing.T) {
 	}, cfg)
 }
 
+func TestSourceEncryptedSnapshotKeepsOriginalConnectionConfig(t *testing.T) {
+	ctx := context.Background()
+	service, repo, _ := newTestManagedDBService(t)
+	database, err := service.Create(ctx, validInput())
+	require.NoError(t, err)
+	source, err := NewSource(repo, service.cipher)
+	require.NoError(t, err)
+
+	snapshot, err := source.EncryptedSnapshot(ctx, database.ID)
+	require.NoError(t, err)
+	require.NotContains(t, string(snapshot), "target_password")
+
+	updated, err := repo.FindByID(ctx, database.ID)
+	require.NoError(t, err)
+	updated.Host = "changed-host"
+	updated.Port = 6432
+	updated.Username = "changed-user"
+	updated.DBName = "changed-db"
+	updated.SSLMode = "require"
+	require.NoError(t, repo.Update(ctx, updated))
+
+	config, err := source.ResolveSnapshot(snapshot)
+	require.NoError(t, err)
+	require.Equal(t, targetdb.ConnConfig{
+		Host: "db-a", Port: 5432, User: "target", Password: "target_password",
+		DBName: "shop", SSLMode: "disable",
+	}, config)
+}
+
 func TestSourceUnknownDatabase(t *testing.T) {
 	src, err := NewSource(newFakeRepo(), newTestCipher(t, 1))
 	require.NoError(t, err)

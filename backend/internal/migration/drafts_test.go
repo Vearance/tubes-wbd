@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"tubes-wbd/internal/access"
-	"tubes-wbd/internal/database/targetdb"
 )
 
 func createTestDraft(t *testing.T, svc *MigrationService, dbID uint) *Draft {
@@ -135,10 +134,6 @@ func TestReadingDraftsRequiresView(t *testing.T) {
 			_, err := s.ListDrafts(ctx, 7, 3)
 			return err
 		},
-		"ListRuns": func(s *MigrationService, id uint) error {
-			_, err := s.ListRuns(ctx, 7, id)
-			return err
-		},
 	}
 
 	for name, read := range reads {
@@ -170,14 +165,15 @@ func TestListDraftsOnlyReturnsThatDatabase(t *testing.T) {
 	require.Equal(t, first.ID, list[1].ID)
 }
 
-func TestExecuteDraftRejected(t *testing.T) {
+func TestSubmitDraftForReviewRejected(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("not found", func(t *testing.T) {
-		svc, _, pools, _ := newTestServiceWithRepo(t)
-		_, err := svc.ExecuteDraft(ctx, 1, 99)
+		svc, _, pools, repo := newTestServiceWithRepo(t)
+		_, err := svc.SubmitDraftForReview(ctx, 1, 99)
 		require.ErrorIs(t, err, ErrDraftNotFound)
 		require.Zero(t, pools.calls)
+		require.Empty(t, repo.executions)
 	})
 
 	t.Run("without edit permission", func(t *testing.T) {
@@ -185,12 +181,13 @@ func TestExecuteDraftRejected(t *testing.T) {
 		d := createTestDraft(t, svc, 3)
 		authz.err = access.ErrInsufficientPermission
 
-		_, err := svc.ExecuteDraft(ctx, 1, d.ID)
+		_, err := svc.SubmitDraftForReview(ctx, 1, d.ID)
 
 		require.ErrorIs(t, err, access.ErrInsufficientPermission)
 		require.Equal(t, "edit", authz.method)
 		require.Equal(t, uint(3), authz.dbID)
-		require.Zero(t, pools.calls, "target connection must not be opened without permission")
+		require.Zero(t, pools.calls)
+		require.Empty(t, repo.executions)
 		require.Equal(t, DraftStatusDraft, repo.status(d.ID))
 	})
 
@@ -200,29 +197,12 @@ func TestExecuteDraftRejected(t *testing.T) {
 			d := createTestDraft(t, svc, 1)
 			setStatus(repo, d.ID, status)
 
-			_, err := svc.ExecuteDraft(ctx, 1, d.ID)
+			_, err := svc.SubmitDraftForReview(ctx, 1, d.ID)
 
 			require.ErrorIs(t, err, ErrDraftNotExecutable)
 			require.Zero(t, pools.calls)
+			require.Empty(t, repo.executions)
 			require.Equal(t, status, repo.status(d.ID))
-		})
-	}
-}
-
-func TestExecuteDraftThatCannotStartKeepsItsStatus(t *testing.T) {
-	for _, status := range []DraftStatus{DraftStatusDraft, DraftStatusFailed} {
-		t.Run(string(status), func(t *testing.T) {
-			svc, _, pools, repo := newTestServiceWithRepo(t)
-			d := createTestDraft(t, svc, 1)
-			setStatus(repo, d.ID, status)
-			pools.err = targetdb.ErrUnreachable
-
-			run, err := svc.ExecuteDraft(context.Background(), 1, d.ID)
-
-			require.ErrorIs(t, err, targetdb.ErrUnreachable)
-			require.Nil(t, run)
-			require.Equal(t, status, repo.status(d.ID), "a migration that never started must not change the draft")
-			require.Empty(t, repo.runs, "a migration that never started must not be recorded")
 		})
 	}
 }

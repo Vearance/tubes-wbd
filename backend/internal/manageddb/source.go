@@ -2,6 +2,7 @@ package manageddb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -24,6 +25,33 @@ func NewSource(repo Repository, cipher *Cipher) (*Source, error) {
 	}
 
 	return &Source{repo: repo, cipher: cipher}, nil
+}
+
+func (s *Source) EncryptedSnapshot(ctx context.Context, id targetdb.DatabaseID) ([]byte, error) {
+	config, err := s.ConnConfig(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("encoding target database configuration snapshot: %w", err)
+	}
+	return s.cipher.Encrypt(string(encoded)), nil
+}
+
+func (s *Source) ResolveSnapshot(encrypted []byte) (targetdb.ConnConfig, error) {
+	encoded, err := s.cipher.Decrypt(encrypted)
+	if err != nil {
+		return targetdb.ConnConfig{}, fmt.Errorf("decrypting target database configuration snapshot: %w", err)
+	}
+	var config targetdb.ConnConfig
+	if err := json.Unmarshal([]byte(encoded), &config); err != nil {
+		return targetdb.ConnConfig{}, fmt.Errorf("decoding target database configuration snapshot: %w", err)
+	}
+	if err := config.Validate(); err != nil {
+		return targetdb.ConnConfig{}, fmt.Errorf("invalid target database configuration snapshot: %w", err)
+	}
+	return config, nil
 }
 
 func (s *Source) ConnConfig(ctx context.Context, id targetdb.DatabaseID) (targetdb.ConnConfig, error) {
