@@ -55,15 +55,15 @@ services:
       TARGET_DB_ENCRYPTION_KEY: ${TARGET_DB_ENCRYPTION_KEY}
       APP_MAX_OPEN_CONNS: ${APP_MAX_OPEN_CONNS:-10}
       APP_MAX_IDLE_CONNS: ${APP_MAX_IDLE_CONNS:-5}
-      APP_METRICS_ADDR: ${WORKER_METRICS_ADDR:-:9091}
+      APP_METRICS_ADDR: ":9091"
       OTEL_SERVICE_NAME: bscheme-worker
       OTEL_SERVICE_VERSION: ${APP_VERSION:-dev}
       OTEL_ENVIRONMENT: ${APP_ENV:-development}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
-    ports:
-      - "${WORKER_METRICS_PORT:-9091}:9091"
+    expose:
+      - "9091"
     depends_on:
       platform-db:
         condition: service_healthy

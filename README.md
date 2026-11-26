@@ -217,7 +217,7 @@ The script prints statement coverage per package and writes `coverage.txt` (per 
 
 ## observability
 
-Centralized logs (Grafana Loki `:3100`), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Grafana Tempo `:3200` via OpenTelemetry Collector), Prometheus metrics (`:9090`, scraping `bscheme-api` `:8080/metrics`, `bscheme-worker` `:9091/metrics`, and RabbitMQ `:15692/metrics`), and auto-provisioned Grafana dashboards (`:3000`, default `admin` / `admin`) are included in the Compose stack:
+Centralized logs (Grafana Loki `:3100`), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Grafana Tempo `:3200` via OpenTelemetry Collector), Prometheus metrics (`:9090`, scraping `bscheme-api` `:8080/metrics`, every `bscheme-worker` replica on `:9091/metrics` inside the Compose network, and RabbitMQ `:15692/metrics`), and auto-provisioned Grafana dashboards (`:3000`, default `admin` / `admin`) are included in the Compose stack:
 
 ```bash
 docker compose up --build -d

@@ -29,7 +29,7 @@ flowchart LR
 | OpenTelemetry Collector | Receives OTLP traces & logs (`4317`/`4318`) and routes to Tempo, Loki, and Prometheus | [`otel-collector/config.yaml`](otel-collector/config.yaml) |
 | Grafana Loki 3.4 | Centralized log store receiving native OTLP logs at `/otlp/v1/logs` with structured metadata | [`loki/loki.yaml`](loki/loki.yaml) |
 | Grafana Tempo 2.7 | Distributed trace store across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL | [`tempo/tempo.yaml`](tempo/tempo.yaml) |
-| Prometheus | Scrapes `internal:8080/metrics`, `worker:9091/metrics`, `rabbitmq:15692/metrics`, and `otel-collector` | [`prometheus/prometheus.yml`](prometheus/prometheus.yml) |
+| Prometheus | Scrapes `internal:8080/metrics`, every `worker` replica on `:9091/metrics` (discovered through Compose DNS with `dns_sd_configs`), `rabbitmq:15692/metrics`, and `otel-collector` | [`prometheus/prometheus.yml`](prometheus/prometheus.yml) |
 | Prometheus Alert Rules | Alerts on down targets, 5xx bursts, failed migrations, queue/lock waits, outbox backlog, DB pool saturation | [`prometheus/alerts.yml`](prometheus/alerts.yml) |
 | Grafana Datasources | Auto-provisions Prometheus, Tempo (`tracesToLogsV2`), and Loki (`derivedFields` TraceID -> Tempo) | [`grafana/provisioning/datasources/datasources.yml`](grafana/provisioning/datasources/datasources.yml) |
 | Grafana Dashboards | Provisioned **BScheme — Queue, Migrations & DB Connection Pool** and **BScheme — API, Auth, Viewer & Runtime Overview** | [`grafana/dashboards/`](grafana/dashboards/) |
@@ -46,7 +46,7 @@ Exposed observability endpoints:
 - **Grafana**: `http://localhost:3000` (default `admin` / `admin`; dashboards are under folder **BScheme**)
 - **Prometheus**: `http://localhost:9090` (`/targets` and `/alerts`)
 - **API `/metrics`**: `http://localhost:8080/metrics`
-- **Worker `/metrics`**: `http://localhost:9091/metrics` (`/healthz` for liveness)
+- **Worker `/metrics`**: `:9091/metrics` (`/healthz` for liveness) is only exposed inside the Compose network so `docker compose up --scale worker=N` does not collide on a host port. Each replica appears as its own `bscheme-worker` target in Prometheus `/targets`; to inspect them directly (the worker image is distroless), run `docker compose exec prometheus wget -qO- http://worker:9091/metrics` from the Prometheus container on the same network
 - **RabbitMQ Prometheus `/metrics`**: `http://localhost:15692/metrics`
 - **Loki / Tempo APIs**: `http://localhost:3100`, `http://localhost:3200`
 
@@ -60,7 +60,7 @@ Exposed observability endpoints:
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `""` (`http://otel-collector:4318` in Compose) | OTLP/HTTP base URL; when unset, OTLP export is skipped gracefully |
 | `OTEL_TRACES_EXPORTER` | `""` (OTLP if endpoint set) | Comma-separated trace exporters: `otlp`, `console` (JSON spans to `stderr`), `otlp,console`, or `none` |
 | `OTEL_TRACES_SAMPLER_ARG` | `1.0` | Parent-based trace sampling ratio (`0.0`..`1.0`) |
-| `APP_METRICS_ADDR` | `:9091` | Worker HTTP bind address serving `/metrics` and `/healthz` |
+| `APP_METRICS_ADDR` | `:9091` | Worker HTTP bind address serving `/metrics` and `/healthz` (fixed to `:9091` in Compose to match the Prometheus scrape port) |
 
 ## Structured JSON Logging, SQL Lifecycle & Trace Correlation
 

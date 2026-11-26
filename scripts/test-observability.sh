@@ -79,7 +79,9 @@ while [[ $# -gt 0 ]]; do
 
 Environment overrides (otherwise read from .env or Compose defaults):
   API_URL           (default: http://localhost:${APP_PORT:-8080})
-  WORKER_URL        (default: http://localhost:${WORKER_METRICS_PORT:-9091})
+  WORKER_URL        (default: unset; worker health is read from Prometheus
+                     up{job="bscheme-worker"}. Set it, e.g. http://localhost:9091,
+                     only when running a worker outside Docker)
   PROMETHEUS_URL    (default: http://localhost:${PROMETHEUS_PORT:-9090})
   LOKI_URL          (default: http://localhost:${LOKI_PORT:-3100})
   TEMPO_URL         (default: http://localhost:${TEMPO_PORT:-3200})
@@ -135,14 +137,13 @@ read_dotenv_key() {
 }
 
 APP_PORT="${APP_PORT:-$(read_dotenv_key APP_PORT 8080)}"
-WORKER_METRICS_PORT="${WORKER_METRICS_PORT:-$(read_dotenv_key WORKER_METRICS_PORT 9091)}"
 PROMETHEUS_PORT="${PROMETHEUS_PORT:-$(read_dotenv_key PROMETHEUS_PORT 9090)}"
 LOKI_PORT="${LOKI_PORT:-$(read_dotenv_key LOKI_PORT 3100)}"
 TEMPO_PORT="${TEMPO_PORT:-$(read_dotenv_key TEMPO_PORT 3200)}"
 GRAFANA_PORT="${GRAFANA_PORT:-$(read_dotenv_key GRAFANA_PORT 3000)}"
 
 API_URL="${API_URL:-http://localhost:${APP_PORT}}"
-WORKER_URL="${WORKER_URL:-http://localhost:${WORKER_METRICS_PORT}}"
+WORKER_URL="${WORKER_URL:-}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:${PROMETHEUS_PORT}}"
 LOKI_URL="${LOKI_URL:-http://localhost:${LOKI_PORT}}"
 TEMPO_URL="${TEMPO_URL:-http://localhost:${TEMPO_PORT}}"
@@ -345,10 +346,23 @@ if ! probe_endpoint "bscheme-api" "${API_URL}/metrics"; then
 	exit 1
 fi
 
-WORKER_UP=true
-probe_endpoint "bscheme-worker" "${WORKER_URL}/healthz" || WORKER_UP=false
 PROM_UP=true
 probe_endpoint "Prometheus" "${PROMETHEUS_URL}/-/ready" || PROM_UP=false
+WORKER_UP=true
+if [[ -n "$WORKER_URL" ]]; then
+	probe_endpoint "bscheme-worker" "${WORKER_URL}/healthz" || WORKER_UP=false
+elif [[ "$PROM_UP" == "true" ]]; then
+	workers_up="$(curl -fsS --max-time 3 -G --data-urlencode 'query=sum(up{job="bscheme-worker"})' \
+		"${PROMETHEUS_URL}/api/v1/query" 2>/dev/null | jq -r '.data.result[0].value[1] // "0"')"
+	if [[ "${workers_up:-0}" =~ ^[1-9][0-9]*$ ]]; then
+		log_ok "bscheme-worker reachable via Prometheus (${workers_up} replica(s) up)"
+	else
+		log_warn "bscheme-worker NOT reported up by Prometheus (it may need one scrape interval after startup)"
+		WORKER_UP=false
+	fi
+else
+	log_warn "bscheme-worker health unknown (Prometheus unreachable and WORKER_URL unset)"
+fi
 LOKI_UP=true
 probe_endpoint "Loki" "${LOKI_URL}/ready" || LOKI_UP=false
 TEMPO_UP=true
