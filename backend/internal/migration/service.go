@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"tubes-wbd/internal/database/targetdb"
+	"tubes-wbd/internal/telemetry"
 )
 
 const (
@@ -168,6 +169,11 @@ func (s *MigrationService) History(ctx context.Context, userID, dbID uint, page,
 }
 
 func (s *MigrationService) HistoryFiltered(ctx context.Context, userID, dbID uint, page, pageSize int, hideRollback bool) (*HistoryPage, error) {
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(dbID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	ctx = telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -185,6 +191,11 @@ func (s *MigrationService) HistoryFiltered(ctx context.Context, userID, dbID uin
 }
 
 func (s *MigrationService) HistoryEntry(ctx context.Context, userID, dbID uint, version int64) (*HistoryEntry, error) {
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(dbID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	ctx = telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
