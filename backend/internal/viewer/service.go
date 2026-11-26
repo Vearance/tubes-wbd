@@ -65,7 +65,7 @@ func NewViewerService(
 	return &ViewerService{authz: authz, pools: pools, config: config}, nil
 }
 
-func startViewerSpan(ctx context.Context, userID, dbID uint, op string, extraAttrs ...any) (context.Context, func(error)) {
+func startViewerSpan(ctx context.Context, userID, dbID uint, op string, extraAttrs ...any) (context.Context, func(error, ...any)) {
 	start := time.Now()
 	actor := telemetry.ActorUser(userID)
 	dbLabel := telemetry.TargetDatabaseLabel(dbID)
@@ -81,7 +81,7 @@ func startViewerSpan(ctx context.Context, userID, dbID uint, op string, extraAtt
 	spanCtx = telemetry.WithActor(spanCtx, actor)
 	spanCtx = telemetry.WithDatabase(spanCtx, dbLabel)
 
-	return spanCtx, func(err error) {
+	return spanCtx, func(err error, resultAttrs ...any) {
 		durationMs := telemetry.RoundMillis(time.Since(start))
 		status := "ok"
 		if err != nil {
@@ -99,6 +99,7 @@ func startViewerSpan(ctx context.Context, userID, dbID uint, op string, extraAtt
 			"duration_ms", durationMs,
 		}
 		logAttrs = append(logAttrs, extraAttrs...)
+		logAttrs = append(logAttrs, resultAttrs...)
 		if err != nil {
 			logAttrs = append(logAttrs, "error", err)
 			if sqlstate := telemetry.SQLState(err); sqlstate != "" {
