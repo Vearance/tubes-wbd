@@ -6,7 +6,7 @@ import { UtilityHeader } from '../../components/AppShell'
 import { AnimatedTabs } from '../../components/aceternity/AnimatedTabs'
 import { Icon } from '../../components/Icon'
 import { useWorkspaceContext } from '../../components/workspaceContext'
-import { Button, ErrorNotice, Loading } from '../../components/ui'
+import { Button, ErrorNotice, PageSkeleton } from '../../components/ui'
 import { useResource } from '../../hooks'
 import {
   ConsensusAirlock,
@@ -142,9 +142,9 @@ export function MigrationPage() {
             : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} history entries`
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
             {hasLiveQueueOrRunning && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-soft px-2.5 py-1 text-[11px] font-bold text-violet">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-soft px-2.5 py-1 text-xs font-bold text-violet-fg">
                 <span className="size-2 rounded-full bg-violet animate-ping" />
                 Live polling worker…
               </span>
@@ -170,9 +170,8 @@ export function MigrationPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="py-16"
           >
-            <Loading label="Loading migration pipeline and ledger…" />
+            <PageSkeleton variant="list" label="Loading migration pipeline and ledger…" />
           </m.div>
         ) : (
           <m.div
@@ -185,7 +184,7 @@ export function MigrationPage() {
           >
 
       {bannerSuccess && (
-        <div className="my-2.5 flex items-center justify-between rounded-[10px] border border-success/25 bg-success-soft px-3.5 py-3 text-xs font-semibold text-success">
+        <div className="my-2.5 flex items-center justify-between rounded-xl border border-success/25 bg-success-soft px-3.5 py-3 text-xs font-semibold text-success-fg">
           <span className="flex items-center gap-2">
             <Icon name="check" className="size-4" />
             {bannerSuccess}

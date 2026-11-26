@@ -50,14 +50,14 @@ function HistoryEntryRow({
   }
 
   return (
-    <article className="overflow-hidden rounded-[18px] border border-line bg-white p-4.5 shadow-2xs">
+    <article className="overflow-hidden rounded-2xl border border-line bg-white p-4.5 shadow-2xs">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3.5 min-w-0 flex-1">
           <div className="min-w-16">
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
+            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
               Version
             </span>
-            <strong className="mt-0.5 block font-mono text-sm font-extrabold text-violet">
+            <strong className="mt-0.5 block font-mono text-sm font-extrabold text-violet-fg">
               v{entry.version}
             </strong>
           </div>
@@ -77,30 +77,35 @@ function HistoryEntryRow({
                   HEAD · Active Schema
                 </Status>
               )}
-              {entry.execution_type && (
-                <Status
-                  tone={
-                    entry.execution_type === 'rollback'
-                      ? 'amber'
-                      : entry.execution_type === 'forward'
-                        ? 'violet'
-                        : 'green'
-                  }
-                >
-                  {entry.execution_type.toUpperCase()}
-                </Status>
-              )}
             </div>
-            <p className="mt-1 mb-0 text-[11px] text-muted">
-              Executed by user #{entry.executed_by} ·{' '}
-              {new Date(entry.executed_at).toLocaleString()}
-              {entry.execution_id ? ` · Execution #${entry.execution_id}` : ''}
+            <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+              {entry.execution_type && (
+                <>
+                  <span
+                    className={
+                      entry.execution_type === 'rollback'
+                        ? 'font-bold uppercase text-warning-fg'
+                        : entry.execution_type === 'forward'
+                          ? 'font-bold uppercase text-violet-fg'
+                          : 'font-bold uppercase text-success-fg'
+                    }
+                  >
+                    {entry.execution_type}
+                  </span>
+                  <span>·</span>
+                </>
+              )}
+              <span>
+                Executed by user #{entry.executed_by} ·{' '}
+                {new Date(entry.executed_at).toLocaleString()}
+                {entry.execution_id ? ` · Execution #${entry.execution_id}` : ''}
+              </span>
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-[11px] text-muted tabular-nums">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
+          <span className="rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-xs text-muted tabular-nums">
             {entry.duration_ms} ms
           </span>
           <Button variant="outline" size="sm" onClick={toggleDetail}>
@@ -118,7 +123,7 @@ function HistoryEntryRow({
       )}
 
       {open && (
-        <div className="mt-3 rounded-xl border border-line bg-[#fbfafd] p-4 space-y-3">
+        <div className="mt-3 rounded-xl border border-line bg-surface-subtle p-4 space-y-3">
           {loading && (
             <span className="text-xs text-muted">Loading SQL snapshot…</span>
           )}
@@ -126,7 +131,7 @@ function HistoryEntryRow({
           {detail && (
             <>
               <div>
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
                   Executed SQL
                 </span>
                 <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
@@ -135,7 +140,7 @@ function HistoryEntryRow({
               </div>
               {detail.down_sql ? (
                 <div>
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-success">
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
                     Rollback Plan (Down SQL)
                   </span>
                   <pre className="m-0 max-h-36 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
@@ -143,7 +148,7 @@ function HistoryEntryRow({
                   </pre>
                 </div>
               ) : (
-                <p className="m-0 text-xs font-medium text-warning">
+                <p className="m-0 text-xs font-medium text-warning-fg">
                   Irreversible:{' '}
                   {detail.irreversible_reason || 'No Down SQL provided.'}
                 </p>
@@ -182,10 +187,10 @@ export function HeadLedger({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-line/80 bg-white p-4.5 shadow-2xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="m-0 text-base font-bold text-ink">Live HEAD Ledger</h2>
-          <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-[11px] font-bold text-violet">
+          <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-bold text-violet-fg">
             {latestActive ? `v${latestActive.version} HEAD` : 'Empty schema'}
           </span>
           <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted">
@@ -255,7 +260,7 @@ export function HeadLedger({
         ))}
 
         {entries.length === 0 && (
-          <div className="rounded-[14px] border border-line bg-white py-12 shadow-2xs">
+          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
             {hideRollback ? (
               <EmptyState icon="migration" title="No visible history entries">
                 Turn off Hide rollback to show the complete migration history.

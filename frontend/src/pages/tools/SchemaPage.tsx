@@ -15,7 +15,7 @@ import {
   Button,
   EmptyState,
   ErrorNotice,
-  Loading,
+  PageSkeleton,
   Search,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
@@ -223,6 +223,42 @@ function ConnectedSchemaDiagram({
     window.addEventListener('mouseup', handleMouseUp)
   }
 
+  const handleTouchStart = (tableName: string, e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    if (!touch) return
+    const current = positions[tableName] || { x: 50, y: 50 }
+    dragRef.current = {
+      tableName,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialX: current.x,
+      initialY: current.y,
+    }
+
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      if (!dragRef.current || !moveEvent.touches[0]) return
+      const t = moveEvent.touches[0]
+      const deltaX = t.clientX - dragRef.current.startX
+      const deltaY = t.clientY - dragRef.current.startY
+      const nextX = Math.max(20, dragRef.current.initialX + deltaX)
+      const nextY = Math.max(20, dragRef.current.initialY + deltaY)
+
+      setCustomPositions((prev) => ({
+        ...prev,
+        [dragRef.current!.tableName]: { x: nextX, y: nextY },
+      }))
+    }
+
+    const handleTouchEnd = () => {
+      dragRef.current = null
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+    }
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: true })
+    window.addEventListener('touchend', handleTouchEnd)
+  }
+
   const CARD_WIDTH = 270
 
   const maxX = Math.max(
@@ -246,12 +282,12 @@ function ConnectedSchemaDiagram({
   )
 
   return (
-    <div className="relative overflow-hidden rounded-[18px] border border-line bg-[#faf8fc] shadow-xs">
+    <div className="relative overflow-hidden rounded-2xl border border-line bg-surface-subtle shadow-xs">
       {Object.keys(customPositions).length > 0 && (
         <button
           type="button"
           onClick={() => setCustomPositions({})}
-          className="absolute top-3 left-3 z-20 inline-flex items-center gap-1 rounded-lg border border-line/80 bg-white/90 px-2.5 py-1 text-xs font-semibold text-ink shadow-2xs hover:border-violet hover:text-violet transition-colors cursor-pointer backdrop-blur-xs"
+          className="absolute top-3 left-3 z-20 inline-flex items-center gap-1 rounded-lg border border-line/80 bg-white/90 px-2.5 py-1 text-xs font-semibold text-ink shadow-2xs hover:border-violet hover:text-violet-fg transition-colors cursor-pointer backdrop-blur-xs"
         >
           <Icon name="refresh" className="size-3" />
           Reset layout
@@ -259,7 +295,7 @@ function ConnectedSchemaDiagram({
       )}
 
       {hoveredRel && (
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg border border-violet/30 bg-violet-soft px-3 py-1.5 text-xs font-semibold text-violet shadow-xs">
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg border border-violet/30 bg-violet-soft px-3 py-1.5 text-xs font-semibold text-violet-fg shadow-xs">
           <Icon name="link" className="size-3.5" />
           <span>
             {hoveredRel.fromTable}.{hoveredRel.fromColumn} → {hoveredRel.toTable}.{hoveredRel.toColumn}
@@ -269,7 +305,7 @@ function ConnectedSchemaDiagram({
 
       <div
         ref={containerRef}
-        className="relative h-[720px] w-full overflow-auto overscroll-contain [scrollbar-width:thin] cursor-grab active:cursor-grabbing"
+        className="relative h-[calc(100dvh-220px)] min-h-[460px] sm:min-h-[640px] w-full overflow-auto overscroll-contain [scrollbar-width:thin] touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
       >
         <svg
           className="absolute inset-0 pointer-events-none"
@@ -287,7 +323,7 @@ function ConnectedSchemaDiagram({
               markerHeight="6"
               orient="auto-start-reverse"
             >
-              <path d="M 0 1 L 10 5 L 0 9 z" fill="#9256e8" />
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--color-violet)" />
             </marker>
             <marker
               id="er-arrow-muted"
@@ -337,7 +373,7 @@ function ConnectedSchemaDiagram({
                 <path
                   d={d}
                   fill="none"
-                  stroke={active ? '#9256e8' : '#c8c2cf'}
+                  stroke={active ? 'var(--color-violet)' : '#c8c2cf'}
                   strokeWidth={active ? 2.5 : 1.5}
                   strokeDasharray={rel.fromTable === rel.toTable ? '4 4' : undefined}
                   markerEnd={active ? 'url(#er-arrow)' : 'url(#er-arrow-muted)'}
@@ -377,7 +413,7 @@ function ConnectedSchemaDiagram({
                 width: `${CARD_WIDTH}px`,
               }}
               className={cn(
-                'absolute rounded-[12px] border border-line bg-white shadow-xs transition-shadow duration-150 select-none',
+                'absolute rounded-xl border border-line bg-white shadow-xs transition-shadow duration-150 select-none',
                 isConnected && 'border-violet ring-2 ring-violet/20 shadow-md',
                 hoveredTable === table.name && 'border-violet ring-2 ring-violet/30 shadow-lg',
               )}
@@ -385,15 +421,16 @@ function ConnectedSchemaDiagram({
               onMouseLeave={() => setHoveredTable(null)}
             >
               <div
-                className="flex items-center gap-2 border-b border-line bg-canvas/60 px-3.5 py-2.5 rounded-t-[12px] cursor-grab active:cursor-grabbing"
+                className="flex items-center gap-2 border-b border-line bg-canvas/60 px-3.5 py-2.5 rounded-t-xl cursor-grab active:cursor-grabbing touch-none"
                 onMouseDown={(e) => handleMouseDown(table.name, e)}
+                onTouchStart={(e) => handleTouchStart(table.name, e)}
               >
-                <Icon name="table" className="size-4 text-violet shrink-0" />
+                <Icon name="table" className="size-4 text-violet-fg shrink-0" />
                 <strong className="truncate text-xs font-bold text-ink flex-1">
                   {table.name}
                 </strong>
                 {table.kind === 'view' && (
-                  <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[9px] font-bold text-accent uppercase">
+                  <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent-fg uppercase">
                     View
                   </span>
                 )}
@@ -418,11 +455,11 @@ function ConnectedSchemaDiagram({
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
                         {isPK ? (
-                          <span title="Primary Key" className="text-warning shrink-0">
+                          <span title="Primary Key" className="text-warning-fg shrink-0">
                             <Icon name="key" className="size-3" />
                           </span>
                         ) : isFK ? (
-                          <span title="Foreign Key" className="text-violet shrink-0">
+                          <span title="Foreign Key" className="text-violet-fg shrink-0">
                             <Icon name="link" className="size-3" />
                           </span>
                         ) : (
@@ -432,39 +469,39 @@ function ConnectedSchemaDiagram({
                           className={cn(
                             'truncate font-mono text-[11px]',
                             isPK && 'font-bold text-ink',
-                            isFK && 'text-violet font-semibold',
+                            isFK && 'text-violet-fg font-semibold',
                           )}
                         >
                           {col.name}
                         </span>
                       </div>
-                      <span className="font-mono text-[10px] text-muted shrink-0">
+                      <span className="font-mono text-[11px] text-muted shrink-0">
                         {col.type}
                       </span>
                     </div>
                   )
                 })}
                 {(!data?.structure || data.structure.columns.length === 0) && (
-                  <div className="py-2 text-center text-[10px] text-muted italic">
+                  <div className="py-2 text-center text-[11px] text-muted italic">
                     {loading ? 'Loading columns…' : 'No columns'}
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-between border-t border-line/60 bg-canvas/30 px-3 py-1.5 text-[10px] text-muted rounded-b-[12px]">
+              <div className="flex items-center justify-between border-t border-line/60 bg-canvas/30 px-3 py-1.5 text-[11px] text-muted rounded-b-xl">
                 <span>
                   {data?.structure?.columns.length ?? 0} columns
                 </span>
                 <div className="flex items-center gap-2.5">
                   <Link
                     to={`/databases/${databaseId}/${schema}/${encodeURIComponent(table.name)}/edit`}
-                    className="text-muted hover:text-violet font-medium no-underline"
+                    className="text-muted hover:text-violet-fg font-medium no-underline"
                   >
                     DDL Blueprint
                   </Link>
                   <Link
                     to={`/databases/${databaseId}/${schema}/${encodeURIComponent(table.name)}`}
-                    className="text-violet hover:underline font-semibold"
+                    className="text-violet-fg hover:underline font-semibold"
                   >
                     View data
                   </Link>
@@ -522,21 +559,22 @@ export function SchemaPage() {
       <UtilityHeader
         backTo="/databases"
         path={
-          <span className="flex items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
             <Link
               to="/databases"
-              className="hover:underline hover:text-ink transition-colors"
+              className="truncate hover:underline hover:text-ink transition-colors"
             >
               {databaseName}
             </Link>
-            <span>/</span>
+            <span className="shrink-0">/</span>
             {schemas.data && schemas.data.length > 1 ? (
               <select
+                aria-label="Select schema"
                 value={schema}
                 onChange={(e) =>
                   navigate(`/databases/${id}/${e.target.value}/schema`)
                 }
-                className="bg-canvas border border-line rounded px-1.5 py-0.5 text-[11px] font-mono outline-none cursor-pointer"
+                className="max-w-[120px] shrink-0 rounded-lg border border-line bg-canvas px-2 py-0.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
               >
                 {schemas.data.map((s) => (
                   <option key={s} value={s}>
@@ -545,7 +583,7 @@ export function SchemaPage() {
                 ))}
               </select>
             ) : (
-              <span>{schema}</span>
+              <span className="shrink-0">{schema}</span>
             )}
           </span>
         }
@@ -556,15 +594,15 @@ export function SchemaPage() {
             : `${tables.data?.length ?? 0} tables · ${relationships.length} relations`
         }
         actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2.5 w-full min-[901px]:w-auto">
+            <div className="flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode('diagram')}
                 className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                   viewMode === 'diagram'
-                    ? 'bg-violet text-white shadow-2xs'
+                    ? 'bg-ink text-white shadow-2xs'
                     : 'text-muted hover:text-ink',
                 )}
               >
@@ -575,9 +613,9 @@ export function SchemaPage() {
                 type="button"
                 onClick={() => setViewMode('cards')}
                 className={cn(
-                  'flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer',
+                  'flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer',
                   viewMode === 'cards'
-                    ? 'bg-violet text-white shadow-2xs'
+                    ? 'bg-ink text-white shadow-2xs'
                     : 'text-muted hover:text-ink',
                 )}
               >
@@ -590,7 +628,7 @@ export function SchemaPage() {
                 value={search}
                 onChange={setSearch}
                 placeholder="Find table…"
-                className="min-w-48"
+                className="min-w-0 flex-1 basis-[180px] sm:flex-initial sm:min-w-48"
               />
             )}
           </div>
@@ -605,9 +643,8 @@ export function SchemaPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="py-16"
           >
-            <Loading label="Inspecting database schema and relations…" />
+            <PageSkeleton variant="schema" label="Inspecting database schema and relations…" />
           </m.div>
         ) : (
           <m.div
@@ -635,8 +672,8 @@ export function SchemaPage() {
               />
             ) : (
               <div className="grid min-h-[500px] min-w-0 max-w-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-5">
-                <section className="min-w-0 rounded-[18px] border border-line bg-[#fdfcfe] p-5 shadow-xs">
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
+                <section className="min-w-0 rounded-2xl border border-line bg-surface-subtle p-3.5 sm:p-5 shadow-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3.5">
                     {filteredTables.map((table) => {
                       const data = tableMap[table.name]
                       const colCount = data?.structure?.columns.length ?? 0
@@ -646,37 +683,37 @@ export function SchemaPage() {
                           whileHover={{ y: -2 }}
                           whileTap={{ scale: 0.98 }}
                           transition={{ duration: 0.15, ease: 'easeOut' }}
-                          className="group flex flex-col justify-between rounded-[18px] border border-line/80 bg-white p-4 shadow-2xs transition-[border-color,box-shadow] duration-150 hover:border-violet/50 hover:shadow-surface"
+                          className="group flex flex-col justify-between rounded-2xl border border-line/80 bg-white p-4 shadow-2xs transition-[border-color,box-shadow] duration-150 hover:border-violet/50 hover:shadow-surface"
                         >
                           <div>
                             <Link
                               to={`/databases/${id}/${table.schema}/${encodeURIComponent(table.name)}`}
                               className="flex items-center gap-2 pb-2.5 border-b border-line no-underline"
                             >
-                              <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet group-hover:scale-105 transition-transform">
+                              <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet-fg group-hover:scale-105 transition-transform">
                                 <Icon name="table" className="size-4" />
                               </span>
-                              <strong className="truncate text-sm font-bold text-ink flex-1 group-hover:text-violet transition-colors">
+                              <strong className="truncate text-sm font-bold text-ink flex-1 group-hover:text-violet-fg transition-colors">
                                 {table.name}
                               </strong>
                               {table.kind === 'view' && (
-                                <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[9px] font-bold text-accent uppercase">
+                                <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent-fg uppercase">
                                   View
                                 </span>
                               )}
                             </Link>
-                            <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                               <span>{colCount > 0 ? `${colCount} columns` : 'View definition'}</span>
                               <div className="flex items-center gap-2.5">
                                 <Link
                                   to={`/databases/${id}/${table.schema}/${encodeURIComponent(table.name)}/edit`}
-                                  className="text-[11px] font-medium text-muted hover:text-violet no-underline"
+                                  className="text-xs font-medium text-muted hover:text-violet-fg no-underline"
                                 >
                                   DDL Blueprint
                                 </Link>
                                 <Link
                                   to={`/databases/${id}/${table.schema}/${encodeURIComponent(table.name)}`}
-                                  className="text-violet font-medium no-underline hover:underline"
+                                  className="text-violet-fg font-medium no-underline hover:underline"
                                 >
                                   View table →
                                 </Link>
@@ -711,9 +748,9 @@ export function SchemaPage() {
                   )}
                 </section>
 
-                <aside className="h-fit rounded-[20px] border border-line/80 bg-white p-6 shadow-2xs space-y-6 text-xs">
+                <aside className="h-fit rounded-2xl border border-line/80 bg-white p-6 shadow-2xs space-y-6 text-xs">
                   <div className="pb-3 border-b border-line/60">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-violet">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-violet-fg">
                       Active Schema
                     </span>
                     <h2 className="text-2xl font-black text-ink mt-1 mb-0 tracking-tight">
@@ -723,14 +760,14 @@ export function SchemaPage() {
 
                   <div className="space-y-5">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted block mb-1.5">
                         Database
                       </span>
                       <span className="font-semibold text-sm text-ink">{databaseName}</span>
                     </div>
 
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted block mb-2">
                         Available Schemas
                       </span>
                       <div className="flex flex-wrap gap-2">
@@ -742,7 +779,7 @@ export function SchemaPage() {
                             className={cn(
                               'rounded-full px-3 py-1 font-mono text-xs border transition-colors cursor-pointer',
                               s === schema
-                                ? 'border-violet/30 bg-violet-soft text-violet font-bold shadow-2xs'
+                                ? 'border-violet/30 bg-violet-soft text-violet-fg font-bold shadow-2xs'
                                 : 'border-line bg-canvas text-muted hover:border-line-strong hover:text-ink',
                             )}
                           >
@@ -753,7 +790,7 @@ export function SchemaPage() {
                     </div>
 
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block mb-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted block mb-1.5">
                         Objects
                       </span>
                       <span className="font-semibold text-sm text-ink">

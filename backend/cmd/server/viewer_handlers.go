@@ -120,6 +120,45 @@ func (s apiServer) GetDatabaseTableRows(
 	})
 }
 
+func (s apiServer) ExecuteDatabaseQuery(
+	w http.ResponseWriter,
+	r *http.Request,
+	databaseID httpapi.DatabaseId,
+	_ httpapi.ExecuteDatabaseQueryParams,
+) {
+	userID, dbID, ok := viewerIDs(w, r, databaseID)
+	if !ok {
+		return
+	}
+
+	var request httpapi.ExecuteDatabaseQueryRequest
+	if !decodeJSONBodyWithLimit(w, r, &request, 1<<20) {
+		return
+	}
+
+	result, err := s.viewer.QueryPage(
+		r.Context(),
+		userID,
+		dbID,
+		request.Sql,
+		intValue(request.Page),
+		intValue(request.PageSize),
+	)
+	if err != nil {
+		writeServiceError(w, err, "executing query")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, httpapi.QueryResult{
+		Columns:   result.Columns,
+		Rows:      result.Rows,
+		Page:      result.Page,
+		PageSize:  result.PageSize,
+		HasNext:   result.HasNext,
+		Truncated: result.Truncated,
+	})
+}
+
 func viewerIDs(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId) (uint, uint, bool) {
 	userID, ok := currentUserID(w, r)
 	if !ok {

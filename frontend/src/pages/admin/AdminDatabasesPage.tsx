@@ -16,8 +16,8 @@ import {
   ConfirmAction,
   EmptyState,
   ErrorNotice,
-  Loading,
   Modal,
+  PageSkeleton,
   Status,
   baseButtonClasses,
   buttonSizes,
@@ -93,11 +93,11 @@ function ConnectionForm({
   }
 
   const fieldClass =
-    "grid gap-1.5 text-sm font-bold text-ink [&_input]:h-11 [&_input]:w-full [&_input]:rounded-[10px] [&_input]:border [&_input]:border-line-strong [&_input]:bg-white [&_input]:px-3 [&_input]:text-xs [&_input]:font-normal [&_input]:text-ink [&_input]:focus:border-violet [&_select]:h-11 [&_select]:w-full [&_select]:rounded-[10px] [&_select]:border [&_select]:border-line-strong [&_select]:bg-white [&_select]:px-3 [&_select]:text-xs [&_select]:font-normal [&_select]:text-ink [&_select]:focus:border-violet";
+    "grid gap-2 text-sm font-bold text-ink [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-line-strong [&_input]:bg-white [&_input]:px-3.5 [&_input]:text-base sm:[&_input]:text-xs [&_input]:font-normal [&_input]:text-ink [&_input]:outline-none [&_input]:focus:border-violet [&_input]:focus:ring-2 [&_input]:focus:ring-violet/25 [&_select]:h-11 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-line-strong [&_select]:bg-white [&_select]:px-3.5 [&_select]:text-base sm:[&_select]:text-xs [&_select]:font-normal [&_select]:text-ink [&_select]:outline-none [&_select]:focus:border-violet [&_select]:focus:ring-2 [&_select]:focus:ring-violet/25";
 
   return (
-    <form className="space-y-4" onSubmit={save}>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <form className="space-y-6" onSubmit={save}>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <label className={fieldClass}>
           <span>Display name</span>
           <input
@@ -189,13 +189,13 @@ function ConnectionForm({
       </div>
       {message && (
         <p
-          className="rounded-[10px] bg-violet-soft px-3 py-2.5 text-xs font-medium text-[#60428b]"
+          className="rounded-xl bg-violet-soft px-4 py-3 text-xs font-semibold text-violet-fg"
           role="status"
         >
           {message}
         </p>
       )}
-      <footer className="flex flex-wrap justify-end gap-2 border-t border-line/60 pt-3">
+      <footer className="flex flex-wrap justify-end gap-3 border-t border-line/80 pt-5">
         <Button onClick={onCancel}>Cancel</Button>
         <Button disabled={busy} onClick={test}>
           <Icon name="refresh" />
@@ -247,6 +247,11 @@ export function AdminDatabasesPage() {
     setMessage("");
     setAccessError("");
     navigate(`/admin/databases/${db.id}`);
+    if (typeof window !== "undefined" && window.innerWidth <= 900) {
+      setTimeout(() => {
+        document.getElementById("db-detail-view")?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
   }
 
   async function test(id: number) {
@@ -403,9 +408,8 @@ export function AdminDatabasesPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className="py-16"
           >
-            <Loading label="Loading managed databases…" />
+            <PageSkeleton variant="admin-split" label="Loading managed databases…" />
           </m.div>
         ) : (
           <m.div
@@ -441,7 +445,7 @@ export function AdminDatabasesPage() {
                 className={cn(
                   "grid min-h-[72px] w-full grid-cols-[38px_minmax(0,1fr)_auto_18px] items-center gap-3 border-0 border-b border-line bg-white px-4 py-3 text-left hover:bg-violet-soft/20 cursor-pointer transition-colors duration-150",
                   isSelected &&
-                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--violet)]",
+                    "bg-violet-soft/60 shadow-[inset_3px_0_var(--color-violet)]",
                 )}
                 key={database.id}
                 onClick={() => selectDatabase(database)}
@@ -459,7 +463,7 @@ export function AdminDatabasesPage() {
                   <span className="mt-0.5 block text-[11px] text-muted">
                     {attached.length} team{attached.length === 1 ? "" : "s"}
                     {blocked && (
-                      <span className="ml-1.5 font-semibold text-warning">
+                      <span className="ml-1.5 font-semibold text-warning-fg">
                         · Leader missing
                       </span>
                     )}
@@ -477,17 +481,29 @@ export function AdminDatabasesPage() {
           )}
         </section>
 
-        <section className={cn(surfaceClass, "relative min-w-0 overflow-auto shadow-xs")}>
+        <section id="db-detail-view" className={cn(surfaceClass, "relative min-w-0 overflow-auto shadow-xs")}>
           {selected ? (
             <div>
               <div className="flex flex-wrap items-center gap-4 border-b border-line p-5">
-                <div className="flex-1 min-w-[240px]">
-
-                  <h2 className="my-1 text-xl font-bold">{selected.name}</h2>
-                  <p className="text-xs text-muted m-0">
-                    {selected.host}:{selected.port} · {selected.db_name} (SSL:{" "}
-                    {selected.ssl_mode})
-                  </p>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="min-[901px]:hidden flex items-center gap-1 text-xs font-bold text-violet-fg bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+                    title="Back to databases list"
+                  >
+                    <Icon name="chevron-left" className="size-3.5" />
+                    <span>List</span>
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="my-1 truncate text-xl font-bold">{selected.name}</h2>
+                    <p className="m-0 truncate text-xs text-muted">
+                      {selected.host}:{selected.port} · {selected.db_name} (SSL:{" "}
+                      {selected.ssl_mode})
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button size="sm" onClick={() => test(selected.id)}>
@@ -518,7 +534,7 @@ export function AdminDatabasesPage() {
                     trigger={
                       <Button
                         size="sm"
-                        className="border-danger/40 text-danger hover:bg-danger-soft"
+                        className="border-danger/40 text-danger-fg hover:bg-danger-soft"
                       >
                         <Icon name="trash" className="size-3.5" />
                         Delete
@@ -528,7 +544,7 @@ export function AdminDatabasesPage() {
                 </div>
                 {message && (
                   <p
-                    className="w-full text-xs text-violet font-semibold m-0 bg-violet-soft px-3 py-2 rounded-lg"
+                    className="w-full text-xs text-violet-fg font-semibold m-0 bg-violet-soft px-3 py-2 rounded-lg"
                     role="status"
                   >
                     {message}
@@ -566,7 +582,7 @@ export function AdminDatabasesPage() {
                 {missingLeaders.length > 0 && (
                   <div className="rounded-xl border border-warning/30 bg-warning-soft/50 px-4 py-3 text-xs text-ink flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      <strong className="text-warning">
+                      <strong className="text-warning-fg">
                         Missing Keyholder:
                       </strong>{" "}
                       {missingLeaders.map((m) => m.group.name).join(", ")}
@@ -598,7 +614,7 @@ export function AdminDatabasesPage() {
                           <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
                             <Link
                               to={`/admin/groups/${group.id}`}
-                              className="text-xs font-bold text-ink no-underline hover:text-violet hover:underline"
+                              className="text-xs font-bold text-ink no-underline hover:text-violet-fg hover:underline"
                             >
                               {group.name}
                             </Link>
@@ -630,7 +646,7 @@ export function AdminDatabasesPage() {
                                   e.target.value as PermissionLevel,
                                 )
                               }
-                              className="h-8 rounded-lg border border-line-strong bg-white px-2.5 text-xs font-semibold text-ink outline-none focus:border-violet"
+                              className="h-9 sm:h-8 rounded-lg border border-line-strong bg-white px-2.5 text-base sm:text-xs font-semibold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                             >
                               <option value="view_only">Viewer</option>
                               <option value="view_edit">Editor</option>
@@ -641,7 +657,7 @@ export function AdminDatabasesPage() {
                               confirmLabel="Revoke access"
                               onConfirm={() => revokeAccess(group.id)}
                               trigger={<Icon name="close" className="size-4" />}
-                              triggerClassName="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-muted hover:bg-danger-soft hover:text-danger"
+                              triggerClassName="grid size-8 place-items-center rounded-lg border-0 bg-transparent text-muted hover:bg-danger-soft hover:text-danger-fg"
                               triggerAriaLabel={`Revoke ${group.name} access`}
                             />
                           </div>
@@ -664,10 +680,11 @@ export function AdminDatabasesPage() {
                       Grant team access:
                     </span>
                     <select
+                      aria-label="Select group to grant access"
                       value={grantGroupId}
                       onChange={(e) => setGrantGroupId(e.target.value)}
                       required
-                      className="h-9 flex-1 min-w-44 rounded-lg border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+                      className="h-10 sm:h-9 w-full min-w-0 flex-1 rounded-lg border border-line-strong bg-white px-3 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 sm:w-auto sm:min-w-44"
                     >
                       <option value="">Choose a group…</option>
                       {unattachedGroups.map((g) => (
@@ -680,11 +697,12 @@ export function AdminDatabasesPage() {
                       ))}
                     </select>
                     <select
+                      aria-label="Select permission level"
                       value={grantPermission}
                       onChange={(e) =>
                         setGrantPermission(e.target.value as PermissionLevel)
                       }
-                      className="h-9 rounded-lg border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+                      className="h-10 sm:h-9 rounded-lg border border-line-strong bg-white px-3 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                     >
                       <option value="view_only">Viewer</option>
                       <option value="view_edit">Editor</option>

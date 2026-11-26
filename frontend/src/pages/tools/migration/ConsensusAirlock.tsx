@@ -67,7 +67,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
           ? 'border-success/35 bg-success-soft/35'
           : isRejected
             ? 'border-danger/35 bg-danger-soft/35'
-            : 'border-warning/35 bg-[#fffdf7]',
+            : 'border-warning/35 bg-warning-tint',
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -75,7 +75,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
           <strong className="block truncate text-xs font-bold text-ink">
             {approval.group_name}
           </strong>
-          <span className="mt-0.5 block text-[11px] text-muted">
+          <span className="mt-0.5 block text-xs text-muted">
             Keyholder:{' '}
             <strong className="text-ink">
               {approval.leader_username
@@ -94,7 +94,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
               ? 'bg-success text-white'
               : isRejected
                 ? 'bg-danger text-white'
-                : 'bg-warning-soft text-warning border border-warning/30',
+                : 'bg-warning-soft text-warning-fg border border-warning/30',
           )}
         >
           <Icon
@@ -104,9 +104,9 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
         </span>
       </div>
 
-      <div className="mt-2.5 pt-2 border-t border-black/5 text-[11px]">
+      <div className="mt-2.5 pt-2 border-t border-black/5 text-xs">
         {isApproved && (
-          <span className="font-semibold text-success">
+          <span className="font-semibold text-success-fg">
             Sealed by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
             {approval.decided_at
               ? ` · ${new Date(approval.decided_at).toLocaleTimeString()}`
@@ -114,17 +114,17 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
           </span>
         )}
         {isRejected && (
-          <span className="font-semibold text-danger">
+          <span className="font-semibold text-danger-fg">
             Tripped by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
           </span>
         )}
         {!isApproved && !isRejected && (
-          <span className="font-medium text-warning">
+          <span className="font-medium text-warning-fg">
             Awaiting leader decision
           </span>
         )}
         {approval.note && (
-          <p className="mt-1 mb-0 rounded bg-white/80 px-2 py-1 text-[11px] text-ink border border-line/60">
+          <p className="mt-1 mb-0 rounded bg-white/80 px-2 py-1 text-xs text-ink border border-line/60">
             &ldquo;{approval.note}&rdquo;
           </p>
         )}
@@ -260,7 +260,7 @@ function ExecutionAirlockCard({
     <article
       id={`execution-${execution.id}`}
       className={cn(
-        'overflow-hidden rounded-[18px] border bg-white shadow-2xs transition-colors',
+        'overflow-hidden rounded-2xl border bg-white shadow-2xs transition-colors',
         initiallyExpanded
           ? 'border-violet ring-2 ring-violet/20'
           : execution.status === 'pending_review'
@@ -273,37 +273,46 @@ function ExecutionAirlockCard({
       <div className="flex flex-wrap items-center justify-between gap-3 p-4.5">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-line bg-canvas px-2 py-0.5 font-mono text-[11px] font-bold text-violet">
-              #{execution.id}
-            </span>
-            <Status
-              tone={
-                execution.type === 'rollback'
-                  ? 'amber'
-                  : execution.type === 'forward'
-                    ? 'violet'
-                    : 'gray'
-              }
-            >
-              {execution.compensation ? 'Compensation' : typeLabel(execution.type)}
-            </Status>
             <h3 className="m-0 truncate text-sm font-bold text-ink">
               {execution.name}
             </h3>
             <Status tone={meta.tone}>{meta.label}</Status>
-            {totalCount > 0 && (
-              <span className="rounded-full bg-canvas px-2 py-0.5 text-[11px] font-semibold text-muted tabular-nums">
-                {approvedCount}/{totalCount} seals
-              </span>
-            )}
           </div>
-          <p className="mt-1 mb-0 text-[11px] text-muted">
-            Submitted by user #{execution.executed_by} · Draft #{execution.draft_id} ·{' '}
-            {new Date(execution.created_at).toLocaleString()}
+          <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            <span className="font-mono font-semibold text-violet-fg">
+              #{execution.id}
+            </span>
+            <span>·</span>
+            <span
+              className={cn(
+                'font-semibold',
+                execution.type === 'rollback'
+                  ? 'text-warning-fg'
+                  : execution.type === 'forward'
+                    ? 'text-violet-fg'
+                    : 'text-ink',
+              )}
+            >
+              {execution.compensation ? 'Compensation' : typeLabel(execution.type)}
+            </span>
+            {totalCount > 0 && (
+              <>
+                <span>·</span>
+                <span className="font-semibold text-ink tabular-nums">
+                  {approvedCount}/{totalCount} seals
+                </span>
+              </>
+            )}
+            <span>·</span>
+            <span>
+              Draft #{execution.draft_id} · Submitted by user #
+              {execution.executed_by} ·{' '}
+              {new Date(execution.created_at).toLocaleString()}
+            </span>
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
           <Button
             variant="outline"
             size="sm"
@@ -316,9 +325,9 @@ function ExecutionAirlockCard({
       </div>
 
       {showSql && (
-        <div className="border-t border-line bg-[#fbfafd] px-4.5 py-3.5 space-y-2.5">
+        <div className="border-t border-line bg-surface-subtle px-4.5 py-3.5 space-y-2.5">
           <div>
-            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
               Immutable Execution Snapshot SQL
             </span>
             <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
@@ -327,7 +336,7 @@ function ExecutionAirlockCard({
           </div>
           {execution.down_sql && (
             <div>
-              <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-success">
+              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
                 Paired Down SQL
               </span>
               <pre className="m-0 max-h-32 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
@@ -336,7 +345,7 @@ function ExecutionAirlockCard({
             </div>
           )}
           {execution.irreversible && execution.irreversible_reason && (
-            <p className="m-0 text-xs text-warning font-medium">
+            <p className="m-0 text-xs text-warning-fg font-medium">
               Marked irreversible: {execution.irreversible_reason}
             </p>
           )}
@@ -418,15 +427,15 @@ function ExecutionAirlockCard({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Optional approval note, or required rejection reason…"
-                  className="h-10 flex-1 rounded-[10px] border border-line-strong bg-white px-3 text-xs outline-none focus:border-violet"
+                  className="h-10 flex-1 rounded-xl border border-line-strong bg-white px-3 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
                 />
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={actionBusy}
                     onClick={handleReject}
-                    className="border-danger/40 text-danger hover:bg-danger-soft"
+                    className="flex-1 sm:flex-initial border-danger/40 text-danger-fg hover:bg-danger-soft"
                   >
                     <Icon name="close" className="size-3.5" />
                     Trip Airlock (Reject)
@@ -436,6 +445,7 @@ function ExecutionAirlockCard({
                     size="sm"
                     loading={actionBusy}
                     onClick={handleApprove}
+                    className="flex-1 sm:flex-initial"
                   >
                     <Icon name="shield" className="size-3.5" />
                     Engage Seal (Approve)
@@ -488,7 +498,7 @@ function ExecutionAirlockCard({
                 <span className="font-bold text-ink">
                   Worker Telemetry · Attempt #{execution.attempt}
                 </span>
-                <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
                   {execution.queued_at && (
                     <span>
                       Queued {new Date(execution.queued_at).toLocaleTimeString()}
@@ -527,7 +537,7 @@ function ExecutionAirlockCard({
                 />
               )}
               {execution.error_message && (
-                <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-[11px] text-danger">
+                <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-xs text-danger-fg break-words">
                   {execution.error_code ? `[${execution.error_code}] ` : ''}
                   {execution.error_message}
                 </div>
@@ -611,10 +621,10 @@ export function ConsensusAirlock({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-line/80 bg-white p-4.5 shadow-2xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
         <div className="flex items-center gap-3">
           <h2 className="m-0 text-base font-bold text-ink">Consensus Airlock</h2>
-          <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-[11px] font-bold text-violet">
+          <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg">
             {counts.pending_review > 0
               ? `${counts.pending_review} awaiting sign-off`
               : 'Consensus settled'}
@@ -628,9 +638,9 @@ export function ConsensusAirlock({
               type="button"
               onClick={() => onFilterChange(opt.key)}
               className={cn(
-                'rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors cursor-pointer',
+                'rounded-full border px-3 py-1 text-xs font-semibold transition-colors cursor-pointer',
                 filter === opt.key
-                  ? 'border-[#1c1b22] bg-[#1c1b22] text-white shadow-xs'
+                  ? 'border-ink bg-ink text-white shadow-xs'
                   : 'border-line bg-white/90 text-muted hover:border-line-strong hover:text-ink shadow-2xs',
               )}
             >
@@ -652,7 +662,7 @@ export function ConsensusAirlock({
         ))}
 
         {filtered.length === 0 && (
-          <div className="rounded-[14px] border border-line bg-white py-12 shadow-2xs">
+          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
             <EmptyState icon="shield" title="No executions in this stage">
               {filter === 'all'
                 ? 'Submit a migration draft, rollback, or forward to open a Consensus Airlock.'

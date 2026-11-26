@@ -203,6 +203,14 @@ export type MigrationHistoryPage = {
 export type ExplainResponse = {
 	statements: Array<{ sql: string; plan: Record<string, unknown>[] }>;
 };
+export type QueryResult = {
+	columns: string[];
+	rows: (string | null)[][];
+	page: number;
+	page_size: number;
+	has_next: boolean;
+	truncated: boolean;
+};
 
 const API_BASE =
 	(import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
@@ -326,6 +334,11 @@ export const api = {
 		request<ExplainResponse>(`/databases/${id}/migrations/explain`, {
 			method: "POST",
 			body: { sql },
+		}),
+	query: (id: number, sql: string, page = 1, pageSize = 50) =>
+		request<QueryResult>(`/databases/${id}/query`, {
+			method: "POST",
+			body: { sql, page, page_size: pageSize },
 		}),
 	history: (id: number, page = 1, hideRollback = false) =>
 		requestHistoryPage(id, page, hideRollback),

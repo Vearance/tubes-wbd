@@ -3,54 +3,50 @@
 @theme {
   --color-canvas: #f8f6fc;
   --color-surface: #ffffff;
+  --color-surface-subtle: #fbfafd;
   --color-surface-alt: #f3eff9;
   --color-ink: #1c1b22;
-  --color-muted: #797482;
+  --color-ink-strong: #121116;
+  --color-muted: #5f5a69;
+  --color-disabled-bg: #f0edf5;
+  --color-disabled-fg: #767080;
   --color-line: #ece8f2;
   --color-line-strong: #dad3e3;
-  --color-violet: #845ec2;
+  --color-violet: #7b4fc2;
   --color-violet-soft: #ede6fc;
-  --color-accent: #f06292;
+  --color-violet-fg: #5b3699;
+  --color-accent: #d9467a;
   --color-accent-soft: #fee8ef;
+  --color-accent-fg: #9f1d4e;
   --color-success: #2eb872;
   --color-success-soft: #e3f6ed;
+  --color-success-fg: #146c43;
   --color-warning: #b57a1e;
   --color-warning-soft: #fef3c7;
-  --color-danger: #e25464;
+  --color-warning-tint: #fffdf7;
+  --color-warning-fg: #855200;
+  --color-danger: #d93f52;
+  --color-danger-strong: #b82c3d;
   --color-danger-soft: #feebee;
-  --font-mono: "SFMono-Regular", Consolas, monospace;
+  --color-danger-fg: #9b2231;
+  --color-editor-bg: #242227;
+  --color-editor-gutter: #1d1b20;
+  --color-editor-border: #3a3740;
+  --color-editor-fg: #f2edf4;
+  --color-editor-muted: #9b94a3;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   --shadow-surface: 0 12px 32px -4px rgba(45, 30, 70, 0.05), 0 2px 6px -1px rgba(45, 30, 70, 0.02);
   --shadow-xs: 0 2px 8px -1px rgba(45, 30, 70, 0.04);
   --shadow-2xs: 0 1px 4px 0 rgba(45, 30, 70, 0.03);
 }
 
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   color: var(--color-ink);
   background: var(--color-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-
-  /* Transitional aliases for components being moved to named Tailwind tokens. */
-  --canvas: var(--color-canvas);
-  --surface: var(--color-surface);
-  --surface-alt: var(--color-surface-alt);
-  --text: var(--color-ink);
-  --muted: var(--color-muted);
-  --line: var(--color-line);
-  --line-strong: var(--color-line-strong);
-  --violet: var(--color-violet);
-  --violet-soft: var(--color-violet-soft);
-  --accent: var(--color-accent);
-  --accent-soft: var(--color-accent-soft);
-  --green: var(--color-success);
-  --green-soft: var(--color-success-soft);
-  --amber: var(--color-warning);
-  --amber-soft: var(--color-warning-soft);
-  --red: var(--color-danger);
-  --red-soft: var(--color-danger-soft);
-  --shadow: var(--shadow-surface);
-  --mono: var(--font-mono);
 }
 
 @layer base {

@@ -507,6 +507,24 @@ type MigrationExplainStatement struct {
 	Sql  string                   `json:"sql"`
 }
 
+// ExecuteDatabaseQueryRequest defines model for ExecuteDatabaseQueryRequest.
+type ExecuteDatabaseQueryRequest struct {
+	Page     *int   `json:"page,omitempty"`
+	PageSize *int   `json:"page_size,omitempty"`
+	// Sql SQL statement to execute. Must be a single read-only query.
+	Sql string `json:"sql"`
+}
+
+// QueryResult defines model for QueryResult.
+type QueryResult struct {
+	Columns   []string    `json:"columns"`
+	HasNext   bool        `json:"has_next"`
+	Page      int         `json:"page"`
+	PageSize  int         `json:"page_size"`
+	Rows      [][]*string `json:"rows"`
+	Truncated bool        `json:"truncated"`
+}
+
 // MigrationHistoryDetail defines model for MigrationHistoryDetail.
 type MigrationHistoryDetail struct {
 	Active             *bool                                `json:"active,omitempty"`
@@ -746,6 +764,11 @@ type ExplainMigrationParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
 }
 
+// ExecuteDatabaseQueryParams defines parameters for ExecuteDatabaseQuery.
+type ExecuteDatabaseQueryParams struct {
+	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
+}
+
 // SubmitMigrationForwardParams defines parameters for SubmitMigrationForward.
 type SubmitMigrationForwardParams struct {
 	XCSRFToken CSRFToken `json:"X-CSRF-Token"`
@@ -857,6 +880,9 @@ type CreateMigrationDraftJSONRequestBody = MigrationDraftRequest
 // ExplainMigrationJSONRequestBody defines body for ExplainMigration for application/json ContentType.
 type ExplainMigrationJSONRequestBody = MigrationExplainRequest
 
+// ExecuteDatabaseQueryJSONRequestBody defines body for ExecuteDatabaseQuery for application/json ContentType.
+type ExecuteDatabaseQueryJSONRequestBody = ExecuteDatabaseQueryRequest
+
 // UpdateMigrationDraftJSONRequestBody defines body for UpdateMigrationDraft for application/json ContentType.
 type UpdateMigrationDraftJSONRequestBody = MigrationDraftRequest
 
@@ -952,6 +978,9 @@ type ServerInterface interface {
 	// ExplainMigration Explain migration SQL without executing it
 	// (POST /databases/{databaseId}/migrations/explain)
 	ExplainMigration(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ExplainMigrationParams)
+	// ExecuteDatabaseQuery Execute a read-only SQL query
+	// (POST /databases/{databaseId}/query)
+	ExecuteDatabaseQuery(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params ExecuteDatabaseQueryParams)
 	// SubmitMigrationForward Submit forward of the latest rolled-back migration for approval
 	// (POST /databases/{databaseId}/migrations/forward)
 	SubmitMigrationForward(w http.ResponseWriter, r *http.Request, databaseId DatabaseId, params SubmitMigrationForwardParams)
@@ -2411,6 +2440,60 @@ func (siw *ServerInterfaceWrapper) ExplainMigration(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ExplainMigration(w, r, databaseId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExecuteDatabaseQuery operation middleware
+func (siw *ServerInterfaceWrapper) ExecuteDatabaseQuery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "databaseId" -------------
+	var databaseId DatabaseId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "databaseId", chi.URLParam(r, "databaseId"), &databaseId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "databaseId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExecuteDatabaseQueryParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CSRFToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExecuteDatabaseQuery(w, r, databaseId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
