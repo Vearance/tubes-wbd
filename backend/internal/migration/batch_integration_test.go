@@ -82,6 +82,19 @@ FOR EACH ROW EXECUTE FUNCTION fail_first_down_batch_once();
 	require.Equal(t, ExecutionStatusCompensated, compensated.Status)
 	require.NoError(t, env.target.QueryRow(ctx, `SELECT count(*) FROM batch_items WHERE value = 'pending'`).Scan(&pendingRows))
 	require.Equal(t, 4, pendingRows)
+
+	hidden, err := svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	var compensationVisible bool
+	for _, entry := range hidden.Entries {
+		if entry.ExecutionID != nil && *entry.ExecutionID == compensation.ID && entry.Status == RunStatusSuccess {
+			compensationVisible = true
+		}
+	}
+	require.True(t, compensationVisible, "hide rollback must not hide a compensation whose partial target stays visible")
+	require.Nil(t, hidden.Forward, "a compensated partial migration cannot be forwarded")
+	_, err = svc.SubmitForwardForReview(ctx, 42, env.dbID)
+	require.ErrorIs(t, err, ErrInvalidForward)
 }
 
 func TestIntegrationBatchMigrationAndReverseRollback(t *testing.T) {

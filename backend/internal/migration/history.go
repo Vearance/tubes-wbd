@@ -33,7 +33,15 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int, hideRollbac
 			h.execution_type, h.target_execution_id, h.active, h.name, h.executed_by, h.executed_at, h.duration_ms
 		FROM _dbm.migration_history h
 		WHERE NOT $1::boolean OR (
-			NOT (h.status = 'success' AND h.execution_type = 'rollback')
+			NOT (
+				h.status = 'success'
+				AND h.execution_type = 'rollback'
+				AND EXISTS (
+					SELECT 1 FROM _dbm.migration_history target
+					WHERE target.status = 'success'
+						AND target.execution_id = h.target_execution_id
+				)
+			)
 			AND NOT (
 				h.status = 'success'
 				AND EXISTS (
@@ -156,22 +164,35 @@ func latestActiveExecutionHistory(ctx context.Context, tx pgx.Tx) (*HistoryEntry
 	return getExecutionHistoryByID(ctx, tx, uint(executionID.Int64))
 }
 
-func latestExecutionHistory(ctx context.Context, tx pgx.Tx) (*HistoryEntry, error) {
+func forwardCandidate(ctx context.Context, tx pgx.Tx) (*HistoryEntry, error) {
 	exists, err := historyExists(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, ErrVersionNotFound
+		return nil, ErrInvalidForward
 	}
 	var executionID pgtype.Int8
 	err = tx.QueryRow(ctx,
-		"SELECT execution_id FROM _dbm.migration_history WHERE status = 'success' ORDER BY version DESC LIMIT 1").Scan(&executionID)
+		`SELECT latest.execution_id
+		FROM (
+			SELECT execution_id, execution_type, target_execution_id
+			FROM _dbm.migration_history
+			WHERE status = 'success'
+			ORDER BY version DESC
+			LIMIT 1
+		) latest
+		WHERE latest.execution_type = 'rollback'
+			AND EXISTS (
+				SELECT 1 FROM _dbm.migration_history target
+				WHERE target.status = 'success'
+					AND target.execution_id = latest.target_execution_id
+			)`).Scan(&executionID)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && !executionID.Valid {
-		return nil, ErrVersionNotFound
+		return nil, ErrInvalidForward
 	}
 	if err != nil {
-		return nil, fmt.Errorf("migration: find latest execution history: %w", err)
+		return nil, fmt.Errorf("migration: find forward candidate: %w", err)
 	}
 	return getExecutionHistoryByID(ctx, tx, uint(executionID.Int64))
 }

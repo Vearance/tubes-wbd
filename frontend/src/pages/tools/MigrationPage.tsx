@@ -72,10 +72,8 @@ export function MigrationPage() {
 
   const draftList = drafts.data ?? []
   const executionList = executions.data ?? []
-  const historyList = history.data ?? []
-  const latestSuccessfulExecution = executionList.find(
-    (execution) => execution.status === 'success',
-  )
+  const historyList = history.data?.entries ?? []
+  const forwardCandidate = history.data?.forward
 
   const hasLiveQueueOrRunning = executionList.some(
     (e) => e.status === 'queued' || e.status === 'running',
@@ -301,7 +299,7 @@ export function MigrationPage() {
               entries={historyList}
               hideRollback={hideRollback}
               onHideRollbackChange={setHideRollback}
-              latestSuccessfulExecution={latestSuccessfulExecution}
+              forwardCandidate={forwardCandidate}
               onRollbackProposed={async (executionId) => {
                 setFocusedExecutionId(executionId)
                 setAirlockFilter('pending_review')

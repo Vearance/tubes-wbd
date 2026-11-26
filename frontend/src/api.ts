@@ -199,6 +199,12 @@ export type MigrationHistoryPage = {
 	page: number;
 	page_size: number;
 	has_next: boolean;
+	forward?: MigrationForwardCandidate;
+};
+export type MigrationForwardCandidate = {
+	rollback_execution_id: number;
+	target_execution_id: number;
+	name: string;
 };
 export type ExplainResponse = {
 	statements: Array<{ sql: string; plan: Record<string, unknown>[] }>;
@@ -331,15 +337,17 @@ export const api = {
 		requestHistoryPage(id, page, hideRollback),
 	historyAll: async (id: number, hideRollback = false) => {
 		const entries: MigrationHistoryEntry[] = [];
+		let forward: MigrationForwardCandidate | undefined;
 		let page = 1;
 		let hasNext = true;
 		while (hasNext) {
 			const result = await requestHistoryPage(id, page, hideRollback);
 			entries.push(...result.entries);
+			if (page === 1) forward = result.forward;
 			hasNext = result.has_next;
 			page += 1;
 		}
-		return entries;
+		return { entries, forward };
 	},
 	historyEntry: (id: number, version: number) =>
 		request<MigrationHistoryDetail>(

@@ -2058,6 +2058,24 @@ components:
           type: integer
         has_next:
           type: boolean
+        forward:
+          $ref: '#/components/schemas/MigrationForwardCandidate'
+    MigrationForwardCandidate:
+      type: object
+      description: Present when the latest successful execution is a rollback that a forward can re-apply. It is computed from the complete history, independent of hide_rollback.
+      required:
+        - rollback_execution_id
+        - target_execution_id
+        - name
+      properties:
+        rollback_execution_id:
+          type: integer
+          format: int64
+        target_execution_id:
+          type: integer
+          format: int64
+        name:
+          type: string
     MigrationExplainRequest:
       type: object
       required:

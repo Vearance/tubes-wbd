@@ -103,18 +103,18 @@ func (s *MigrationService) SubmitForwardForReview(ctx context.Context, userID, d
 	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
-	var latest *HistoryEntry
+	var rollback *HistoryEntry
 	if err := s.readOnly(ctx, dbID, func(tx pgx.Tx) error {
 		var err error
-		latest, err = latestExecutionHistory(ctx, tx)
+		rollback, err = forwardCandidate(ctx, tx)
 		return err
 	}); err != nil {
 		return nil, err
 	}
-	if latest.Type != ExecutionTypeRollback || latest.TargetExecutionID == nil {
+	if rollback.TargetExecutionID == nil {
 		return nil, ErrInvalidForward
 	}
-	return s.createActionExecution(ctx, userID, dbID, *latest.TargetExecutionID, ExecutionTypeForward, "")
+	return s.createActionExecution(ctx, userID, dbID, *rollback.TargetExecutionID, ExecutionTypeForward, "")
 }
 
 func (s *MigrationService) createActionExecution(ctx context.Context, userID, dbID, targetID uint, action ExecutionType, sql string) (*Execution, error) {

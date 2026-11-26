@@ -182,6 +182,15 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, tableExists(t, env.target, "projects"))
 
+	for _, hide := range []bool{false, true} {
+		afterRollback, err := svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, hide)
+		require.NoError(t, err)
+		require.NotNil(t, afterRollback.Forward, "forward must be offered regardless of hide_rollback=%v", hide)
+		require.Equal(t, rollback.ID, afterRollback.Forward.RollbackExecutionID)
+		require.Equal(t, up.ID, afterRollback.Forward.TargetExecutionID)
+		require.Equal(t, "create projects", afterRollback.Forward.Name)
+	}
+
 	forward, err := svc.SubmitForwardForReview(ctx, 42, env.dbID)
 	require.NoError(t, err)
 	require.Equal(t, ExecutionTypeForward, forward.Type)
@@ -201,6 +210,7 @@ func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	require.False(t, history.Entries[1].Active)
 	require.Equal(t, ExecutionTypeUp, history.Entries[2].Type)
 	require.False(t, history.Entries[2].Active)
+	require.Nil(t, history.Forward, "forward is no longer available once applied")
 
 	hiddenHistory, err := svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
 	require.NoError(t, err)
