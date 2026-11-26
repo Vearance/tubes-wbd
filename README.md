@@ -215,6 +215,11 @@ bash scripts/coverage.sh --unit   # unit tests only
 
 The script prints statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. It runs Go coverage from `backend/` and excludes the generated `backend/internal/http/api.gen.go` from the report.
 
+## observability
+
+Centralized logs (Grafana Loki), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Grafana Tempo via OpenTelemetry Collector), Prometheus metrics (`/metrics` on API `:8080`, worker `:9091`, RabbitMQ `:15692`), and auto-provisioned Grafana dashboards (`:3000`) are included in the Compose stack.
+
+See [`observability/README.md`](observability/README.md) for architecture details, label cardinality guardrails, dashboard descriptions, and verified log/trace correlation and `/metrics` output examples.
 
 ## contributors
 
