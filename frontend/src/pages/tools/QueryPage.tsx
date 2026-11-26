@@ -5,7 +5,7 @@ import {
 } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { AnimatePresence, m } from 'motion/react'
-import { api, type TableStructure } from '../../api'
+import { api, type QueryResult, type TableStructure } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
 import { useWorkspaceContext } from '../../components/workspaceContext'
 import { Icon } from '../../components/Icon'
@@ -13,6 +13,8 @@ import {
   Button,
   EmptyState,
   ErrorNotice,
+  Modal,
+  NullBadge,
   Status,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
@@ -106,7 +108,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
   if (!node || typeof node !== 'object') return null
 
   return (
-    <div className="rounded-xl border border-line bg-[#fdfcfe] p-4 shadow-2xs">
+    <div className="rounded-xl border border-line bg-surface-subtle p-4 shadow-2xs">
       <div className="flex items-center gap-2 mb-3">
         <Status tone="violet">Step #{index}</Status>
         <span className="font-bold text-sm text-ink">{node['Node Type'] ?? 'Scan Node'}</span>
@@ -119,7 +121,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Total Cost
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -127,7 +129,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
           </span>
         </div>
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Startup Cost
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -135,7 +137,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
           </span>
         </div>
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Est. Rows
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -143,7 +145,7 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
           </span>
         </div>
         <div className="rounded-lg border border-line bg-white p-2.5">
-          <span className="text-[10px] uppercase font-bold text-muted block mb-0.5">
+          <span className="text-[11px] uppercase font-bold text-muted block mb-0.5">
             Plan Width
           </span>
           <span className="font-mono font-semibold text-ink">
@@ -153,20 +155,20 @@ function PlanCard({ node, index }: { node: ExplainPlanNode; index: number }) {
       </div>
 
       {node['Filter'] && (
-        <div className="mt-3 rounded-lg bg-amber-soft/60 border border-warning/20 p-2.5 text-xs">
-          <span className="text-[10px] font-bold text-warning uppercase block mb-0.5">
+        <div className="mt-3 rounded-lg bg-warning-soft/60 border border-warning/25 p-2.5 text-xs">
+          <span className="text-[11px] font-bold text-warning-fg uppercase block mb-0.5">
             Filter Condition
           </span>
-          <code className="font-mono text-[11px] text-ink">{node['Filter']}</code>
+          <code className="font-mono text-xs text-ink">{node['Filter']}</code>
         </div>
       )}
 
       {node['Index Cond'] && (
-        <div className="mt-3 rounded-lg bg-success-soft/60 border border-success/20 p-2.5 text-xs">
-          <span className="text-[10px] font-bold text-success uppercase block mb-0.5">
+        <div className="mt-3 rounded-lg bg-success-soft/60 border border-success/25 p-2.5 text-xs">
+          <span className="text-[11px] font-bold text-success-fg uppercase block mb-0.5">
             Index Condition ({node['Index Name']})
           </span>
-          <code className="font-mono text-[11px] text-ink">{node['Index Cond']}</code>
+          <code className="font-mono text-xs text-ink">{node['Index Cond']}</code>
         </div>
       )}
     </div>
@@ -191,7 +193,7 @@ export function QueryPage() {
   const [editedSql, setEditedSql] = useState<string | null>(
     initialSqlParam ??
       (initialTableParam
-        ? `SELECT * FROM ${schema}.${initialTableParam}\nLIMIT 25;`
+        ? `SELECT * FROM ${schema}.${initialTableParam};`
         : null),
   )
 
@@ -199,7 +201,7 @@ export function QueryPage() {
   const sql =
     editedSql ??
     (defaultTableName
-      ? `SELECT * FROM ${schema}.${defaultTableName}\nLIMIT 25;`
+      ? `SELECT * FROM ${schema}.${defaultTableName};`
       : `-- Select a table from the schema reference on the left\nSELECT 1;`)
 
   const [expandedTable, setExpandedTable] = useState<string | null>(
@@ -209,12 +211,19 @@ export function QueryPage() {
     Record<string, TableStructure>
   >({})
   const [tableFilter, setTableFilter] = useState('')
+  const [queryResult, setQueryResult] = useState<QueryResult | null>(null)
+  const [queryBusy, setQueryBusy] = useState(false)
+  const [pageSize, setPageSize] = useState(50)
+  const [executedSql, setExecutedSql] = useState('')
+  const [activeTab, setActiveTab] = useState<'results' | 'plan'>('results')
   const [plan, setPlan] = useState<unknown[] | null>(null)
   const [rawPlan, setRawPlan] = useState('')
   const [planTab, setPlanTab] = useState<'visual' | 'json'>('visual')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedCell, setCopiedCell] = useState<string | null>(null)
+  const [mobileSchemaOpen, setMobileSchemaOpen] = useState(false)
 
   const lineNumbersRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -227,6 +236,44 @@ export function QueryPage() {
     }
   }
 
+  async function executeQueryPage(
+    targetSql: string,
+    targetPage: number,
+    targetPageSize: number,
+  ) {
+    if (!targetSql.trim()) return
+    setQueryBusy(true)
+    setError('')
+    try {
+      const result = await api.query(id, targetSql, targetPage, targetPageSize)
+      setQueryResult(result)
+      setExecutedSql(targetSql)
+      setActiveTab('results')
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to execute query',
+      )
+    } finally {
+      setQueryBusy(false)
+    }
+  }
+
+  function runQuery() {
+    void executeQueryPage(sql, 1, pageSize)
+  }
+
+  function goToPage(targetPage: number) {
+    if (targetPage < 1 || !executedSql.trim()) return
+    void executeQueryPage(executedSql, targetPage, pageSize)
+  }
+
+  function handlePageSizeChange(nextSize: number) {
+    setPageSize(nextSize)
+    if (executedSql.trim() && queryResult) {
+      void executeQueryPage(executedSql, 1, nextSize)
+    }
+  }
+
   async function explain() {
     if (!sql.trim()) return
     setBusy(true)
@@ -236,6 +283,7 @@ export function QueryPage() {
       setRawPlan(JSON.stringify(result.statements, null, 2))
       const plans = result.statements.flatMap((s) => s.plan)
       setPlan(plans)
+      setActiveTab('plan')
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'Unable to explain query',
@@ -248,7 +296,11 @@ export function QueryPage() {
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault()
-      void explain()
+      if (e.shiftKey) {
+        void explain()
+      } else {
+        void runQuery()
+      }
     }
   }
 
@@ -261,6 +313,41 @@ export function QueryPage() {
     void navigator.clipboard?.writeText(rawPlan)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  function copyCellValue(val: string | null, key: string) {
+    if (val === null) return
+    void navigator.clipboard?.writeText(val)
+    setCopiedCell(key)
+    setTimeout(() => setCopiedCell(null), 1500)
+  }
+
+  function handleExportCsv() {
+    if (!queryResult || queryResult.rows.length === 0) return
+    const escapeCsv = (val: string | null) => {
+      if (val === null) return ''
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`
+      }
+      return val
+    }
+    const header = queryResult.columns.map(escapeCsv).join(',')
+    const rows = queryResult.rows
+      .map((row) => row.map(escapeCsv).join(','))
+      .join('\n')
+    const csvContent = `${header}\n${rows}`
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute(
+      'download',
+      `query-result-p${queryResult.page}-${Date.now()}.csv`,
+    )
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   async function toggleTableReference(tableName: string) {
@@ -316,15 +403,6 @@ export function QueryPage() {
         title="SQL editor"
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleFormat}
-              title="Format SQL keywords"
-            >
-              <Icon name="code" className="size-3.5" />
-              Format
-            </Button>
             {canEdit && (
               <Button
                 variant="outline"
@@ -333,18 +411,27 @@ export function QueryPage() {
                 title="Promote this SQL into a Migration Draft"
               >
                 <Icon name="migration" className="size-3.5" />
-                Stage as Migration Draft
+                Stage Draft
               </Button>
             )}
             <Button
-              variant="dark"
+              variant="outline"
               size="sm"
               loading={busy}
               onClick={explain}
-              title="Run EXPLAIN (FORMAT JSON) (Ctrl+Enter)"
+              title="Run EXPLAIN (FORMAT JSON) (Ctrl+Shift+Enter)"
+            >
+              Explain
+            </Button>
+            <Button
+              variant="dark"
+              size="sm"
+              loading={queryBusy}
+              onClick={runQuery}
+              title="Execute read-only SQL query (Ctrl+Enter)"
             >
               <Icon name="play" className="size-3.5" />
-              Explain query
+              Run query
             </Button>
           </>
         }
@@ -352,23 +439,24 @@ export function QueryPage() {
 
       {error && <ErrorNotice message={error} onDismiss={() => setError('')} />}
 
-      <div className="grid min-h-[calc(100dvh-130px)] min-w-0 max-w-full grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-[18px] border border-line bg-white shadow-xs max-[900px]:grid-cols-[minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col justify-between border-r border-line bg-[#fbfafd] p-4 text-xs text-muted max-[900px]:hidden">
+      <div className="grid min-h-[calc(100dvh-130px)] min-w-0 max-w-full grid-cols-[260px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-line bg-white shadow-xs max-[900px]:grid-cols-[minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col justify-between border-r border-line bg-surface-subtle p-4 text-xs text-muted max-[900px]:hidden">
           <div className="flex min-h-0 flex-1 flex-col">
             <header className="mb-2.5 flex items-center justify-between">
-              <span className="font-bold text-[11px] uppercase tracking-wider text-ink">
+              <span className="font-bold text-xs uppercase tracking-wider text-ink">
                 Schema Reference
               </span>
-              <span className="font-mono text-[10px] text-violet">{schema}</span>
+              <span className="font-mono text-[11px] font-semibold text-violet-fg">{schema}</span>
             </header>
 
             {(tables.data?.length ?? 0) > 6 && (
               <input
                 type="text"
+                aria-label="Filter tables"
                 placeholder="Filter tables…"
                 value={tableFilter}
                 onChange={(e) => setTableFilter(e.target.value)}
-                className="mb-2 h-8 w-full rounded-lg border border-line bg-white px-2.5 text-[11px] text-ink outline-none focus:border-violet"
+                className="mb-2 h-8 w-full rounded-lg border border-line bg-white px-2.5 text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
               />
             )}
 
@@ -384,10 +472,10 @@ export function QueryPage() {
                     <button
                       type="button"
                       onClick={() => void toggleTableReference(t.name)}
-                      className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-[11px] font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
+                      className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-xs font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
                     >
                       <span className="flex items-center gap-1.5 min-w-0">
-                        <Icon name="table" className="size-3.5 text-violet shrink-0" />
+                        <Icon name="table" className="size-3.5 text-violet-fg shrink-0" />
                         <span className="truncate font-mono">{t.name}</span>
                       </span>
                       <Icon
@@ -403,7 +491,7 @@ export function QueryPage() {
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                          className="overflow-hidden border-t border-line bg-[#fcfbfd]"
+                          className="overflow-hidden border-t border-line bg-surface-subtle"
                         >
                           <div className="px-2.5 py-2 space-y-1.5">
                             {st ? (
@@ -414,17 +502,17 @@ export function QueryPage() {
                                     type="button"
                                     onClick={() => insertSnippet(c.name)}
                                     title={`Insert "${c.name}" at cursor`}
-                                    className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left font-mono text-[10px] text-ink hover:bg-white transition-colors cursor-pointer"
+                                    className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-ink hover:bg-white transition-colors cursor-pointer"
                                   >
                                     <span className="truncate">{c.name}</span>
-                                    <span className="shrink-0 text-[9px] text-muted">
+                                    <span className="shrink-0 text-[11px] text-muted">
                                       {c.type}
                                     </span>
                                   </button>
                                 ))}
                               </div>
                             ) : (
-                              <span className="block py-1 text-[10px] text-muted">
+                              <span className="block py-1 text-[11px] text-muted">
                                 Loading columns…
                               </span>
                             )}
@@ -436,7 +524,7 @@ export function QueryPage() {
                 )
               })}
               {!tables.loading && visibleTables.length === 0 && (
-                <p className="m-0 py-3 text-center text-[11px] text-muted">
+                <p className="m-0 py-3 text-center text-xs text-muted">
                   No tables found in {schema}
                 </p>
               )}
@@ -444,42 +532,65 @@ export function QueryPage() {
           </div>
 
           <div className="mt-6 border-t border-line/70 pt-4 space-y-3.5">
-            <p className="m-0 text-[11px] leading-relaxed text-muted">
+            <p className="m-0 text-xs leading-relaxed text-muted">
               Press{' '}
-              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink shadow-2xs">
+              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink shadow-2xs">
                 Ctrl+Enter
               </kbd>{' '}
-              to explain query cost.
+              to run query, or{' '}
+              <kbd className="rounded-md border border-line bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink shadow-2xs">
+                Ctrl+Shift+Enter
+              </kbd>{' '}
+              to explain cost.
             </p>
-            <div className="rounded-2xl border border-violet/20 bg-violet-soft/50 p-3.5 text-[#5e3894] shadow-2xs">
+            <div className="rounded-2xl border border-line/80 bg-white p-3.5 text-ink shadow-2xs">
               <div className="flex items-center gap-1.5 font-bold text-xs">
-                <Icon name="shield" className="size-4" />
-                Safe Planning Mode
+                <Icon name="shield" className="size-4 text-violet-fg" />
+                Read-Only Execution
               </div>
-              <p className="mt-1.5 mb-0 text-[11px] leading-relaxed text-[#7350a8]">
-                Evaluates via read-only{' '}
-                <code className="font-mono text-[10px] font-bold">EXPLAIN</code>{' '}
-                without mutating tables.
+              <p className="mt-1.5 mb-0 text-xs leading-relaxed text-muted">
+                Executes in a safe read-only transaction with statement timeout
+                and paginated results (up to 100 rows per page).
               </p>
             </div>
           </div>
         </aside>
 
-        <section className="grid min-w-0 grid-rows-[44px_280px_44px_minmax(0,1fr)] overflow-hidden">
-          <div className="flex min-w-0 items-center justify-between border-b border-line bg-canvas/40 px-4 text-xs font-medium text-muted">
+        <section className="grid min-w-0 grid-rows-[auto_200px_auto_minmax(0,1fr)] sm:grid-rows-[auto_280px_auto_minmax(0,1fr)] overflow-hidden">
+          <div className="flex min-h-[44px] min-w-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-canvas/40 px-3.5 py-2 sm:px-4 text-xs font-medium text-muted">
             <span className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-violet" />
-              SQL Editor
+              <span className="font-semibold text-ink">SQL</span>
+              <span className="text-xs text-muted">
+                · {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+              </span>
             </span>
-            <span className="text-[11px] text-muted">
-              {lineCount} {lineCount === 1 ? 'line' : 'lines'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMobileSchemaOpen(true)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer min-[901px]:hidden"
+                title="Insert column or table from schema"
+              >
+                <Icon name="columns" className="size-3.5 text-violet-fg" />
+                Columns
+              </button>
+              <button
+                type="button"
+                onClick={handleFormat}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink transition-colors hover:border-line-strong cursor-pointer"
+                title="Format SQL keywords"
+              >
+                <Icon name="code" className="size-3.5 text-muted" />
+                Format
+              </button>
+            </div>
           </div>
 
-          <div className="grid min-h-0 min-w-0 grid-cols-[46px_minmax(0,1fr)] overflow-hidden bg-[#242227]">
+          <div className="grid min-h-0 min-w-0 grid-cols-[46px_minmax(0,1fr)] overflow-hidden bg-editor-bg focus-within:ring-2 focus-within:ring-inset focus-within:ring-violet/70">
             <div
               ref={lineNumbersRef}
-              className="overflow-hidden border-r border-[#3a3740] bg-[#1d1b20] py-3 text-right font-mono text-xs leading-6 text-[#77717c] select-none pr-3"
+              className="overflow-hidden border-r border-editor-border bg-editor-gutter py-3 text-right font-mono text-xs leading-6 text-editor-muted select-none pr-3"
             >
               {Array.from({ length: lineCount }, (_, i) => (
                 <div key={i}>{i + 1}</div>
@@ -487,7 +598,7 @@ export function QueryPage() {
             </div>
             <textarea
               ref={textareaRef}
-              className="h-full w-full min-w-0 resize-none overflow-auto border-0 bg-transparent p-3 font-mono text-[13px] leading-6 text-[#f2edf4] outline-none [scrollbar-width:thin]"
+              className="h-full w-full min-w-0 resize-none overflow-auto border-0 bg-transparent p-3 font-mono text-base sm:text-[13px] leading-6 text-editor-fg outline-none [scrollbar-width:thin]"
               value={sql}
               onChange={(e) => setEditedSql(e.target.value)}
               onScroll={handleScroll}
@@ -497,18 +608,57 @@ export function QueryPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between border-b border-line bg-canvas/40 px-4 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-ink">Query Execution Plan</span>
-              {rawPlan && (
-                <div className="flex items-center gap-1 ml-3 border-l border-line pl-3">
+          <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 border-b border-line bg-canvas/40 px-3.5 py-2 sm:px-4 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('results')}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                  activeTab === 'results'
+                    ? 'bg-ink text-white'
+                    : 'text-muted hover:text-ink hover:bg-canvas',
+                )}
+              >
+                <span>Results</span>
+                {queryResult && (
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 py-0.5 font-mono text-[11px]',
+                      activeTab === 'results'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-canvas text-ink border border-line',
+                    )}
+                  >
+                    {queryResult.page > 1 ? `p.${queryResult.page} · ` : ''}
+                    {queryResult.rows.length}
+                    {queryResult.has_next ? '+' : ''}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('plan')}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                  activeTab === 'plan'
+                    ? 'bg-ink text-white'
+                    : 'text-muted hover:text-ink hover:bg-canvas',
+                )}
+              >
+                <span>Explain Plan</span>
+              </button>
+
+              {activeTab === 'plan' && rawPlan && (
+                <div className="inline-flex items-center rounded-lg border border-line bg-white p-0.5 shadow-2xs sm:ml-2">
                   <button
                     type="button"
                     onClick={() => setPlanTab('visual')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
                       planTab === 'visual'
-                        ? 'bg-violet text-white'
+                        ? 'bg-ink/10 font-semibold text-ink'
                         : 'text-muted hover:text-ink',
                     )}
                   >
@@ -518,9 +668,9 @@ export function QueryPage() {
                     type="button"
                     onClick={() => setPlanTab('json')}
                     className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-medium transition-colors',
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
                       planTab === 'json'
-                        ? 'bg-violet text-white'
+                        ? 'bg-ink/10 font-semibold text-ink'
                         : 'text-muted hover:text-ink',
                     )}
                   >
@@ -530,38 +680,249 @@ export function QueryPage() {
               )}
             </div>
 
-            {rawPlan && (
-              <button
-                type="button"
-                onClick={handleCopyPlan}
-                className="flex items-center gap-1 text-[11px] text-muted hover:text-ink transition-colors cursor-pointer"
-              >
-                <Icon
-                  name={copied ? 'check' : 'copy'}
-                  className={cn('size-3.5', copied && 'text-success')}
-                />
-                {copied ? 'Copied' : 'Copy plan'}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {activeTab === 'results' &&
+                queryResult &&
+                queryResult.rows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted hover:text-ink transition-colors cursor-pointer"
+                    title="Download as CSV"
+                  >
+                    <Icon name="save" className="size-3.5" />
+                    Export CSV
+                  </button>
+                )}
+
+              {activeTab === 'plan' && rawPlan && (
+                <button
+                  type="button"
+                  onClick={handleCopyPlan}
+                  className="flex items-center gap-1 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
+                >
+                  <Icon
+                    name={copied ? 'check' : 'copy'}
+                    className={cn('size-3.5', copied && 'text-success-fg')}
+                  />
+                  {copied ? 'Copied' : 'Copy plan'}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="min-h-0 overflow-auto p-4 [scrollbar-width:thin]">
-            {!rawPlan ? (
+            {activeTab === 'results' ? (
+              !queryResult ? (
+                <EmptyState
+                  icon="play"
+                  title="No query executed yet"
+                  action={
+                    <Button
+                      variant="dark"
+                      size="sm"
+                      onClick={runQuery}
+                      loading={queryBusy}
+                    >
+                      <Icon name="play" className="size-3.5" />
+                      Run query
+                    </Button>
+                  }
+                >
+                  Run your SQL statement to inspect rows, join data, and preview
+                  results.
+                </EmptyState>
+              ) : (
+                <div className="flex flex-col h-full min-h-0 space-y-3">
+                  {queryResult.rows.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center">
+                      <EmptyState
+                        icon="table"
+                        title="0 rows returned"
+                        action={
+                          queryResult.page > 1 ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={queryBusy}
+                              onClick={() => goToPage(1)}
+                            >
+                              Back to page 1
+                            </Button>
+                          ) : undefined
+                        }
+                      >
+                        {queryResult.page > 1
+                          ? `No rows found on page ${queryResult.page}.`
+                          : 'Statement executed successfully with no matching records.'}
+                      </EmptyState>
+                    </div>
+                  ) : (
+                    <div className="w-full min-w-0 max-w-full flex-1 overflow-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin] rounded-xl border border-line">
+                      <div className="sr-only" role="status" aria-live="polite">
+                        {copiedCell ? 'Cell value copied to clipboard' : ''}
+                      </div>
+                      <table className="w-max min-w-full table-fixed border-collapse text-xs">
+                        <thead className="sticky top-0 z-10 bg-surface-subtle shadow-2xs">
+                          <tr>
+                            <th className="h-10 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[11px] text-muted select-none">
+                              #
+                            </th>
+                            {queryResult.columns.map((col) => (
+                              <th
+                                key={col}
+                                className="h-10 border-r border-b border-line px-2.5 sm:px-3.5 text-left font-semibold text-ink whitespace-nowrap"
+                              >
+                                <span className="font-mono text-xs">{col}</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {queryResult.rows.map((row, rIdx) => (
+                            <tr
+                              key={rIdx}
+                              className="hover:bg-canvas/50 transition-colors"
+                            >
+                              <td className="h-9 w-[54px] border-r border-b border-line px-3 text-center font-mono text-[11px] text-muted bg-surface-subtle/40 select-none">
+                                {(queryResult.page - 1) * queryResult.page_size +
+                                  rIdx +
+                                  1}
+                              </td>
+                              {row.map((cell, cIdx) => {
+                                const cellKey = `${rIdx}-${cIdx}`
+                                const isCopied = copiedCell === cellKey
+                                return (
+                                  <td
+                                    key={cIdx}
+                                    className="h-9 max-w-[260px] sm:max-w-[340px] border-r border-b border-line p-0 font-mono text-xs text-ink"
+                                  >
+                                    {cell === null ? (
+                                      <span className="flex h-full items-center px-2.5 sm:px-3.5">
+                                        <NullBadge />
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => copyCellValue(cell, cellKey)}
+                                        title={`${cell} (Click to copy)`}
+                                        aria-label={`Copy ${queryResult.columns[cIdx]} value`}
+                                        className={cn(
+                                          'flex h-full w-full items-center truncate px-2.5 sm:px-3.5 text-left cursor-copy active:scale-100 hover:bg-violet-soft/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet/60',
+                                          cIdx === 0 &&
+                                            'text-violet-fg font-semibold',
+                                        )}
+                                      >
+                                        {isCopied ? (
+                                          <span className="text-[11px] font-bold text-success-fg flex items-center gap-1">
+                                            <Icon name="check" className="size-3" />{' '}
+                                            Copied
+                                          </span>
+                                        ) : (
+                                          <span className="truncate">{cell}</span>
+                                        )}
+                                      </button>
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <footer className="flex min-w-0 flex-wrap items-center justify-between gap-2.5 rounded-xl border border-line bg-surface-subtle px-3.5 py-2 text-xs text-muted shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <span>
+                        Page{' '}
+                        <strong className="text-ink tabular-nums">
+                          {queryResult.page}
+                        </strong>
+                      </span>
+                      {queryResult.rows.length > 0 && (
+                        <>
+                          <span>·</span>
+                          <span className="tabular-nums">
+                            Rows{' '}
+                            <strong className="text-ink">
+                              {(queryResult.page - 1) * queryResult.page_size +
+                                1}
+                            </strong>
+                            –
+                            <strong className="text-ink">
+                              {(queryResult.page - 1) * queryResult.page_size +
+                                queryResult.rows.length}
+                            </strong>
+                          </span>
+                        </>
+                      )}
+                      <span className="hidden sm:inline">·</span>
+                      <label className="inline-flex items-center gap-1.5">
+                        <span>Per page</span>
+                        <select
+                          aria-label="Rows per page"
+                          value={pageSize}
+                          disabled={queryBusy}
+                          onChange={(e) =>
+                            handlePageSizeChange(Number(e.target.value))
+                          }
+                          className="h-8 rounded-lg border border-line bg-white px-2 font-mono text-base sm:text-xs font-semibold text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
+                        >
+                          {[25, 50, 100].map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={queryBusy || queryResult.page <= 1}
+                        onClick={() => goToPage(queryResult.page - 1)}
+                      >
+                        <Icon name="chevron-left" className="size-3.5" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={queryBusy || !queryResult.has_next}
+                        onClick={() => goToPage(queryResult.page + 1)}
+                      >
+                        Next
+                        <Icon name="chevron" className="size-3.5" />
+                      </Button>
+                    </div>
+                  </footer>
+                </div>
+              )
+            ) : !rawPlan ? (
               <EmptyState
                 icon="code"
                 title="No query plan generated yet"
                 action={
-                  <Button variant="outline" size="sm" onClick={explain}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={explain}
+                    loading={busy}
+                  >
                     <Icon name="play" className="size-3.5" />
                     Explain current statement
                   </Button>
                 }
               >
-                Click &ldquo;Explain query&rdquo; to analyze the cost, node
-                types, and scan strategies without altering data.
+                Click &ldquo;Explain&rdquo; to analyze the cost, node types, and
+                scan strategies without altering data.
               </EmptyState>
             ) : planTab === 'json' ? (
-              <pre className="m-0 font-mono text-xs leading-relaxed text-[#3b3442] bg-[#fbfafd] p-4 rounded-xl border border-line overflow-auto">
+              <pre className="m-0 font-mono text-xs leading-relaxed text-ink bg-surface-subtle p-4 rounded-xl border border-line overflow-auto">
                 {rawPlan}
               </pre>
             ) : (
@@ -577,6 +938,89 @@ export function QueryPage() {
           </div>
         </section>
       </div>
+
+      <Modal
+        open={mobileSchemaOpen}
+        onOpenChange={setMobileSchemaOpen}
+        title="Schema Reference"
+        description={`Tables in ${schema} schema`}
+        size="md"
+      >
+        <div className="space-y-3">
+          {(tables.data?.length ?? 0) > 4 && (
+            <input
+              type="text"
+              aria-label="Filter tables"
+              placeholder="Filter tables…"
+              value={tableFilter}
+              onChange={(e) => setTableFilter(e.target.value)}
+              className="h-10 w-full rounded-xl border border-line bg-canvas px-3 text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
+            />
+          )}
+          <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1 [scrollbar-width:thin]">
+            {visibleTables.map((t) => {
+              const isOpen = expandedTable === t.name
+              const st = structuresByTable[t.name]
+              return (
+                <div
+                  key={t.name}
+                  className="rounded-xl border border-line bg-white overflow-hidden shadow-2xs"
+                >
+                  <button
+                    type="button"
+                    onClick={() => void toggleTableReference(t.name)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-semibold text-ink hover:bg-canvas/60 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Icon name="table" className="size-4 text-violet-fg shrink-0" />
+                      <span className="truncate font-mono">{t.name}</span>
+                    </span>
+                    <Icon
+                      name={isOpen ? 'chevron-down' : 'chevron'}
+                      className="size-3.5 text-muted shrink-0"
+                    />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <m.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden border-t border-line bg-surface-subtle px-3 py-2 space-y-1"
+                      >
+                        {st ? (
+                          st.columns.map((c) => (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => {
+                                insertSnippet(c.name)
+                                setMobileSchemaOpen(false)
+                              }}
+                              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left font-mono text-xs text-ink hover:bg-white transition-colors cursor-pointer"
+                            >
+                              <span className="truncate">{c.name}</span>
+                              <span className="text-[11px] text-muted">{c.type}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted block py-1">Loading columns…</span>
+                        )}
+                      </m.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            })}
+            {!tables.loading && visibleTables.length === 0 && (
+              <p className="m-0 py-4 text-center text-xs text-muted">
+                No tables found in {schema}
+              </p>
+            )}
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }

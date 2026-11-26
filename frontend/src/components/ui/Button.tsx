@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ComponentProps } from 'react'
 import { cn } from '../../lib/utils'
 import {
   baseButtonClasses,
@@ -8,7 +8,7 @@ import {
   type ButtonVariant,
 } from './buttonStyles'
 
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+export type ButtonProps = ComponentProps<'button'> & {
   variant?: ButtonVariant | string
   size?: ButtonSize
   loading?: boolean

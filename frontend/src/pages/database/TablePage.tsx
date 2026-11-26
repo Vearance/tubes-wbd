@@ -13,8 +13,8 @@ import {
   buttonVariants,
   EmptyState,
   ErrorNotice,
-  Loading,
   NullBadge,
+  PageSkeleton,
   Search,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
@@ -46,8 +46,8 @@ function DataGrid({
     setTimeout(() => setCopiedCell(null), 1500)
   }
 
-  const cellClass =
-    'h-10 overflow-hidden border-r border-b border-line px-3 text-left whitespace-nowrap text-ellipsis max-w-[340px]'
+  const cellBaseClass =
+    'h-10 overflow-hidden border-r border-b border-line text-left max-w-[280px] sm:max-w-[340px]'
 
   if (rows.length === 0) {
     return (
@@ -72,11 +72,19 @@ function DataGrid({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin]">
+    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin] touch-pan-x">
+      <div className="sr-only" role="status" aria-live="polite">
+        {copiedCell ? 'Cell value copied to clipboard' : ''}
+      </div>
       <table className="w-max min-w-[max(100%,1000px)] table-fixed border-collapse text-xs">
         <thead className="sticky top-0 z-10">
           <tr>
-            <th className={cn(cellClass, 'h-12 w-[54px] bg-[#fbfafd] font-mono text-[10px] text-muted text-center')}>
+            <th
+              className={cn(
+                cellBaseClass,
+                'h-12 w-[54px] px-2.5 sm:px-3 bg-surface-subtle font-mono text-[11px] text-muted text-center',
+              )}
+            >
               #
             </th>
             {columns.map((c) => {
@@ -84,28 +92,38 @@ function DataGrid({
               return (
                 <th
                   className={cn(
-                    cellClass,
-                    'h-12 bg-[#fbfafd] font-semibold text-ink transition-colors hover:bg-canvas cursor-pointer select-none',
-                    isSorted && 'bg-violet-soft/40 text-violet',
+                    cellBaseClass,
+                    'h-12 p-0 bg-surface-subtle font-semibold text-ink transition-colors hover:bg-canvas select-none',
+                    isSorted && 'bg-violet-soft/40 text-violet-fg',
                   )}
                   key={c}
-                  onClick={() => onSort(c)}
-                  title={`Click to sort by ${c}`}
+                  aria-sort={
+                    isSorted
+                      ? sortDir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSort(c)}
+                    title={`Click to sort by ${c}`}
+                    className="flex h-full w-full items-center justify-between gap-2 px-2.5 sm:px-3 text-left font-semibold cursor-pointer active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet/60"
+                  >
                     <span className="truncate">{c}</span>
                     <span className="shrink-0 text-muted">
                       {isSorted ? (
                         sortDir === 'asc' ? (
-                          <Icon name="sort-asc" className="size-3.5 text-violet" />
+                          <Icon name="sort-asc" className="size-3.5 text-violet-fg" />
                         ) : (
-                          <Icon name="sort-desc" className="size-3.5 text-violet" />
+                          <Icon name="sort-desc" className="size-3.5 text-violet-fg" />
                         )
                       ) : (
-                        <Icon name="sort" className="size-3 text-muted/30 hover:text-muted" />
+                        <Icon name="sort" className="size-3 text-muted/40 hover:text-muted" />
                       )}
                     </span>
-                  </div>
+                  </button>
                 </th>
               )
             })}
@@ -116,8 +134,8 @@ function DataGrid({
             <tr key={i} className="hover:bg-canvas/60 transition-colors">
               <td
                 className={cn(
-                  cellClass,
-                  'w-[54px] text-center font-mono text-[10px] text-muted bg-[#fbfafd]/40',
+                  cellBaseClass,
+                  'w-[54px] px-2 text-center font-mono text-[11px] text-muted bg-surface-subtle/40 select-none',
                 )}
               >
                 {i + 1}
@@ -127,23 +145,32 @@ function DataGrid({
                 const isCopied = copiedCell === cellKey
                 return (
                   <td
-                    className={cn(
-                      cellClass,
-                      j === 0 && 'font-mono text-[#6946a1]',
-                      'cursor-default',
-                    )}
+                    className={cn(cellBaseClass, 'p-0')}
                     key={j}
-                    onClick={() => copyValue(cell, cellKey)}
-                    title={cell !== null ? `${cell} (Click to copy)` : 'NULL'}
                   >
-                    {isCopied ? (
-                      <span className="text-[10px] font-bold text-success flex items-center gap-1">
-                        <Icon name="check" className="size-3" /> Copied
+                    {cell === null ? (
+                      <span className="flex h-full items-center px-2.5 sm:px-3">
+                        <NullBadge />
                       </span>
-                    ) : cell === null ? (
-                      <NullBadge />
                     ) : (
-                      cell
+                      <button
+                        type="button"
+                        onClick={() => copyValue(cell, cellKey)}
+                        title={`${cell} (Click to copy)`}
+                        aria-label={`Copy ${columns[j]} value`}
+                        className={cn(
+                          'flex h-full w-full items-center truncate px-2.5 sm:px-3 text-left cursor-copy active:scale-100 hover:bg-violet-soft/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet/60',
+                          j === 0 && 'font-mono text-violet-fg font-semibold',
+                        )}
+                      >
+                        {isCopied ? (
+                          <span className="text-[11px] font-bold text-success-fg flex items-center gap-1">
+                            <Icon name="check" className="size-3" /> Copied
+                          </span>
+                        ) : (
+                          <span className="truncate">{cell}</span>
+                        )}
+                      </button>
                     )}
                   </td>
                 )
@@ -183,7 +210,7 @@ function DefinitionTable({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin]">
+    <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin] touch-pan-x">
       <table className="w-full min-w-[720px] border-collapse">
         <thead>
           <tr>
@@ -191,7 +218,7 @@ function DefinitionTable({
               <th
                 className={cn(
                   cellClass,
-                  'bg-[#fbfafd] text-[10px] font-bold text-muted uppercase tracking-wider',
+                  'bg-surface-subtle text-[11px] font-bold text-muted uppercase tracking-wider',
                 )}
                 key={h}
               >
@@ -209,16 +236,16 @@ function DefinitionTable({
                     cellClass,
                     j === 0 && 'font-semibold text-ink',
                     j === typeColumnIndex &&
-                      'font-mono text-[11px] text-[#6946a1]',
+                      'font-mono text-xs text-violet-fg',
                   )}
                   key={j}
                 >
                   {value === 'Yes' ? (
-                    <span className="inline-block rounded-full bg-success-soft text-success px-2 py-0.5 text-[10px] font-bold">
+                    <span className="inline-block rounded-full bg-success-soft text-success-fg px-2.5 py-0.5 text-[11px] font-bold">
                       Yes
                     </span>
                   ) : value === 'No' ? (
-                    <span className="inline-block rounded-full bg-canvas text-muted px-2 py-0.5 text-[10px] font-medium">
+                    <span className="inline-block rounded-full bg-canvas text-muted px-2.5 py-0.5 text-[11px] font-medium">
                       No
                     </span>
                   ) : (
@@ -324,21 +351,22 @@ export function TablePage() {
       <UtilityHeader
         backTo="/databases"
         path={
-          <span className="flex items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-1.5">
             <Link
               to="/databases"
-              className="hover:underline hover:text-ink transition-colors"
+              className="truncate hover:underline hover:text-ink transition-colors"
             >
               {databaseName}
             </Link>
-            <span>/</span>
+            <span className="shrink-0">/</span>
             {schemas.data && schemas.data.length > 1 ? (
               <select
+                aria-label="Select schema"
                 value={schema}
                 onChange={(e) =>
                   navigate(`/databases/${id}/${e.target.value}/tables`)
                 }
-                className="bg-canvas border border-line rounded px-1.5 py-0.5 text-[11px] font-mono outline-none cursor-pointer"
+                className="max-w-[120px] shrink-0 rounded-lg border border-line bg-canvas px-2 py-0.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
               >
                 {schemas.data.map((s) => (
                   <option key={s} value={s}>
@@ -347,7 +375,7 @@ export function TablePage() {
                 ))}
               </select>
             ) : (
-              <span>{schema}</span>
+              <span className="shrink-0">{schema}</span>
             )}
           </span>
         }
@@ -361,7 +389,7 @@ export function TablePage() {
         }
         actions={
           selected ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
               <Link
                 to={`/databases/${id}/${schema}/query?table=${encodeURIComponent(selected)}`}
                 className={cn(
@@ -399,9 +427,8 @@ export function TablePage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="py-16"
           >
-            <Loading label="Reading table data and schema…" />
+            <PageSkeleton variant="table" label="Reading table data and schema…" />
           </m.div>
         ) : (
           <m.div
@@ -426,25 +453,25 @@ export function TablePage() {
         className="mb-4"
       />
 
-      <section className="min-w-0 max-w-full overflow-hidden rounded-[18px] border border-line/80 bg-white shadow-2xs">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-line/80 bg-white shadow-2xs">
         {tab === 'data' && (
           <div className="flex min-h-[54px] max-w-full flex-wrap items-center gap-2.5 border-b border-line px-3 py-2">
-            <div className="shrink-0 max-[600px]:w-full">
+            <div className="w-full sm:w-auto shrink-0">
               <Search
                 value={search}
                 onChange={setSearch}
                 placeholder="Search rows in table…"
-                className="min-w-64"
+                className="w-full sm:min-w-64"
               />
             </div>
             {search && (
-              <span className="text-[11px] text-muted">
+              <span className="text-xs text-muted">
                 Showing {displayedRows.length} of {rows.data?.rows.length ?? 0}{' '}
                 rows
               </span>
             )}
             {sortCol && (
-              <div className="flex items-center gap-1 text-[11px] bg-violet-soft text-violet px-2 py-1 rounded-md">
+              <div className="flex items-center gap-1 text-xs bg-violet-soft text-violet-fg px-2.5 py-1 rounded-lg">
                 <span>
                   Sorted by <b>{sortCol}</b> ({sortDir})
                 </span>
@@ -512,8 +539,8 @@ export function TablePage() {
         )}
 
         {tab === 'data' && (
-          <footer className="flex min-h-[50px] min-w-0 items-center justify-between border-t border-line px-4 text-xs text-muted">
-            <div className="flex items-center gap-4">
+          <footer className="flex min-h-[50px] min-w-0 flex-wrap items-center justify-between gap-2 border-t border-line px-3.5 py-2.5 sm:px-4 text-xs text-muted">
+            <div className="flex items-center gap-2 sm:gap-4">
               <span>
                 Page <strong className="text-ink">{page}</strong>
               </span>

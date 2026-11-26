@@ -10,7 +10,7 @@ import {
   Button,
   EmptyState,
   ErrorNotice,
-  Loading,
+  PageSkeleton,
   Search,
   Status,
 } from '../../components/ui'
@@ -64,7 +64,7 @@ export function DatabaseListPage() {
               value={search}
               onChange={setSearch}
               placeholder="Filter databases…"
-              className="min-w-56"
+              className="w-full sm:min-w-56"
             />
           ) : undefined
         }
@@ -78,9 +78,8 @@ export function DatabaseListPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="py-16"
           >
-            <Loading label="Loading accessible databases…" />
+            <PageSkeleton variant="cards" label="Loading accessible databases…" />
           </m.div>
         ) : (
           <m.div
@@ -95,7 +94,7 @@ export function DatabaseListPage() {
       {error && <ErrorNotice message={error} />}
 
       {pendingApprovals.length > 0 && (
-        <section className="mb-5 overflow-hidden rounded-[18px] border border-warning/35 bg-[#fffcf4] shadow-xs">
+        <section className="mb-5 overflow-hidden rounded-2xl border border-warning/35 bg-warning-tint shadow-xs">
           <div className="flex items-center justify-between gap-3 border-b border-warning/20 bg-warning-soft/50 px-4 py-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-warning text-white shadow-2xs">
@@ -118,21 +117,21 @@ export function DatabaseListPage() {
                   key={exec.id}
                   className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white/80 hover:bg-white transition-colors"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[11px] font-bold text-violet shrink-0">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[11px] font-bold text-violet-fg shrink-0">
                       #{exec.id}
                     </span>
                     <strong className="truncate text-xs font-bold text-ink">
                       {exec.name}
                     </strong>
                     <Status tone={meta.tone}>{meta.label}</Status>
-                    <span className="text-[11px] text-muted truncate">
+                    <span className="text-xs text-muted truncate">
                       {dbName}
                     </span>
                   </div>
                   <Link
                     to={`/databases/${exec.database_id}/migrations?tab=airlock&executionId=${exec.id}`}
-                    className="inline-flex min-h-8 items-center gap-1 rounded-xl bg-[#1c1b22] px-3 text-xs font-bold text-white no-underline hover:bg-[#121116] transition-colors shrink-0 shadow-xs"
+                    className="inline-flex min-h-8 items-center justify-center gap-1 rounded-xl bg-ink px-3.5 text-xs font-bold text-white no-underline hover:bg-ink-strong transition-colors shrink-0 shadow-xs max-[600px]:w-full"
                   >
                     Review
                     <Icon name="chevron" className="size-3.5" />
@@ -145,7 +144,7 @@ export function DatabaseListPage() {
       )}
 
       {databases.length > 0 && (
-        <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
+        <div className="grid min-w-0 grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
           {filtered.map((db) => {
             const isEditor = db.permission === 'view_edit'
             const dbPending = pendingApprovals.filter(
@@ -159,16 +158,16 @@ export function DatabaseListPage() {
               >
                 <DatabaseMark
                   connected={dbPending === 0}
-                  className="relative grid size-[44px] shrink-0 place-items-center rounded-2xl bg-violet-soft text-violet shadow-2xs"
+                  className="relative grid size-[44px] shrink-0 place-items-center rounded-2xl bg-violet-soft text-violet-fg shadow-2xs"
                 />
                 <div className="min-w-0">
                   <strong className="block truncate text-sm font-bold text-ink">
                     {db.name}
                   </strong>
-                  <small className="mt-0.5 block text-[11px] text-muted">
+                  <small className="mt-0.5 block text-xs text-muted">
                     PostgreSQL · #{db.id}
                     {dbPending > 0 && (
-                      <span className="ml-1.5 font-bold text-warning">
+                      <span className="ml-1.5 font-bold text-warning-fg">
                         · {dbPending} seal{dbPending === 1 ? '' : 's'}
                       </span>
                     )}
@@ -178,7 +177,7 @@ export function DatabaseListPage() {
                   className={cn(
                     'grid size-7 shrink-0 place-items-center rounded-full border',
                     isEditor
-                      ? 'border-violet/25 bg-violet-soft text-violet'
+                      ? 'border-violet/25 bg-violet-soft text-violet-fg'
                       : 'border-line bg-canvas text-muted',
                   )}
                   title={isEditor ? 'Editor (View + Edit)' : 'Viewer (View only)'}

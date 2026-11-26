@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -24,9 +26,12 @@ const (
 )
 
 type QueryResult struct {
-	Columns   []string
-	Rows      [][]*string
-	Truncated bool
+	Columns   []string    `json:"columns"`
+	Rows      [][]*string `json:"rows"`
+	Page      int         `json:"page"`
+	PageSize  int         `json:"page_size"`
+	HasNext   bool        `json:"has_next"`
+	Truncated bool        `json:"truncated"`
 }
 
 // Query executes one row-returning statement in a bounded read-only transaction.
@@ -35,7 +40,23 @@ func (s *ViewerService) Query(ctx context.Context, userID, dbID uint, sql string
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
+	return s.executeQuery(ctx, dbID, sql, 1, maxQueryRows)
+}
 
+// QueryPage executes one row-returning statement in a bounded read-only transaction with server-side pagination.
+// Both View Only and View + Edit users are authorized through RequireView.
+func (s *ViewerService) QueryPage(ctx context.Context, userID, dbID uint, sql string, page, pageSize int) (*QueryResult, error) {
+	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+		return nil, err
+	}
+	page, pageSize, err := normalizePage(page, pageSize, s.config)
+	if err != nil {
+		return nil, err
+	}
+	return s.executeQuery(ctx, dbID, sql, page, pageSize)
+}
+
+func (s *ViewerService) executeQuery(ctx context.Context, dbID uint, sql string, page, pageSize int) (*QueryResult, error) {
 	statement, err := validateReadQuery(sql)
 	if err != nil {
 		return nil, err
@@ -66,24 +87,32 @@ func (s *ViewerService) Query(ctx context.Context, userID, dbID uint, sql string
 		return nil, fmt.Errorf("viewer: set query timeout: %w", err)
 	}
 
-	wrapped := fmt.Sprintf("SELECT * FROM (\n%s\n) AS bscheme_query LIMIT %d", statement, maxQueryRows+1)
+	offset := int64(page-1) * int64(pageSize)
+	wrapped := fmt.Sprintf("SELECT * FROM (\n%s\n) AS bscheme_query LIMIT %d OFFSET %d", statement, pageSize+1, offset)
 	rows, err := tx.Query(queryCtx, wrapped)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidInput, pgErr.Message)
+		}
 		return nil, fmt.Errorf("viewer: execute read-only query: %w", err)
 	}
 	defer rows.Close()
 
 	fields := rows.FieldDescriptions()
 	result := &QueryResult{
-		Columns: make([]string, len(fields)),
-		Rows:    make([][]*string, 0, maxQueryRows),
+		Columns:  make([]string, len(fields)),
+		Rows:     make([][]*string, 0, pageSize),
+		Page:     page,
+		PageSize: pageSize,
 	}
 	for index, field := range fields {
 		result.Columns[index] = field.Name
 	}
 
 	for rows.Next() {
-		if len(result.Rows) == maxQueryRows {
+		if len(result.Rows) == pageSize {
+			result.HasNext = true
 			result.Truncated = true
 			break
 		}
@@ -98,6 +127,10 @@ func (s *ViewerService) Query(ctx context.Context, userID, dbID uint, sql string
 		result.Rows = append(result.Rows, row)
 	}
 	if err := rows.Err(); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidInput, pgErr.Message)
+		}
 		return nil, fmt.Errorf("viewer: read query rows: %w", err)
 	}
 	return result, nil
