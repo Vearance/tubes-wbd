@@ -12,6 +12,25 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var (
+	errTargetCommitOutcomeUnknown  = errors.New("migration: target commit outcome unknown")
+	errBatchReconciliationRequired = errors.New("migration: batch checkpoint reconciliation required")
+)
+
+type targetCommitError struct {
+	cause error
+}
+
+func (e targetCommitError) Error() string {
+	return fmt.Sprintf("committing target transaction: %v", e.cause)
+}
+
+func (e targetCommitError) Unwrap() error { return e.cause }
+
+func (e targetCommitError) Is(target error) bool {
+	return target == errTargetCommitOutcomeUnknown
+}
+
 const ensureBatchSchemaSQL = `
 CREATE SCHEMA IF NOT EXISTS _dbm;
 CREATE TABLE IF NOT EXISTS _dbm.migration_batch_progress (
@@ -140,7 +159,7 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 			break
 		}
 
-		finished := false
+		nextProgress := progress
 		err = withTargetTransaction(ctx, conn, func(tx pgx.Tx) error {
 			var keys []int64
 			nextCursor := progress.LastCursor
@@ -209,7 +228,7 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 				if _, err := tx.Exec(ctx, `UPDATE _dbm.migration_batch_progress SET completed = true WHERE execution_id = $1`, int64(execution.ID)); err != nil {
 					return fmt.Errorf("marking batch execution complete: %w", err)
 				}
-				finished = true
+				nextProgress.Completed = true
 				return nil
 			}
 			sqlKind := "batch_up"
@@ -243,20 +262,28 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 				 WHERE execution_id = $1`, int64(execution.ID), nextCursor, batchNumber, rowsAffected); err != nil {
 				return fmt.Errorf("recording committed batch progress: %w", err)
 			}
-			progress.LastCursor = nextCursor
-			progress.BatchCount = batchNumber
-			progress.RowsProcessed += rowsAffected
+			nextProgress.LastCursor = nextCursor
+			nextProgress.BatchCount = batchNumber
+			nextProgress.RowsProcessed += rowsAffected
 			return nil
 		})
 		if err != nil {
+			if errors.Is(err, errTargetCommitOutcomeUnknown) {
+				actualProgress, committed, reconcileErr := s.reconcileBatchCommit(ctx, conn, execution, progress)
+				if reconcileErr != nil {
+					return nil, reconcileErr
+				}
+				if committed {
+					progress = actualProgress
+					continue
+				}
+			}
 			return nil, recordBatchFailure(ctx, pool, execution, err, startedAt)
 		}
-		if finished {
-			progress.Completed = true
-		}
+		progress = nextProgress
 		applyBatchProgress(execution, progress)
 		if err := s.updateExecutionProgress(ctx, execution); err != nil {
-			return nil, fmt.Errorf("persisting batch progress: %w", err)
+			return nil, batchReconciliationError("persisting batch progress to Platform DB", err)
 		}
 	}
 
@@ -276,7 +303,10 @@ func withTargetTransaction(ctx context.Context, conn *pgxpool.Conn, fn func(pgx.
 	if err := fn(tx); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return targetCommitError{cause: err}
+	}
+	return nil
 }
 
 func readBatchProgress(ctx context.Context, conn *pgxpool.Conn, executionID uint) (batchProgress, error) {
@@ -287,6 +317,48 @@ func readBatchProgress(ctx context.Context, conn *pgxpool.Conn, executionID uint
 		&progress.LastCursor, &progress.BatchCount, &progress.RowsProcessed, &progress.Completed,
 	)
 	return progress, err
+}
+
+func readBatchProgressTx(ctx context.Context, tx pgx.Tx, executionID uint) (batchProgress, error) {
+	var progress batchProgress
+	err := tx.QueryRow(ctx,
+		`SELECT last_cursor, batch_count, rows_processed, completed
+		 FROM _dbm.migration_batch_progress WHERE execution_id = $1`, int64(executionID)).Scan(
+		&progress.LastCursor, &progress.BatchCount, &progress.RowsProcessed, &progress.Completed,
+	)
+	return progress, err
+}
+
+func (s *MigrationService) reconcileBatchCommit(
+	ctx context.Context,
+	conn *pgxpool.Conn,
+	execution *Execution,
+	previous batchProgress,
+) (batchProgress, bool, error) {
+	actual, err := readBatchProgress(ctx, conn, execution.ID)
+	if err != nil {
+		return batchProgress{}, false, batchReconciliationError("reading target checkpoint after commit error", err)
+	}
+
+	committed := actual.BatchCount == previous.BatchCount+1 ||
+		actual.BatchCount == previous.BatchCount && !previous.Completed && actual.Completed
+	unchanged := actual == previous
+	if !committed && !unchanged {
+		return batchProgress{}, false, batchReconciliationError(
+			fmt.Sprintf("target checkpoint changed unexpectedly from batch %d to %d", previous.BatchCount, actual.BatchCount),
+			errTargetCommitOutcomeUnknown,
+		)
+	}
+
+	applyBatchProgress(execution, actual)
+	if err := s.updateExecutionProgress(ctx, execution); err != nil {
+		return batchProgress{}, false, batchReconciliationError("syncing target checkpoint to Platform DB", err)
+	}
+	return actual, committed, nil
+}
+
+func batchReconciliationError(message string, err error) error {
+	return fmt.Errorf("%w: %s: %w", errBatchReconciliationRequired, message, err)
 }
 
 func applyBatchProgress(execution *Execution, progress batchProgress) {

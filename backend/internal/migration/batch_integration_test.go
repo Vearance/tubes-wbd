@@ -5,11 +5,84 @@ package migration
 import (
 	"context"
 	"testing"
+	"time"
 
 	"tubes-wbd/internal/access"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestIntegrationStaleBatchRecoveryReconcilesTargetCheckpoint(t *testing.T) {
+	env := newDraftEnv(t, `
+CREATE TABLE batch_items (id bigint PRIMARY KEY, value integer NOT NULL);
+INSERT INTO batch_items (id, value) SELECT id, 0 FROM generate_series(1, 4) AS id;
+`)
+	leaderID := env.addApproverGroup(t, "Batch Approvers", "recovery-leader", access.PermissionViewEdit)
+	svc := env.service(t, stubAuthorizer{})
+	ctx := context.Background()
+	draft, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{
+		Name:    "increment batch values",
+		SQL:     "UPDATE batch_items SET value = value + 1 WHERE id = ANY($1::bigint[])",
+		DownSQL: "UPDATE batch_items SET value = value - 1 WHERE id = ANY($1::bigint[])",
+		Batch:   &BatchDefinition{Schema: "public", Table: "batch_items", KeyColumn: "id", BatchSize: 2},
+	})
+	require.NoError(t, err)
+	execution, err := svc.SubmitDraftForReview(ctx, 42, draft.ID)
+	require.NoError(t, err)
+	approveAndQueue(t, svc, leaderID, execution.ID)
+	claimed, err := env.repo.ClaimExecution(ctx, execution.ID)
+	require.NoError(t, err)
+	require.NotNil(t, claimed)
+
+	require.NoError(t, ensureHistorySchema(ctx, env.target, true))
+	_, err = env.target.Exec(ctx, ensureBatchSchemaSQL)
+	require.NoError(t, err)
+	tx, err := env.target.Begin(ctx)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx,
+		`INSERT INTO _dbm.migration_batch_progress
+			(execution_id, last_cursor, batch_count, rows_processed, scope_complete)
+		 VALUES ($1, 2, 1, 2, true)`, int64(execution.ID))
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx,
+		`INSERT INTO _dbm.migration_batch_scope (execution_id, key)
+		 SELECT $1, scope.key FROM unnest($2::bigint[]) AS scope(key)`, int64(execution.ID), []int64{1, 2, 3, 4})
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx,
+		`UPDATE batch_items SET value = value + 1 WHERE id = ANY($1::bigint[])`, []int64{1, 2})
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx,
+		`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed)
+		 VALUES ($1, 1, $2, 2)`, int64(execution.ID), []int64{1, 2})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx), "target batch committed before Platform DB progress was updated")
+
+	require.NoError(t, env.platform.Model(&Execution{}).
+		Where("id = ?", execution.ID).
+		Update("started_at", time.Now().Add(-time.Hour)).Error)
+	worker, err := NewExecutionWorker(svc, env.repo)
+	require.NoError(t, err)
+	require.NoError(t, worker.RecoverStale(ctx))
+
+	queued, err := svc.Execution(ctx, 42, execution.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusQueued, queued.Status)
+	require.Equal(t, 1, queued.BatchCount)
+	require.EqualValues(t, 2, queued.RowsProcessed)
+	require.NotNil(t, queued.ActiveDatabaseID, "recovery must retain the per-database lock")
+	require.Equal(t, env.dbID, *queued.ActiveDatabaseID)
+
+	require.NoError(t, worker.RunExecution(ctx, execution.ID))
+	completed, err := svc.Execution(ctx, 42, execution.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusSuccess, completed.Status)
+	require.Equal(t, 2, completed.BatchCount)
+	require.EqualValues(t, 4, completed.RowsProcessed)
+	var minValue, maxValue int
+	require.NoError(t, env.target.QueryRow(ctx, "SELECT min(value), max(value) FROM batch_items").Scan(&minValue, &maxValue))
+	require.Equal(t, 1, minValue, "the committed first batch must not be executed twice")
+	require.Equal(t, 1, maxValue)
+}
 
 func TestIntegrationCompensationResumesAfterDownBatchFailure(t *testing.T) {
 	env := newDraftEnv(t, `
