@@ -4,10 +4,18 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 
 	"tubes-wbd/internal/database/targetdb"
 )
+
+func TestRetryableExecutionErrorRecognizesTransientPostgresErrors(t *testing.T) {
+	for _, code := range []string{"40001", "40P01"} {
+		require.True(t, retryableExecutionError(&pgconn.PgError{Code: code}), "SQLSTATE %s", code)
+	}
+	require.False(t, retryableExecutionError(&pgconn.PgError{Code: "23505"}))
+}
 
 type fixedConfigSnapshots struct {
 	encrypted []byte

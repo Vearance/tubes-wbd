@@ -103,18 +103,18 @@ func (s *MigrationService) SubmitForwardForReview(ctx context.Context, userID, d
 	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
-	var latest *HistoryEntry
+	var rollback *HistoryEntry
 	if err := s.readOnly(ctx, dbID, func(tx pgx.Tx) error {
 		var err error
-		latest, err = latestExecutionHistory(ctx, tx)
+		rollback, err = forwardCandidate(ctx, tx)
 		return err
 	}); err != nil {
 		return nil, err
 	}
-	if latest.Type != ExecutionTypeRollback || latest.TargetExecutionID == nil {
+	if rollback.TargetExecutionID == nil {
 		return nil, ErrInvalidForward
 	}
-	return s.createActionExecution(ctx, userID, dbID, *latest.TargetExecutionID, ExecutionTypeForward, "")
+	return s.createActionExecution(ctx, userID, dbID, *rollback.TargetExecutionID, ExecutionTypeForward, "")
 }
 
 func (s *MigrationService) createActionExecution(ctx context.Context, userID, dbID, targetID uint, action ExecutionType, sql string) (*Execution, error) {
@@ -704,6 +704,15 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), w.service.opts.StatementTimeout+10*time.Second)
 	defer cancel()
 	if err := w.service.authz.RequireEdit(workCtx, execution.ExecutedBy, execution.ManagedDatabaseID); err != nil {
+		if execution.Batch != nil {
+			completed, reconcileErr := w.reconcileBatchExecution(workCtx, execution)
+			if reconcileErr != nil {
+				return errors.Join(err, reconcileErr)
+			}
+			if completed {
+				return nil
+			}
+		}
 		status := executionFailureStatus(execution)
 		if finishErr := w.repo.FinishExecution(workCtx, execution.ID, status, nil, "permission_revoked", err.Error()); finishErr != nil {
 			return errors.Join(err, finishErr)
@@ -712,6 +721,23 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	}
 	entry, runErr := w.service.runExecution(workCtx, execution)
 	if runErr != nil {
+		if execution.Batch != nil {
+			completed, reconcileErr := w.reconcileBatchExecution(workCtx, execution)
+			if reconcileErr != nil {
+				if !errors.Is(runErr, errBatchReconciliationRequired) &&
+					retryableExecutionError(runErr) && execution.Attempt < maxExecutionAttempts {
+					delay := time.Second << (execution.Attempt - 1)
+					if err := w.repo.RetryExecution(workCtx, execution.ID, delay, runErr.Error()); err != nil {
+						return errors.Join(runErr, reconcileErr, err)
+					}
+					return nil
+				}
+				return errors.Join(runErr, reconcileErr)
+			}
+			if completed {
+				return nil
+			}
+		}
 		if retryableExecutionError(runErr) && execution.Attempt < maxExecutionAttempts {
 			delay := time.Second << (execution.Attempt - 1)
 			slog.Warn("migration execution attempt failed; retry scheduled",
@@ -800,25 +826,18 @@ func (w *ExecutionWorker) recoverStaleExecution(ctx context.Context, execution *
 		_ = tx.Rollback(ctx)
 		return nil
 	}
-	exists, err := historyExists(ctx, tx)
+	entry, err := w.reconcileTargetExecutionState(ctx, tx, execution)
 	if err != nil {
 		_ = tx.Rollback(ctx)
 		return err
 	}
-	if exists {
-		entry, lookupErr := getExecutionHistoryByID(ctx, tx, execution.ID)
-		if lookupErr == nil {
-			if err := w.repo.FinishExecution(ctx, execution.ID, ExecutionStatusSuccess, &entry.Version, "", ""); err != nil {
-				_ = tx.Rollback(ctx)
-				return err
-			}
+	if entry != nil {
+		if err := w.repo.FinishExecution(ctx, execution.ID, ExecutionStatusSuccess, &entry.Version, "", ""); err != nil {
 			_ = tx.Rollback(ctx)
-			return nil
+			return err
 		}
-		if !errors.Is(lookupErr, ErrVersionNotFound) {
-			_ = tx.Rollback(ctx)
-			return lookupErr
-		}
+		_ = tx.Rollback(ctx)
+		return nil
 	}
 	_ = tx.Rollback(ctx)
 	if execution.Attempt >= maxExecutionAttempts {
@@ -826,6 +845,129 @@ func (w *ExecutionWorker) recoverStaleExecution(ctx context.Context, execution *
 		return w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", "worker stopped before completing the execution")
 	}
 	return w.repo.RetryExecution(ctx, execution.ID, 0, "worker restarted before execution completed")
+}
+
+func (w *ExecutionWorker) reconcileBatchExecution(ctx context.Context, execution *Execution) (bool, error) {
+	pool, closePool, err := w.service.executionPool(ctx, execution)
+	if err != nil {
+		return false, batchReconciliationError("connecting to target database", err)
+	}
+	if closePool {
+		defer pool.Close()
+	}
+	if err := ensureHistorySchema(ctx, pool, false); err != nil {
+		return false, batchReconciliationError("checking target migration history", err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return false, batchReconciliationError("starting target checkpoint reconciliation", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+
+	var locked bool
+	if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtext($1))", lockName).Scan(&locked); err != nil {
+		return false, batchReconciliationError("checking target migration lock", err)
+	}
+	if !locked {
+		return false, batchReconciliationError("target migration lock is still held", ErrMigrationInProgress)
+	}
+
+	entry, err := w.reconcileTargetExecutionState(ctx, tx, execution)
+	if err != nil {
+		return false, err
+	}
+	if entry == nil {
+		return false, nil
+	}
+	if err := w.repo.FinishExecution(ctx, execution.ID, ExecutionStatusSuccess, &entry.Version, "", ""); err != nil {
+		return false, batchReconciliationError("finishing execution found in target history", err)
+	}
+	return true, nil
+}
+
+func (w *ExecutionWorker) reconcileTargetExecutionState(
+	ctx context.Context,
+	tx pgx.Tx,
+	execution *Execution,
+) (*HistoryEntry, error) {
+	var completed *HistoryEntry
+	exists, err := historyExists(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		entry, lookupErr := getExecutionHistoryByID(ctx, tx, execution.ID)
+		if lookupErr == nil {
+			completed = entry
+		} else if !errors.Is(lookupErr, ErrVersionNotFound) {
+			return nil, lookupErr
+		}
+	}
+
+	if execution.Batch == nil {
+		return completed, nil
+	}
+	progress, exists, err := readBatchProgressForReconciliation(ctx, tx, execution)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		progress = batchProgress{}
+	}
+	if batchProgressRegressed(execution, progress) {
+		return nil, fmt.Errorf("target batch checkpoint is behind the Platform DB checkpoint")
+	}
+	applyBatchProgress(execution, progress)
+	if err := w.service.updateExecutionProgress(ctx, execution); err != nil {
+		return nil, batchReconciliationError("syncing target checkpoint to Platform DB", err)
+	}
+	return completed, nil
+}
+
+func readBatchProgressForReconciliation(
+	ctx context.Context,
+	tx pgx.Tx,
+	execution *Execution,
+) (batchProgress, bool, error) {
+	var tableExists bool
+	if err := tx.QueryRow(ctx, "SELECT to_regclass('_dbm.migration_batch_progress') IS NOT NULL").Scan(&tableExists); err != nil {
+		return batchProgress{}, false, batchReconciliationError("checking target batch checkpoint table", err)
+	}
+	if !tableExists {
+		if execution.BatchCount > 0 || execution.RowsProcessed > 0 || execution.BatchDone {
+			return batchProgress{}, false, batchReconciliationError(
+				"target batch checkpoint table is missing despite Platform DB progress",
+				errTargetCommitOutcomeUnknown,
+			)
+		}
+		return batchProgress{}, false, nil
+	}
+
+	progress, err := readBatchProgressTx(ctx, tx, execution.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if execution.BatchCount > 0 || execution.RowsProcessed > 0 || execution.BatchDone {
+			return batchProgress{}, false, batchReconciliationError(
+				"target batch checkpoint row is missing despite Platform DB progress",
+				errTargetCommitOutcomeUnknown,
+			)
+		}
+		return batchProgress{}, false, nil
+	}
+	if err != nil {
+		return batchProgress{}, false, batchReconciliationError("reading target batch checkpoint", err)
+	}
+	return progress, true, nil
+}
+
+func batchProgressRegressed(execution *Execution, progress batchProgress) bool {
+	if progress.BatchCount < execution.BatchCount || progress.RowsProcessed < execution.RowsProcessed ||
+		execution.BatchDone && !progress.Completed {
+		return true
+	}
+	if execution.LastCursor != nil && progress.BatchCount == execution.BatchCount && progress.LastCursor != *execution.LastCursor {
+		return true
+	}
+	return false
 }
 
 func executionFailureStatus(execution *Execution) ExecutionStatus {
@@ -836,7 +978,13 @@ func executionFailureStatus(execution *Execution) ExecutionStatus {
 }
 
 func retryableExecutionError(err error) bool {
-	return errors.Is(err, targetdb.ErrUnreachable) ||
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01") {
+		return true
+	}
+	return pgconn.SafeToRetry(err) ||
+		errors.Is(err, errBatchReconciliationRequired) ||
+		errors.Is(err, targetdb.ErrUnreachable) ||
 		errors.Is(err, targetdb.ErrTimeout) ||
 		errors.Is(err, targetdb.ErrConnectionFailed) ||
 		errors.Is(err, ErrMigrationInProgress)

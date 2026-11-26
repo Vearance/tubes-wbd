@@ -34,6 +34,13 @@ func (s apiServer) ListMigrationHistory(
 		PageSize: page.PageSize,
 		HasNext:  page.HasNext,
 	}
+	if page.Forward != nil {
+		response.Forward = &httpapi.MigrationForwardCandidate{
+			RollbackExecutionId: int64(page.Forward.RollbackExecutionID),
+			TargetExecutionId:   int64(page.Forward.TargetExecutionID),
+			Name:                page.Forward.Name,
+		}
+	}
 	for _, e := range page.Entries {
 		entry := httpapi.MigrationHistoryEntry{
 			Version:           e.Version,

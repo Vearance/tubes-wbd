@@ -59,4 +59,11 @@ type HistoryPage struct {
 	Page     int
 	PageSize int
 	HasNext  bool
+	Forward  *ForwardCandidate
+}
+
+type ForwardCandidate struct {
+	RollbackExecutionID uint
+	TargetExecutionID   uint
+	Name                string
 }
