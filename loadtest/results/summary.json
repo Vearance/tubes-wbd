@@ -1,0 +1,410 @@
+{
+  "config": {
+    "quick": false,
+    "stageSec": 60,
+    "rampSec": 10,
+    "holdSec": 50,
+    "activeDurationSec": 240,
+    "totalWallSec": 240.067271948,
+    "apiVUs": {
+      "normal": 10,
+      "high": 80,
+      "stress": 220,
+      "recovery": 10
+    },
+    "sameDbRpm": {
+      "normal": 4,
+      "high": 18,
+      "stress": 48,
+      "recovery": 4
+    },
+    "diffDbRpm": {
+      "normal": 9,
+      "high": 36,
+      "stress": 90,
+      "recovery": 9
+    }
+  },
+  "overall": {
+    "totalHttpReqs": 238083,
+    "httpThroughputRps": 991.7345170297523,
+    "httpErrorRate": 0,
+    "apiRequests": 234614,
+    "apiThroughputRps": 977.5583333333333,
+    "apiErrorRate": 0,
+    "apiDurationMs": {
+      "count": 234614,
+      "avgMs": 30.84624630234312,
+      "minMs": 1.122503,
+      "p50Ms": 21.613366499999998,
+      "p90Ms": 70.01328990000003,
+      "p95Ms": 95.67830239999998,
+      "p99Ms": 157.4572528999999,
+      "maxMs": 480.691466
+    },
+    "migrationEnqueueDurationMs": {
+      "count": 213,
+      "avgMs": 55.719692070422546,
+      "minMs": 5.095976,
+      "p50Ms": 53.222945,
+      "p90Ms": 102.8466722,
+      "p95Ms": 121.76874139999991,
+      "p99Ms": 179.30305911999994,
+      "maxMs": 230.793389
+    },
+    "migrationsEnqueueAccepted": 213,
+    "migrationsSucceeded": 213,
+    "migrationsFailed": 0,
+    "migrationsTimedOut": 0,
+    "migrationJobErrorRate": 0,
+    "migrationThroughputActivePerMin": 53.25,
+    "migrationThroughputWallPerMin": 53.235078219109454,
+    "queueWaitMs": {
+      "count": 213,
+      "avgMs": 6641.901408450704,
+      "minMs": 19,
+      "p50Ms": 2786,
+      "p90Ms": 17800.000000000004,
+      "p95Ms": 18770.999999999996,
+      "p99Ms": 27126.91999999999,
+      "maxMs": 31184
+    },
+    "execDurationMs": {
+      "count": 213,
+      "avgMs": 1243.8638497652582,
+      "minMs": 1219,
+      "p50Ms": 1249,
+      "p90Ms": 1259,
+      "p95Ms": 1264,
+      "p99Ms": 1268.88,
+      "maxMs": 1269
+    },
+    "e2eDurationMs": {
+      "count": 213,
+      "avgMs": 7885.765258215963,
+      "minMs": 1238,
+      "p50Ms": 4050,
+      "p90Ms": 19022,
+      "p95Ms": 19995.199999999997,
+      "p99Ms": 28379.159999999993,
+      "maxMs": 32411
+    }
+  },
+  "stages": {
+    "normal": {
+      "durationSec": 60,
+      "api": {
+        "requests": 9900,
+        "throughputRps": 165,
+        "errorRate": 0,
+        "p50Ms": 4.5402059999999995,
+        "p95Ms": 6.9109291,
+        "avgMs": 4.631974229191923,
+        "maxMs": 23.528344
+      },
+      "migrations": {
+        "enqueueAccepted": 11,
+        "succeeded": 11,
+        "failed": 0,
+        "jobErrorRate": 0,
+        "completionThroughputPerMin": 11,
+        "completionThroughputPerSec": 0.18333333333333332,
+        "queueWaitMs": {
+          "count": 11,
+          "avgMs": 334.09090909090907,
+          "minMs": 23,
+          "p50Ms": 356,
+          "p90Ms": 689,
+          "p95Ms": 689.5,
+          "p99Ms": 689.9,
+          "maxMs": 690
+        },
+        "execDurationMs": {
+          "count": 11,
+          "avgMs": 1227.090909090909,
+          "minMs": 1219,
+          "p50Ms": 1229,
+          "p90Ms": 1231,
+          "p95Ms": 1231,
+          "p99Ms": 1231,
+          "maxMs": 1231
+        },
+        "e2eDurationMs": {
+          "count": 11,
+          "avgMs": 1561.1818181818182,
+          "minMs": 1253,
+          "p50Ms": 1586,
+          "p90Ms": 1910,
+          "p95Ms": 1914.5,
+          "p99Ms": 1918.1,
+          "maxMs": 1919
+        }
+      }
+    },
+    "high": {
+      "durationSec": 60,
+      "api": {
+        "requests": 74929,
+        "throughputRps": 1248.8166666666666,
+        "errorRate": 0,
+        "p50Ms": 5.627003,
+        "p95Ms": 24.254345,
+        "avgMs": 8.623197026865569,
+        "maxMs": 213.144014
+      },
+      "migrations": {
+        "enqueueAccepted": 51,
+        "succeeded": 51,
+        "failed": 0,
+        "jobErrorRate": 0,
+        "completionThroughputPerMin": 51,
+        "completionThroughputPerSec": 0.85,
+        "queueWaitMs": {
+          "count": 51,
+          "avgMs": 503.9019607843137,
+          "minMs": 55,
+          "p50Ms": 550,
+          "p90Ms": 938,
+          "p95Ms": 939.5,
+          "p99Ms": 942,
+          "maxMs": 942
+        },
+        "execDurationMs": {
+          "count": 51,
+          "avgMs": 1240.235294117647,
+          "minMs": 1223,
+          "p50Ms": 1239,
+          "p90Ms": 1257,
+          "p95Ms": 1264.5,
+          "p99Ms": 1265.5,
+          "maxMs": 1266
+        },
+        "e2eDurationMs": {
+          "count": 51,
+          "avgMs": 1744.137254901961,
+          "minMs": 1298,
+          "p50Ms": 1778,
+          "p90Ms": 2170,
+          "p95Ms": 2184,
+          "p99Ms": 2188,
+          "maxMs": 2189
+        }
+      }
+    },
+    "stress": {
+      "durationSec": 60,
+      "api": {
+        "requests": 125347,
+        "throughputRps": 2089.116666666667,
+        "errorRate": 0,
+        "p50Ms": 39.597834,
+        "p95Ms": 119.25557469999998,
+        "avgMs": 48.989372801359714,
+        "maxMs": 480.691466
+      },
+      "migrations": {
+        "enqueueAccepted": 129,
+        "succeeded": 129,
+        "failed": 0,
+        "jobErrorRate": 0,
+        "completionThroughputPerMin": 129,
+        "completionThroughputPerSec": 2.15,
+        "queueWaitMs": {
+          "count": 129,
+          "avgMs": 8771.70542635659,
+          "minMs": 303,
+          "p50Ms": 8092,
+          "p90Ms": 17649.6,
+          "p95Ms": 18484.2,
+          "p99Ms": 28373.12,
+          "maxMs": 31184
+        },
+        "execDurationMs": {
+          "count": 129,
+          "avgMs": 1249.7364341085272,
+          "minMs": 1220,
+          "p50Ms": 1252,
+          "p90Ms": 1260.2,
+          "p95Ms": 1264.6,
+          "p99Ms": 1269,
+          "maxMs": 1269
+        },
+        "e2eDurationMs": {
+          "count": 129,
+          "avgMs": 10021.441860465116,
+          "minMs": 1560,
+          "p50Ms": 9348,
+          "p90Ms": 18879.6,
+          "p95Ms": 19709.6,
+          "p99Ms": 29627.399999999998,
+          "maxMs": 32411
+        }
+      }
+    },
+    "recovery": {
+      "durationSec": 60,
+      "api": {
+        "requests": 24438,
+        "throughputRps": 407.3,
+        "errorRate": 0,
+        "p50Ms": 7.4710665,
+        "p95Ms": 54.083289049999884,
+        "avgMs": 16.54416247446609,
+        "maxMs": 218.370607
+      },
+      "migrations": {
+        "enqueueAccepted": 22,
+        "succeeded": 22,
+        "failed": 0,
+        "jobErrorRate": 0,
+        "completionThroughputPerMin": 22,
+        "completionThroughputPerSec": 0.36666666666666664,
+        "queueWaitMs": {
+          "count": 22,
+          "avgMs": 11536.40909090909,
+          "minMs": 19,
+          "p50Ms": 16164,
+          "p90Ms": 19321.5,
+          "p95Ms": 19330.85,
+          "p99Ms": 24301.679999999993,
+          "maxMs": 25623
+        },
+        "execDurationMs": {
+          "count": 22,
+          "avgMs": 1226.2272727272727,
+          "minMs": 1219,
+          "p50Ms": 1226.5,
+          "p90Ms": 1230,
+          "p95Ms": 1231.9,
+          "p99Ms": 1232.79,
+          "maxMs": 1233
+        },
+        "e2eDurationMs": {
+          "count": 22,
+          "avgMs": 12762.636363636364,
+          "minMs": 1238,
+          "p50Ms": 17388.5,
+          "p90Ms": 20550.2,
+          "p95Ms": 20557.95,
+          "p99Ms": 25532.629999999994,
+          "maxMs": 26855
+        }
+      }
+    }
+  },
+  "targetComparison": {
+    "same_db": {
+      "enqueueAccepted": 73,
+      "succeeded": 73,
+      "failed": 0,
+      "jobErrorRate": 0,
+      "completionThroughputPerMin": 18.25,
+      "completionThroughputPerSec": 0.30416666666666664,
+      "queueWaitMs": {
+        "count": 73,
+        "avgMs": 7610.931506849315,
+        "minMs": 55,
+        "p50Ms": 4052,
+        "p90Ms": 18485.6,
+        "p95Ms": 22753.19999999996,
+        "p99Ms": 29451.680000000004,
+        "maxMs": 31184
+      },
+      "execDurationMs": {
+        "count": 73,
+        "avgMs": 1244.3013698630136,
+        "minMs": 1219,
+        "p50Ms": 1249,
+        "p90Ms": 1261.6,
+        "p95Ms": 1265.4,
+        "p99Ms": 1268.28,
+        "maxMs": 1269
+      },
+      "e2eDurationMs": {
+        "count": 73,
+        "avgMs": 8855.232876712329,
+        "minMs": 1298,
+        "p50Ms": 5305,
+        "p90Ms": 19711.8,
+        "p95Ms": 23980.399999999958,
+        "p99Ms": 30698.120000000003,
+        "maxMs": 32411
+      }
+    },
+    "diff_db": {
+      "enqueueAccepted": 140,
+      "succeeded": 140,
+      "failed": 0,
+      "jobErrorRate": 0,
+      "completionThroughputPerMin": 35,
+      "completionThroughputPerSec": 0.5833333333333334,
+      "queueWaitMs": {
+        "count": 140,
+        "avgMs": 6136.621428571429,
+        "minMs": 19,
+        "p50Ms": 2239.5,
+        "p90Ms": 17155.000000000004,
+        "p95Ms": 18531.149999999998,
+        "p99Ms": 19137.289999999994,
+        "maxMs": 19331
+      },
+      "execDurationMs": {
+        "count": 140,
+        "avgMs": 1243.6357142857144,
+        "minMs": 1219,
+        "p50Ms": 1249,
+        "p90Ms": 1258.1,
+        "p95Ms": 1263.05,
+        "p99Ms": 1268.61,
+        "maxMs": 1269
+      },
+      "e2eDurationMs": {
+        "count": 140,
+        "avgMs": 7380.257142857143,
+        "minMs": 1238,
+        "p50Ms": 3493.5,
+        "p90Ms": 18381.000000000004,
+        "p95Ms": 19760.049999999996,
+        "p99Ms": 20364.339999999993,
+        "maxMs": 20558
+      }
+    }
+  },
+  "thresholds": {
+    "http_req_duration{kind:api}": {
+      "p(95)<500": {
+        "ok": true
+      }
+    },
+    "api_req_duration": {
+      "p(95)<500": {
+        "ok": true
+      }
+    },
+    "api_error_rate": {
+      "rate<0.01": {
+        "ok": true
+      }
+    },
+    "migration_job_error_rate": {
+      "rate<0.05": {
+        "ok": true
+      }
+    },
+    "api_duration_normal": {
+      "p(95)<150": {
+        "ok": true
+      }
+    },
+    "api_duration_recovery": {
+      "p(95)<250": {
+        "ok": true
+      }
+    },
+    "http_req_failed": {
+      "rate<0.01": {
+        "ok": true
+      }
+    }
+  }
+}
