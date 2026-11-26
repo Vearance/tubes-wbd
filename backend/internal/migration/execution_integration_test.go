@@ -144,6 +144,75 @@ func TestIntegrationFailedRollbackLeavesHistoryPositionActive(t *testing.T) {
 	require.Equal(t, up.ID, latestActive.ExecutionID, "failed rollback must not change active migration state")
 }
 
+func TestIntegrationForwardCandidatesFollowRollbackStack(t *testing.T) {
+	env := newDraftEnv(t, "")
+	svc := env.service(t, stubAuthorizer{})
+	ctx := context.Background()
+	leader := env.addApproverGroup(t, "Migration Approvers", "stack-leader", access.PermissionViewEdit)
+	worker, err := NewExecutionWorker(svc, env.repo)
+	require.NoError(t, err)
+
+	applyMigration := func(name string) *Execution {
+		draft, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{
+			Name: name, SQL: "SELECT 1", DownSQL: "SELECT 1",
+		})
+		require.NoError(t, err)
+		execution, err := svc.SubmitDraftForReview(ctx, 42, draft.ID)
+		require.NoError(t, err)
+		approveAndQueue(t, svc, leader, execution.ID)
+		require.NoError(t, worker.RunExecution(ctx, execution.ID))
+		return execution
+	}
+	rollbackLatest := func() *Execution {
+		execution, err := svc.SubmitRollbackForReview(ctx, 42, env.dbID)
+		require.NoError(t, err)
+		approveAndQueue(t, svc, leader, execution.ID)
+		require.NoError(t, worker.RunExecution(ctx, execution.ID))
+		return execution
+	}
+	applyForward := func(target *Execution) *Execution {
+		execution, err := svc.SubmitForwardForReview(ctx, 42, env.dbID)
+		require.NoError(t, err)
+		require.Equal(t, target.ID, *execution.TargetExecutionID)
+		approveAndQueue(t, svc, leader, execution.ID)
+		require.NoError(t, worker.RunExecution(ctx, execution.ID))
+		return execution
+	}
+
+	applyMigration("A")
+	migrationB := applyMigration("B")
+	migrationC := applyMigration("C")
+
+	rollbackC := rollbackLatest()
+	require.Equal(t, migrationC.ID, *rollbackC.TargetExecutionID)
+	rollbackB := rollbackLatest()
+	require.Equal(t, migrationB.ID, *rollbackB.TargetExecutionID)
+
+	page, err := svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	require.NotNil(t, page.Forward)
+	require.Equal(t, rollbackB.ID, page.Forward.RollbackExecutionID)
+	require.Equal(t, migrationB.ID, page.Forward.TargetExecutionID)
+
+	applyForward(migrationB)
+	page, err = svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	require.NotNil(t, page.Forward)
+	require.Equal(t, rollbackC.ID, page.Forward.RollbackExecutionID)
+	require.Equal(t, migrationC.ID, page.Forward.TargetExecutionID)
+
+	applyForward(migrationC)
+	page, err = svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	require.Nil(t, page.Forward)
+
+	rollbackLatest()
+	applyMigration("D")
+	page, err = svc.HistoryFiltered(ctx, 42, env.dbID, 1, 20, true)
+	require.NoError(t, err)
+	require.Nil(t, page.Forward, "a new successful migration invalidates older forward candidates")
+}
+
 func TestIntegrationAsyncUpRollbackAndForward(t *testing.T) {
 	env := newDraftEnv(t, "")
 	svc := env.service(t, stubAuthorizer{})

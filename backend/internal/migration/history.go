@@ -164,6 +164,11 @@ func latestActiveExecutionHistory(ctx context.Context, tx pgx.Tx) (*HistoryEntry
 	return getExecutionHistoryByID(ctx, tx, uint(executionID.Int64))
 }
 
+type forwardStackEntry struct {
+	rollbackExecutionID uint
+	targetExecutionID   uint
+}
+
 func forwardCandidate(ctx context.Context, tx pgx.Tx) (*HistoryEntry, error) {
 	exists, err := historyExists(ctx, tx)
 	if err != nil {
@@ -172,29 +177,73 @@ func forwardCandidate(ctx context.Context, tx pgx.Tx) (*HistoryEntry, error) {
 	if !exists {
 		return nil, ErrInvalidForward
 	}
-	var executionID pgtype.Int8
-	err = tx.QueryRow(ctx,
-		`SELECT latest.execution_id
-		FROM (
-			SELECT execution_id, execution_type, target_execution_id
-			FROM _dbm.migration_history
-			WHERE status = 'success'
-			ORDER BY version DESC
-			LIMIT 1
-		) latest
-		WHERE latest.execution_type = 'rollback'
-			AND EXISTS (
-				SELECT 1 FROM _dbm.migration_history target
-				WHERE target.status = 'success'
-					AND target.execution_id = latest.target_execution_id
-			)`).Scan(&executionID)
-	if errors.Is(err, pgx.ErrNoRows) || err == nil && !executionID.Valid {
+
+	rows, err := tx.Query(ctx,
+		`SELECT execution_id, execution_type, target_execution_id
+		FROM _dbm.migration_history
+		WHERE status = 'success'
+		ORDER BY version ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("migration: list successful history for forward candidates: %w", err)
+	}
+	events, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (struct {
+		executionID       pgtype.Int8
+		executionType     string
+		targetExecutionID pgtype.Int8
+	}, error) {
+		var event struct {
+			executionID       pgtype.Int8
+			executionType     string
+			targetExecutionID pgtype.Int8
+		}
+		if err := row.Scan(&event.executionID, &event.executionType, &event.targetExecutionID); err != nil {
+			return event, err
+		}
+		return event, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("migration: read successful history for forward candidates: %w", err)
+	}
+
+	successfulExecutions := make(map[uint]struct{}, len(events))
+	stack := make([]forwardStackEntry, 0)
+	for _, event := range events {
+		switch ExecutionType(event.executionType) {
+		case ExecutionTypeUp:
+			stack = stack[:0]
+		case ExecutionTypeRollback:
+			if !event.executionID.Valid || !event.targetExecutionID.Valid {
+				stack = stack[:0]
+				break
+			}
+			targetID := uint(event.targetExecutionID.Int64)
+			if _, targetExists := successfulExecutions[targetID]; !targetExists {
+				stack = stack[:0]
+				break
+			}
+			stack = append(stack, forwardStackEntry{
+				rollbackExecutionID: uint(event.executionID.Int64),
+				targetExecutionID:   targetID,
+			})
+		case ExecutionTypeForward:
+			if !event.targetExecutionID.Valid || len(stack) == 0 ||
+				stack[len(stack)-1].targetExecutionID != uint(event.targetExecutionID.Int64) {
+				stack = stack[:0]
+				break
+			}
+			stack = stack[:len(stack)-1]
+		default:
+			stack = stack[:0]
+		}
+		if event.executionID.Valid {
+			successfulExecutions[uint(event.executionID.Int64)] = struct{}{}
+		}
+	}
+
+	if len(stack) == 0 {
 		return nil, ErrInvalidForward
 	}
-	if err != nil {
-		return nil, fmt.Errorf("migration: find forward candidate: %w", err)
-	}
-	return getExecutionHistoryByID(ctx, tx, uint(executionID.Int64))
+	return getExecutionHistoryByID(ctx, tx, stack[len(stack)-1].rollbackExecutionID)
 }
 
 func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEntry, error) {

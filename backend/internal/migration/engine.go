@@ -342,20 +342,21 @@ func validateExecutionPosition(ctx context.Context, tx pgx.Tx, execution *Execut
 		if execution.TargetExecutionID == nil {
 			return ErrInvalidInput
 		}
-		var lastType string
-		var lastTarget int64
-		var originalSQL string
-		err := tx.QueryRow(ctx,
-			`SELECT h.execution_type, h.target_execution_id, original.sql
-			 FROM _dbm.migration_history h
-			 JOIN _dbm.migration_history original
-			   ON original.execution_id = h.target_execution_id AND original.status = 'success'
-			 WHERE h.status = 'success'
-			 ORDER BY h.version DESC LIMIT 1`).Scan(&lastType, &lastTarget, &originalSQL)
+		rollback, err := forwardCandidate(ctx, tx)
 		if err != nil {
-			return executionError(err)
+			return err
 		}
-		if ExecutionType(lastType) != ExecutionTypeRollback || uint(lastTarget) != *execution.TargetExecutionID || originalSQL != execution.SQL {
+		if rollback.TargetExecutionID == nil || *rollback.TargetExecutionID != *execution.TargetExecutionID {
+			return ErrInvalidForward
+		}
+		original, err := getExecutionHistoryByID(ctx, tx, *rollback.TargetExecutionID)
+		if errors.Is(err, ErrVersionNotFound) {
+			return ErrInvalidForward
+		}
+		if err != nil {
+			return err
+		}
+		if original.SQL != execution.SQL {
 			return ErrInvalidForward
 		}
 	default:
