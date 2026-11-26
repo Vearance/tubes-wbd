@@ -164,6 +164,10 @@ func (s *MigrationService) targetConfigSnapshot(ctx context.Context, databaseID 
 }
 
 func (s *MigrationService) History(ctx context.Context, userID, dbID uint, page, pageSize int) (*HistoryPage, error) {
+	return s.HistoryFiltered(ctx, userID, dbID, page, pageSize, false)
+}
+
+func (s *MigrationService) HistoryFiltered(ctx context.Context, userID, dbID uint, page, pageSize int, hideRollback bool) (*HistoryPage, error) {
 	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
 		return nil, err
 	}
@@ -174,7 +178,7 @@ func (s *MigrationService) History(ctx context.Context, userID, dbID uint, page,
 
 	var result *HistoryPage
 	err = s.readOnly(ctx, dbID, func(tx pgx.Tx) (err error) {
-		result, err = listHistory(ctx, tx, page, pageSize)
+		result, err = listHistory(ctx, tx, page, pageSize, hideRollback)
 		return err
 	})
 	return result, err

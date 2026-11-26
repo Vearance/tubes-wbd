@@ -20,7 +20,9 @@ func (s apiServer) ListMigrationHistory(
 		return
 	}
 
-	page, err := s.migrations.History(r.Context(), userID, dbID, intValue(params.Page), intValue(params.PageSize))
+	hideRollback := params.HideRollback != nil && *params.HideRollback
+	page, err := s.migrations.HistoryFiltered(r.Context(), userID, dbID,
+		intValue(params.Page), intValue(params.PageSize), hideRollback)
 	if err != nil {
 		writeServiceError(w, err, "listing migration history")
 		return
