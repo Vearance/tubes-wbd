@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/singleflight"
@@ -14,14 +15,28 @@ import (
 
 const applicationName = "dbm-platform"
 
+// PoolStats aggregates live connection pool metrics across all open target database pools
+// along with cumulative wait statistics preserved across pool invalidations.
+type PoolStats struct {
+	ActivePools  int64
+	ActiveConns  int64
+	IdleConns    int64
+	TotalConns   int64
+	MaxConns     int64
+	WaitCount    int64
+	WaitDuration time.Duration
+}
+
 type Manager struct {
-	src    ConfigSource
-	opts   Options
-	mu     sync.Mutex
-	pools  map[DatabaseID]*pgxpool.Pool
-	gen    map[DatabaseID]uint64
-	closed bool
-	sf     singleflight.Group
+	src                ConfigSource
+	opts               Options
+	mu                 sync.Mutex
+	pools              map[DatabaseID]*pgxpool.Pool
+	gen                map[DatabaseID]uint64
+	closed             bool
+	closedWaitCount    int64
+	closedWaitDuration time.Duration
+	sf                 singleflight.Group
 }
 
 func NewManager(src ConfigSource, opts Options) *Manager {
@@ -100,7 +115,7 @@ func (m *Manager) openPool(ctx context.Context, id DatabaseID) (*pgxpool.Pool, e
 	if err != nil {
 		return nil, err
 	}
-	return m.connect(ctx, cfg)
+	return m.connect(ctx, id, cfg)
 }
 
 func (m *Manager) PoolWithConfig(ctx context.Context, cfg ConnConfig) (*pgxpool.Pool, error) {
@@ -113,7 +128,7 @@ func (m *Manager) PoolWithConfig(ctx context.Context, cfg ConnConfig) (*pgxpool.
 
 	connectCtx, cancel := context.WithTimeout(ctx, m.opts.ConnectTimeout)
 	defer cancel()
-	pool, err := m.connect(connectCtx, cfg)
+	pool, err := m.connect(connectCtx, 0, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +147,7 @@ func (m *Manager) Test(ctx context.Context, cfg ConnConfig) error {
 	ctx, cancel := context.WithTimeout(ctx, m.opts.ConnectTimeout)
 	defer cancel()
 
-	pool, err := m.connect(ctx, cfg)
+	pool, err := m.connect(ctx, 0, cfg)
 	if err != nil {
 		return err
 	}
@@ -144,6 +159,11 @@ func (m *Manager) Invalidate(id DatabaseID) {
 	m.mu.Lock()
 	m.gen[id]++
 	pool := m.pools[id]
+	if pool != nil {
+		st := pool.Stat()
+		m.closedWaitCount += st.EmptyAcquireCount()
+		m.closedWaitDuration += st.EmptyAcquireWaitTime()
+	}
 	delete(m.pools, id)
 	m.mu.Unlock()
 
@@ -156,6 +176,13 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	m.closed = true
 	pools := m.pools
+	for _, pool := range pools {
+		if pool != nil {
+			st := pool.Stat()
+			m.closedWaitCount += st.EmptyAcquireCount()
+			m.closedWaitDuration += st.EmptyAcquireWaitTime()
+		}
+	}
 	m.pools = make(map[DatabaseID]*pgxpool.Pool)
 	m.mu.Unlock()
 
@@ -164,10 +191,38 @@ func (m *Manager) Close() {
 	}
 }
 
-func (m *Manager) connect(ctx context.Context, c ConnConfig) (*pgxpool.Pool, error) {
+// Stats returns aggregated connection pool metrics across all open target database pools.
+func (m *Manager) Stats() PoolStats {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	stats := PoolStats{
+		ActivePools:  int64(len(m.pools)),
+		WaitCount:    m.closedWaitCount,
+		WaitDuration: m.closedWaitDuration,
+	}
+	for _, pool := range m.pools {
+		if pool == nil {
+			continue
+		}
+		st := pool.Stat()
+		stats.ActiveConns += int64(st.AcquiredConns())
+		stats.IdleConns += int64(st.IdleConns())
+		stats.TotalConns += int64(st.TotalConns())
+		stats.MaxConns += int64(st.MaxConns())
+		stats.WaitCount += st.EmptyAcquireCount()
+		stats.WaitDuration += st.EmptyAcquireWaitTime()
+	}
+	return stats
+}
+
+func (m *Manager) connect(ctx context.Context, id DatabaseID, c ConnConfig) (*pgxpool.Pool, error) {
 	cfg, err := buildPoolConfig(c, m.opts)
 	if err != nil {
 		return nil, err
+	}
+	if m.opts.QueryTracer != nil {
+		cfg.ConnConfig.Tracer = m.opts.QueryTracer(id)
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
