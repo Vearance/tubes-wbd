@@ -532,6 +532,11 @@ else
 		'{name:$name,sql:$sql,down_sql:$down,batch:{schema:"public",table:$tbl,key_column:"id",scope_sql:"",batch_size:5}}')"
 	run_draft_execution "Batch update 5x5 (up)" "$batch_payload" "success"
 
+	if [[ "$INTERVAL" -gt 0 ]]; then
+		log_ok "Pausing ${INTERVAL}s so Prometheus scrapes migration histograms across >=2 intervals"
+		sleep "$INTERVAL"
+	fi
+
 	# 3. Rollback of the batch migration.
 	http_call POST "${API_URL}/databases/${OBS_DB_ID}/migrations/rollback" \
 		"$USER_COOKIES" "$USER_CSRF" "" "$MIGRATION_CORR_ID"
