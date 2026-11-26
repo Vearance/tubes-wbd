@@ -26,6 +26,9 @@ func TestLoadServerConfig(t *testing.T) {
 	t.Setenv("APP_VIEWER_DEFAULT_PAGE_SIZE", "25")
 	t.Setenv("APP_VIEWER_MAX_PAGE_SIZE", "75")
 	t.Setenv("APP_SHUTDOWN_TIMEOUT", "15s")
+	t.Setenv("OTEL_SERVICE_NAME", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_TRACES_EXPORTER", "console")
 
 	t.Setenv("APP_RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 
@@ -51,6 +54,10 @@ func TestLoadServerConfig(t *testing.T) {
 	require.Equal(t, 25, cfg.Viewer.DefaultPageSize)
 	require.Equal(t, 75, cfg.Viewer.MaxPageSize)
 	require.Equal(t, 15*time.Second, cfg.ShutdownTimeout)
+	require.Equal(t, "bscheme-api", cfg.Telemetry.ServiceName)
+	require.Empty(t, cfg.Telemetry.OTLPEndpoint)
+	require.Equal(t, "console", cfg.Telemetry.TracesExporter)
+	require.Equal(t, 1.0, cfg.Telemetry.SampleRatio)
 }
 
 func TestLoadServerConfigRejectsInvalidSessionDuration(t *testing.T) {

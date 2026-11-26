@@ -12,6 +12,7 @@ import (
 	"tubes-wbd/internal/auth"
 	"tubes-wbd/internal/database/platformdb"
 	"tubes-wbd/internal/manageddb"
+	"tubes-wbd/internal/telemetry"
 	"tubes-wbd/internal/viewer"
 )
 
@@ -33,6 +34,7 @@ type serverConfig struct {
 	CookieSecure    bool
 	ShutdownTimeout time.Duration
 	TargetDBKey     []byte
+	Telemetry       telemetry.Config
 }
 
 func loadServerConfig() (serverConfig, error) {
@@ -157,6 +159,11 @@ func loadServerConfig() (serverConfig, error) {
 		return serverConfig{}, fmt.Errorf("TARGET_DB_ENCRYPTION_KEY: %w", err)
 	}
 
+	telemetryCfg, err := telemetry.LoadConfig("bscheme-api")
+	if err != nil {
+		return serverConfig{}, fmt.Errorf("loading telemetry config: %w", err)
+	}
+
 	return serverConfig{
 		RabbitMQURL:   rabbitMQURL,
 		RabbitMQQueue: rabbitMQQueue,
@@ -184,6 +191,7 @@ func loadServerConfig() (serverConfig, error) {
 		CookieSecure:    cookieSecure,
 		ShutdownTimeout: shutdownTimeout,
 		TargetDBKey:     targetDBKey,
+		Telemetry:       telemetryCfg,
 	}, nil
 }
 
