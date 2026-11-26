@@ -220,7 +220,7 @@ export type QueryResult = {
 
 const API_BASE =
 	(import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
-	"";
+	"/api";
 const CSRF_KEY = "bscheme_csrf";
 const USER_KEY = "bscheme_user";
 

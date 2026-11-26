@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
   const backendProxy = {
     target: `http://${env.BACKEND_HOST || 'localhost'}:${env.APP_PORT || '8080'}`,
     changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/api/, ''),
   }
 
   return {
@@ -17,11 +18,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       proxy: {
-        '/auth': backendProxy,
-        '/admin': backendProxy,
-        '/databases': backendProxy,
-        '/migrations': backendProxy,
-        '/health': backendProxy,
+        '/api': backendProxy,
       },
     },
   }
