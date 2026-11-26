@@ -24,7 +24,7 @@ func (s apiServer) ListMigrationHistory(
 	page, err := s.migrations.HistoryFiltered(r.Context(), userID, dbID,
 		intValue(params.Page), intValue(params.PageSize), hideRollback)
 	if err != nil {
-		writeServiceError(w, err, "listing migration history")
+		writeServiceError(r.Context(), w, err, "listing migration history")
 		return
 	}
 
@@ -73,7 +73,7 @@ func (s apiServer) ExplainMigration(
 
 	result, err := s.migrations.Explain(r.Context(), userID, dbID, request.Sql)
 	if err != nil {
-		writeServiceError(w, err, "explaining migration SQL")
+		writeServiceError(r.Context(), w, err, "explaining migration SQL")
 		return
 	}
 
@@ -102,7 +102,7 @@ func (s apiServer) GetMigrationHistoryEntry(
 
 	entry, err := s.migrations.HistoryEntry(r.Context(), userID, dbID, version)
 	if err != nil {
-		writeServiceError(w, err, "getting migration history entry")
+		writeServiceError(r.Context(), w, err, "getting migration history entry")
 		return
 	}
 
@@ -135,7 +135,7 @@ func (s apiServer) ListMigrationDrafts(w http.ResponseWriter, r *http.Request, d
 
 	drafts, err := s.migrations.ListDrafts(r.Context(), userID, dbID)
 	if err != nil {
-		writeServiceError(w, err, "listing migration drafts")
+		writeServiceError(r.Context(), w, err, "listing migration drafts")
 		return
 	}
 
@@ -164,7 +164,7 @@ func (s apiServer) CreateMigrationDraft(
 	draft, err := s.migrations.CreateDraft(r.Context(), userID, dbID,
 		migrationFromRequest(request))
 	if err != nil {
-		writeServiceError(w, err, "creating migration draft")
+		writeServiceError(r.Context(), w, err, "creating migration draft")
 		return
 	}
 	writeJSON(w, http.StatusCreated, draftResponse(draft))
@@ -178,7 +178,7 @@ func (s apiServer) GetMigrationDraft(w http.ResponseWriter, r *http.Request, dra
 
 	draft, err := s.migrations.GetDraft(r.Context(), userID, id)
 	if err != nil {
-		writeServiceError(w, err, "getting migration draft")
+		writeServiceError(r.Context(), w, err, "getting migration draft")
 		return
 	}
 	writeJSON(w, http.StatusOK, draftResponse(draft))
@@ -202,7 +202,7 @@ func (s apiServer) UpdateMigrationDraft(
 	draft, err := s.migrations.UpdateDraft(r.Context(), userID, id,
 		migrationFromRequest(request))
 	if err != nil {
-		writeServiceError(w, err, "updating migration draft")
+		writeServiceError(r.Context(), w, err, "updating migration draft")
 		return
 	}
 	writeJSON(w, http.StatusOK, draftResponse(draft))
@@ -221,7 +221,7 @@ func (s apiServer) ExecuteMigrationDraft(
 
 	execution, err := s.migrations.SubmitDraftForReview(r.Context(), userID, id)
 	if err != nil {
-		writeServiceError(w, err, "submitting migration execution")
+		writeServiceError(r.Context(), w, err, "submitting migration execution")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, executionResponse(execution))
@@ -234,7 +234,7 @@ func (s apiServer) SubmitMigrationRollback(w http.ResponseWriter, r *http.Reques
 	}
 	execution, err := s.migrations.SubmitRollbackForReview(r.Context(), userID, dbID)
 	if err != nil {
-		writeServiceError(w, err, "submitting migration rollback")
+		writeServiceError(r.Context(), w, err, "submitting migration rollback")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, executionResponse(execution))
@@ -247,7 +247,7 @@ func (s apiServer) SubmitMigrationForward(w http.ResponseWriter, r *http.Request
 	}
 	execution, err := s.migrations.SubmitForwardForReview(r.Context(), userID, dbID)
 	if err != nil {
-		writeServiceError(w, err, "submitting migration forward")
+		writeServiceError(r.Context(), w, err, "submitting migration forward")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, executionResponse(execution))
@@ -269,7 +269,7 @@ func (s apiServer) SubmitMigrationCompensation(
 	}
 	execution, err := s.migrations.SubmitCompensationForReview(r.Context(), userID, id)
 	if err != nil {
-		writeServiceError(w, err, "submitting migration compensation")
+		writeServiceError(r.Context(), w, err, "submitting migration compensation")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, executionResponse(execution))
@@ -282,7 +282,7 @@ func (s apiServer) ListMigrationExecutions(w http.ResponseWriter, r *http.Reques
 	}
 	executions, err := s.migrations.Executions(r.Context(), userID, dbID)
 	if err != nil {
-		writeServiceError(w, err, "listing migration executions")
+		writeServiceError(r.Context(), w, err, "listing migration executions")
 		return
 	}
 	response := make([]httpapi.MigrationExecution, 0, len(executions))
@@ -303,7 +303,7 @@ func (s apiServer) GetMigrationExecution(w http.ResponseWriter, r *http.Request,
 	}
 	execution, err := s.migrations.Execution(r.Context(), userID, id)
 	if err != nil {
-		writeServiceError(w, err, "getting migration execution")
+		writeServiceError(r.Context(), w, err, "getting migration execution")
 		return
 	}
 	writeJSON(w, http.StatusOK, executionResponse(execution))

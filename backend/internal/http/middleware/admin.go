@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"tubes-wbd/internal/auth"
@@ -29,15 +29,25 @@ func RequireAdmin(authorizer AdminAuthorizer) func(http.Handler) http.Handler {
 			isAdmin, err := authorizer.IsAdmin(r.Context(), session.UserID)
 			if err != nil {
 				if errors.Is(err, auth.ErrUserNotFound) {
-					writeError(w, http.StatusUnauthorized, "authentication required")
+					writeErrorContext(r.Context(), w, http.StatusUnauthorized, "authentication required")
 					return
 				}
-				log.Printf("admin middleware: %v", err)
-				writeError(w, http.StatusInternalServerError, "internal server error")
+				slog.ErrorContext(r.Context(), "admin authorization check failed",
+					"event", "authz.admin.error",
+					"database", "platform",
+					"status", "error",
+					"error", err,
+				)
+				writeErrorContext(r.Context(), w, http.StatusInternalServerError, "internal server error")
 				return
 			}
 			if !isAdmin {
-				writeError(w, http.StatusForbidden, "admin access required")
+				slog.WarnContext(r.Context(), "admin authorization denied",
+					"event", "authz.admin.denied",
+					"database", "platform",
+					"status", "rejected",
+				)
+				writeErrorContext(r.Context(), w, http.StatusForbidden, "admin access required")
 				return
 			}
 

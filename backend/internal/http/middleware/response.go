@@ -1,8 +1,9 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -11,9 +12,17 @@ type errorResponse struct {
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
+	writeErrorContext(context.Background(), w, status, message)
+}
+
+func writeErrorContext(ctx context.Context, w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(errorResponse{Message: message}); err != nil {
-		log.Printf("writing middleware error response: %v", err)
+		slog.ErrorContext(ctx, "writing middleware error response",
+			"event", "http.response.write_error",
+			"status", "error",
+			"error", err,
+		)
 	}
 }

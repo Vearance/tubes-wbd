@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 
 	"tubes-wbd/internal/access"
@@ -11,7 +12,7 @@ import (
 func (s apiServer) ListAdminDatabases(w http.ResponseWriter, r *http.Request) {
 	databases, err := s.managedDatabases.List(r.Context())
 	if err != nil {
-		writeServiceError(w, err, "listing managed databases")
+		writeServiceError(r.Context(), w, err, "listing managed databases")
 		return
 	}
 
@@ -34,7 +35,7 @@ func (s apiServer) CreateAdminDatabase(
 
 	database, err := s.managedDatabases.Create(r.Context(), in)
 	if err != nil {
-		writeServiceError(w, err, "creating managed database")
+		writeServiceError(r.Context(), w, err, "creating managed database")
 		return
 	}
 	writeJSON(w, http.StatusCreated, managedDatabaseResponse(database))
@@ -49,7 +50,7 @@ func (s apiServer) TestAdminDatabaseConnection(
 	if !ok {
 		return
 	}
-	writeConnectionTest(w, s.managedDatabases.TestConnection(r.Context(), in))
+	writeConnectionTest(r.Context(), w, s.managedDatabases.TestConnection(r.Context(), in))
 }
 
 func (s apiServer) GetAdminDatabase(w http.ResponseWriter, r *http.Request, databaseID httpapi.DatabaseId) {
@@ -60,7 +61,7 @@ func (s apiServer) GetAdminDatabase(w http.ResponseWriter, r *http.Request, data
 
 	database, err := s.managedDatabases.Get(r.Context(), id)
 	if err != nil {
-		writeServiceError(w, err, "getting managed database")
+		writeServiceError(r.Context(), w, err, "getting managed database")
 		return
 	}
 	writeJSON(w, http.StatusOK, managedDatabaseResponse(database))
@@ -83,7 +84,7 @@ func (s apiServer) UpdateAdminDatabase(
 
 	database, err := s.managedDatabases.Update(r.Context(), id, in)
 	if err != nil {
-		writeServiceError(w, err, "updating managed database")
+		writeServiceError(r.Context(), w, err, "updating managed database")
 		return
 	}
 	writeJSON(w, http.StatusOK, managedDatabaseResponse(database))
@@ -101,7 +102,7 @@ func (s apiServer) DeleteAdminDatabase(
 	}
 
 	if err := s.managedDatabases.Delete(r.Context(), id); err != nil {
-		writeServiceError(w, err, "deleting managed database")
+		writeServiceError(r.Context(), w, err, "deleting managed database")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -117,7 +118,7 @@ func (s apiServer) TestAdminStoredDatabase(
 	if !ok {
 		return
 	}
-	writeConnectionTest(w, s.managedDatabases.TestStored(r.Context(), id))
+	writeConnectionTest(r.Context(), w, s.managedDatabases.TestStored(r.Context(), id))
 }
 
 func (s apiServer) ListAdminGroupDatabases(w http.ResponseWriter, r *http.Request, groupID httpapi.GroupId) {
@@ -128,7 +129,7 @@ func (s apiServer) ListAdminGroupDatabases(w http.ResponseWriter, r *http.Reques
 
 	permissions, err := s.groupService.ListDatabasePermissions(r.Context(), id)
 	if err != nil {
-		writeServiceError(w, err, "listing group database permissions")
+		writeServiceError(r.Context(), w, err, "listing group database permissions")
 		return
 	}
 
@@ -167,7 +168,7 @@ func (s apiServer) SetAdminGroupDatabase(
 
 	permission, err := s.groupService.SetDatabasePermission(r.Context(), gid, dbID, level)
 	if err != nil {
-		writeServiceError(w, err, "setting group database permission")
+		writeServiceError(r.Context(), w, err, "setting group database permission")
 		return
 	}
 	writeJSON(w, http.StatusOK, databasePermissionResponse(permission))
@@ -190,7 +191,7 @@ func (s apiServer) RemoveAdminGroupDatabase(
 	}
 
 	if err := s.groupService.RemoveDatabasePermission(r.Context(), gid, dbID); err != nil {
-		writeServiceError(w, err, "removing group database permission")
+		writeServiceError(r.Context(), w, err, "removing group database permission")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -204,7 +205,7 @@ func (s apiServer) ListDatabases(w http.ResponseWriter, r *http.Request) {
 
 	databases, err := s.managedDatabases.List(r.Context())
 	if err != nil {
-		writeServiceError(w, err, "listing databases")
+		writeServiceError(r.Context(), w, err, "listing databases")
 		return
 	}
 
@@ -212,7 +213,7 @@ func (s apiServer) ListDatabases(w http.ResponseWriter, r *http.Request) {
 	for index := range databases {
 		level, err := s.authorization.EffectivePermission(r.Context(), userID, databases[index].ID)
 		if err != nil {
-			writeServiceError(w, err, "computing database permission")
+			writeServiceError(r.Context(), w, err, "computing database permission")
 			return
 		}
 		permission, ok := permissionResponse(level)
@@ -254,7 +255,7 @@ func decodeManagedDatabaseInput(w http.ResponseWriter, r *http.Request) (managed
 	return in, true
 }
 
-func writeConnectionTest(w http.ResponseWriter, err error) {
+func writeConnectionTest(ctx context.Context, w http.ResponseWriter, err error) {
 	if err == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -263,7 +264,7 @@ func writeConnectionTest(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusUnprocessableEntity, message)
 		return
 	}
-	writeServiceError(w, err, "testing database connection")
+	writeServiceError(ctx, w, err, "testing database connection")
 }
 
 func managedDatabaseResponse(d *manageddb.ManagedDatabase) httpapi.ManagedDatabase {

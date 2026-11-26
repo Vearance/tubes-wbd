@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"log/slog"
 	"mime"
 	"net/http"
 
@@ -39,13 +40,24 @@ func CSRF(service *auth.AuthService) func(http.Handler) http.Handler {
 			); err != nil {
 				switch {
 				case errors.Is(err, auth.ErrInvalidCSRFToken):
-					writeError(w, http.StatusForbidden, "invalid csrf token")
+					slog.WarnContext(r.Context(), "csrf validation rejected",
+						"event", "auth.csrf.rejected",
+						"database", "platform",
+						"status", "rejected",
+					)
+					writeErrorContext(r.Context(), w, http.StatusForbidden, "invalid csrf token")
 				case errors.Is(err, auth.ErrUnauthenticated),
 					errors.Is(err, auth.ErrSessionExpired),
 					errors.Is(err, auth.ErrSessionRevoked):
-					writeError(w, http.StatusUnauthorized, "authentication required")
+					writeErrorContext(r.Context(), w, http.StatusUnauthorized, "authentication required")
 				default:
-					writeError(w, http.StatusInternalServerError, "internal server error")
+					slog.ErrorContext(r.Context(), "csrf validation failed",
+						"event", "auth.csrf.error",
+						"database", "platform",
+						"status", "error",
+						"error", err,
+					)
+					writeErrorContext(r.Context(), w, http.StatusInternalServerError, "internal server error")
 				}
 				return
 			}
