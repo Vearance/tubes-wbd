@@ -1,5 +1,5 @@
 export const baseButtonClasses =
-  'inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-xl font-bold text-[13px] tracking-tight disabled:cursor-not-allowed select-none transition-colors'
+  'inline-flex min-h-9 sm:min-h-11 max-w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl font-bold text-xs sm:text-[13px] tracking-tight disabled:cursor-not-allowed select-none transition-colors'
 
 export const buttonVariants = {
   default:
@@ -15,8 +15,8 @@ export const buttonVariants = {
 
 export const buttonSizes = {
   sm: 'min-h-8 px-3 text-xs rounded-lg gap-1.5',
-  md: 'min-h-11 px-[18px] text-[13px] rounded-xl gap-2',
-  lg: 'min-h-12 px-6 text-sm rounded-2xl gap-2.5',
+  md: 'min-h-9.5 px-3.5 text-xs sm:min-h-11 sm:px-[18px] sm:text-[13px] rounded-xl gap-1.5 sm:gap-2',
+  lg: 'min-h-10.5 px-5 text-xs sm:min-h-12 sm:px-6 sm:text-sm rounded-2xl gap-2 sm:gap-2.5',
 } as const
 
 export type ButtonVariant = keyof typeof buttonVariants

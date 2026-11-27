@@ -11,9 +11,11 @@ import {
   ConfirmAction,
   EmptyState,
   ErrorNotice,
+  Modal,
   Status,
 } from '../../../components/ui'
-import { cn } from '../../../lib/utils'
+import { cleanMigrationName, cn } from '../../../lib/utils'
+import { TablePagination } from './TablePagination'
 
 export type AirlockFilter =
   | 'all'
@@ -113,7 +115,8 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
       <div className="mt-2.5 pt-2 border-t border-black/5 text-xs">
         {isApproved && (
           <span className="font-semibold text-success-fg">
-            Sealed by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
+            Approved by @
+            {approval.decided_by_username ?? `user #${approval.decided_by}`}
             {approval.decided_at
               ? ` · ${new Date(approval.decided_at).toLocaleTimeString()}`
               : ''}
@@ -121,7 +124,8 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
         )}
         {isRejected && (
           <span className="font-semibold text-danger-fg">
-            Tripped by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
+            Rejected by @
+            {approval.decided_by_username ?? `user #${approval.decided_by}`}
           </span>
         )}
         {!isApproved && !isRejected && (
@@ -130,7 +134,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
           </span>
         )}
         {approval.note && (
-          <p className="mt-1 mb-0 rounded bg-white/80 px-2 py-1 text-xs text-ink border border-line/60">
+          <p className="mt-1.5 mb-0 rounded-lg bg-white/85 px-2.5 py-1.5 text-xs text-ink border border-line/60">
             &ldquo;{approval.note}&rdquo;
           </p>
         )}
@@ -139,18 +143,17 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
   )
 }
 
-function ExecutionAirlockCard({
+function ExecutionDetailModal({
   execution,
   canEdit,
-  initiallyExpanded,
+  onClose,
   onMutated,
 }: {
-  execution: MigrationExecution
+  execution: MigrationExecution | null
   canEdit: boolean
-  initiallyExpanded: boolean
+  onClose: () => void
   onMutated: (message: string) => Promise<void>
 }) {
-  const [showSql, setShowSql] = useState(initiallyExpanded)
   const [summary, setSummary] = useState<MigrationApprovalSummary | null>(null)
   const [summaryUnavailable, setSummaryUnavailable] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
@@ -158,13 +161,19 @@ function ExecutionAirlockCard({
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState('')
 
+  const execId = execution?.id ?? null
+  const execStatus = execution?.status ?? null
+  const execUpdated = execution?.updated_at ?? null
+
   useEffect(() => {
+    if (execId == null) return
     let active = true
     queueMicrotask(async () => {
       setSummaryLoading(true)
       setSummaryUnavailable(false)
+      setActionError('')
       try {
-        const res = await api.executionApprovals(execution.id)
+        const res = await api.executionApprovals(execId)
         if (active) setSummary(res)
       } catch {
         if (active) setSummaryUnavailable(true)
@@ -175,9 +184,10 @@ function ExecutionAirlockCard({
     return () => {
       active = false
     }
-  }, [execution.id, execution.status, execution.updated_at])
+  }, [execId, execStatus, execUpdated])
 
   async function handleApprove() {
+    if (!execution) return
     setActionBusy(true)
     setActionError('')
     try {
@@ -186,8 +196,8 @@ function ExecutionAirlockCard({
       setNote('')
       await onMutated(
         updated.execution_status === 'approved'
-          ? `Execution #${execution.id} reached full consensus and is ready to queue!`
-          : `Seal recorded for Execution #${execution.id}. Waiting for remaining team Keyholders.`,
+          ? `Execution #${execution.id} received all group approvals and is ready to queue!`
+          : `Approval recorded for Execution #${execution.id}. Waiting for remaining team Keyholders.`,
       )
     } catch (err) {
       setActionError(
@@ -199,6 +209,7 @@ function ExecutionAirlockCard({
   }
 
   async function handleReject() {
+    if (!execution) return
     if (!note.trim()) {
       setActionError(
         'Please enter a rejection reason so the author knows what to fix.',
@@ -224,6 +235,7 @@ function ExecutionAirlockCard({
   }
 
   async function handleEnqueue(resumingPartial = false) {
+    if (!execution) return
     setActionBusy(true)
     setActionError('')
     try {
@@ -243,6 +255,7 @@ function ExecutionAirlockCard({
   }
 
   async function handleCompensate() {
+    if (!execution) return
     setActionBusy(true)
     setActionError('')
     try {
@@ -259,108 +272,32 @@ function ExecutionAirlockCard({
     }
   }
 
-  const meta = statusMeta(execution.status, execution.type)
   const approvedCount =
     summary?.approvals.filter((a) => a.decision === 'approved').length ?? 0
   const totalCount = summary?.approvals.length ?? 0
 
   return (
-    <article
-      id={`execution-${execution.id}`}
-      className={cn(
-        'overflow-hidden rounded-2xl border bg-white shadow-2xs transition-colors',
-        initiallyExpanded
-          ? 'border-violet ring-2 ring-violet/20'
-          : execution.status === 'pending_review'
-            ? 'border-warning/40'
-            : execution.status === 'approved'
-              ? 'border-success/40'
-              : 'border-line',
-      )}
+    <Modal
+      open={Boolean(execution)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setSummary(null)
+          setNote('')
+          setActionError('')
+          onClose()
+        }
+      }}
+      title={execution ? cleanMigrationName(execution.name) : 'Execution Details'}
+      description={
+        execution
+          ? `Execution #${execution.id} · Draft #${execution.draft_id}`
+          : undefined
+      }
+      size="xl"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4.5">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 truncate text-sm font-bold text-ink">
-              {execution.name}
-            </h3>
-            <Status tone={meta.tone}>{meta.label}</Status>
-          </div>
-          <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <span className="font-mono font-semibold text-violet-fg">
-              #{execution.id}
-            </span>
-            <span>·</span>
-            <span
-              className={cn(
-                'font-semibold',
-                execution.type === 'rollback'
-                  ? 'text-warning-fg'
-                  : execution.type === 'forward'
-                    ? 'text-violet-fg'
-                    : 'text-ink',
-              )}
-            >
-              {execution.compensation ? 'Compensation' : typeLabel(execution.type)}
-            </span>
-            {totalCount > 0 && (
-              <>
-                <span>·</span>
-                <span className="font-semibold text-ink tabular-nums">
-                  {approvedCount}/{totalCount} seals
-                </span>
-              </>
-            )}
-            <span>·</span>
-            <span>
-              Draft #{execution.draft_id} · Submitted by user #
-              {execution.executed_by} ·{' '}
-              {new Date(execution.created_at).toLocaleString()}
-            </span>
-          </p>
-        </div>
+      {execution && (
+        <div className="space-y-6">
 
-        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSql((prev) => !prev)}
-          >
-            <Icon name="code" className="size-3.5" />
-            {showSql ? 'Hide SQL' : 'Inspect SQL'}
-          </Button>
-        </div>
-      </div>
-
-      {showSql && (
-        <div className="border-t border-line bg-surface-subtle px-4.5 py-3.5 space-y-2.5">
-          <div>
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
-              Immutable Execution Snapshot SQL
-            </span>
-            <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
-              {execution.sql}
-            </pre>
-          </div>
-          {execution.down_sql && (
-            <div>
-              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
-                Paired Down SQL
-              </span>
-              <pre className="m-0 max-h-32 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
-                {execution.down_sql}
-              </pre>
-            </div>
-          )}
-          {execution.irreversible && execution.irreversible_reason && (
-            <p className="m-0 text-xs text-warning-fg font-medium">
-              Marked irreversible: {execution.irreversible_reason}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="border-t border-line p-4.5 space-y-4">
           {actionError && (
             <ErrorNotice
               message={actionError}
@@ -369,9 +306,7 @@ function ExecutionAirlockCard({
           )}
 
           {summaryLoading && !summary && (
-            <p className="m-0 text-xs text-muted">
-              Loading multi-team consensus seals…
-            </p>
+            <p className="m-0 text-xs text-muted">Loading group approvals…</p>
           )}
 
           {summaryUnavailable && (
@@ -386,7 +321,7 @@ function ExecutionAirlockCard({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="font-bold text-ink">
-                    Consensus Seals ({approvedCount}/{totalCount})
+                    Group Approvals ({approvedCount}/{totalCount})
                   </span>
                   <span className="font-mono text-[11px] text-muted tabular-nums">
                     {totalCount > 0
@@ -408,7 +343,7 @@ function ExecutionAirlockCard({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2.5">
                 {summary.approvals.map((approval) => (
                   <SealSlot key={approval.group_id} approval={approval} />
                 ))}
@@ -446,7 +381,7 @@ function ExecutionAirlockCard({
                     className="flex-1 sm:flex-initial border-danger/40 text-danger-fg hover:bg-danger-soft"
                   >
                     <Icon name="close" className="size-3.5" />
-                    Trip Airlock (Reject)
+                    Reject Execution
                   </Button>
                   <Button
                     variant="dark"
@@ -456,7 +391,7 @@ function ExecutionAirlockCard({
                     className="flex-1 sm:flex-initial"
                   >
                     <Icon name="shield" className="size-3.5" />
-                    Engage Seal (Approve)
+                    Approve
                   </Button>
                 </div>
               </div>
@@ -471,8 +406,8 @@ function ExecutionAirlockCard({
                 </span>
                 <strong className="text-xs font-bold text-ink">
                   {canEdit
-                    ? 'Consensus Unlocked · Ready for Queue'
-                    : 'Consensus Unlocked · Awaiting Editor to Queue'}
+                    ? 'All Groups Approved · Ready to Queue'
+                    : 'All Groups Approved · Awaiting Editor to Queue'}
                 </strong>
               </div>
               {canEdit && (
@@ -481,7 +416,7 @@ function ExecutionAirlockCard({
                   description={`Places "${execution.name}" onto the worker execution queue.`}
                   confirmLabel="Release to Queue"
                   tone="primary"
-                  onConfirm={handleEnqueue}
+                  onConfirm={() => handleEnqueue()}
                   trigger={
                     <Button variant="dark" size="sm" loading={actionBusy}>
                       <Icon name="play" className="size-3.5" />
@@ -501,12 +436,12 @@ function ExecutionAirlockCard({
             execution.status === 'compensation_pending' ||
             execution.status === 'compensating' ||
             execution.status === 'compensated') && (
-            <div className="rounded-xl border border-line bg-canvas/70 p-3.5 text-xs space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="rounded-xl border border-line bg-canvas/70 p-3.5 text-xs space-y-2.5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <span className="font-bold text-ink">
                   Worker Telemetry · Attempt #{execution.attempt}
                 </span>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
                   {execution.queued_at && (
                     <span>
                       Queued {new Date(execution.queued_at).toLocaleTimeString()}
@@ -529,43 +464,51 @@ function ExecutionAirlockCard({
                   )}
                 </div>
               </div>
-              {canEdit && execution.status === 'partial' && execution.batch && (
-                <ConfirmAction
-                  title={`Resume partial execution #${execution.id}?`}
-                  description="Continues from the saved batch checkpoint; batches that already completed will not run again."
-                  confirmLabel={
-                    execution.compensation ? 'Resume Compensation' : 'Resume Execution'
-                  }
-                  tone="primary"
-                  onConfirm={() => handleEnqueue(true)}
-                  trigger={
-                    <Button variant="dark" size="sm" loading={actionBusy}>
-                      <Icon name="play" className="size-3.5" />
-                      {execution.compensation
+              <div className="flex flex-wrap gap-2">
+                {canEdit && execution.status === 'partial' && execution.batch && (
+                  <ConfirmAction
+                    title={`Resume partial execution #${execution.id}?`}
+                    description="Continues from the saved batch checkpoint; batches that already completed will not run again."
+                    confirmLabel={
+                      execution.compensation
                         ? 'Resume Compensation'
-                        : 'Resume Partial Execution'}
-                    </Button>
-                  }
-                />
-              )}
-              {canEdit &&
-                execution.status === 'partial' &&
-                execution.type === 'up' &&
-                execution.batch && (
-                <ConfirmAction
-                  title={`Compensate partial execution #${execution.id}?`}
-                  description="Creates a new rollback execution using Down SQL for committed batches only, in reverse order. It must receive the same group approvals before it can run."
-                  confirmLabel="Submit Compensation for Review"
-                  tone="primary"
-                  onConfirm={handleCompensate}
-                  trigger={
-                    <Button variant="outline" size="sm" loading={actionBusy}>
-                      <Icon name="undo" className="size-3.5" />
-                      Compensate Committed Batches
-                    </Button>
-                  }
-                />
-              )}
+                        : 'Resume Execution'
+                    }
+                    tone="primary"
+                    onConfirm={() => handleEnqueue(true)}
+                    trigger={
+                      <Button variant="dark" size="sm" loading={actionBusy}>
+                        <Icon name="play" className="size-3.5" />
+                        {execution.compensation
+                          ? 'Resume Compensation'
+                          : 'Resume Partial Execution'}
+                      </Button>
+                    }
+                  />
+                )}
+                {canEdit &&
+                  execution.status === 'partial' &&
+                  execution.type === 'up' &&
+                  execution.batch && (
+                    <ConfirmAction
+                      title={`Compensate partial execution #${execution.id}?`}
+                      description="Creates a new rollback execution using Down SQL for committed batches only, in reverse order. It must receive the same group approvals before it can run."
+                      confirmLabel="Submit Compensation for Review"
+                      tone="primary"
+                      onConfirm={handleCompensate}
+                      trigger={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          loading={actionBusy}
+                        >
+                          <Icon name="undo" className="size-3.5" />
+                          Compensate Committed Batches
+                        </Button>
+                      }
+                    />
+                  )}
+              </div>
               {execution.error_message && (
                 <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-xs text-danger-fg break-words">
                   {execution.error_code ? `[${execution.error_code}] ` : ''}
@@ -574,8 +517,35 @@ function ExecutionAirlockCard({
               )}
             </div>
           )}
+
+          <div className="space-y-5 border-t border-line pt-5">
+            <div className="space-y-2">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
+                Immutable Execution Snapshot SQL
+              </span>
+              <pre className="m-0 max-h-56 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-ink">
+                {execution.sql}
+              </pre>
+            </div>
+            {execution.down_sql && (
+              <div className="space-y-2">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-success-fg">
+                  Paired Down SQL
+                </span>
+                <pre className="m-0 max-h-44 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-muted">
+                  {execution.down_sql}
+                </pre>
+              </div>
+            )}
+            {execution.irreversible && execution.irreversible_reason && (
+              <div className="rounded-xl border border-warning/25 bg-warning-soft/40 p-4 text-xs font-medium text-warning-fg">
+                Marked irreversible: {execution.irreversible_reason}
+              </div>
+            )}
+          </div>
         </div>
-    </article>
+      )}
+    </Modal>
   )
 }
 
@@ -594,6 +564,26 @@ export function ConsensusAirlock({
   focusedExecutionId: number | null
   onMutated: (message: string) => Promise<void>
 }) {
+  const [selectedId, setSelectedId] = useState<number | null>(
+    focusedExecutionId,
+  )
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [prevFocusedId, setPrevFocusedId] = useState<number | null>(
+    focusedExecutionId,
+  )
+  if (prevFocusedId !== focusedExecutionId) {
+    setPrevFocusedId(focusedExecutionId)
+    if (focusedExecutionId != null) {
+      setSelectedId(focusedExecutionId)
+    }
+  }
+
+  const selectedExecution =
+    selectedId != null
+      ? executions.find((e) => e.id === selectedId) ?? null
+      : null
+
   const counts = {
     all: executions.length,
     pending_review: executions.filter(
@@ -638,72 +628,187 @@ export function ConsensusAirlock({
     )
   })
 
-  const filterOptions: Array<{ key: AirlockFilter; label: string }> = [
-    { key: 'all', label: `All (${counts.all})` },
+  const filterOptions: Array<{
+    key: AirlockFilter
+    label: string
+    count: number
+  }> = [
+    { key: 'all', label: 'All', count: counts.all },
     {
       key: 'pending_review',
-      label: `Awaiting Sign-off (${counts.pending_review})`,
+      label: 'Awaiting Sign-off',
+      count: counts.pending_review,
     },
-    { key: 'approved', label: `Ready to Queue (${counts.approved})` },
+    { key: 'approved', label: 'Ready to Queue', count: counts.approved },
     {
       key: 'queue_running',
-      label: `Queue / Running / Partial (${counts.queue_running})`,
+      label: 'In Progress',
+      count: counts.queue_running,
     },
-    { key: 'completed', label: `Completed / Rejected (${counts.completed})` },
+    { key: 'completed', label: 'Completed', count: counts.completed },
   ]
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedExecutions = filtered.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  )
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <h2 className="m-0 text-base font-bold text-ink">Consensus Airlock</h2>
-          <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white px-5 py-4 sm:px-6 sm:py-5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="m-0 text-base font-bold text-ink">
+            Migration Execution
+          </h2>
+          <span className="rounded-full bg-violet-soft border border-violet/20 px-3 py-1 text-xs font-bold text-violet-fg whitespace-nowrap">
             {counts.pending_review > 0
               ? `${counts.pending_review} awaiting sign-off`
-              : 'Consensus settled'}
+              : 'All settled'}
           </span>
         </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {filterOptions.map((opt) => (
+      <div
+        className="flex items-center gap-2 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-2.5 sm:overflow-visible"
+        role="group"
+        aria-label="Filter executions by status"
+      >
+        {filterOptions.map((opt) => {
+          const active = filter === opt.key
+          return (
             <button
               key={opt.key}
               type="button"
               onClick={() => onFilterChange(opt.key)}
               className={cn(
-                'rounded-full border px-3 py-1 text-xs font-semibold transition-colors cursor-pointer',
-                filter === opt.key
+                'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer',
+                active
                   ? 'border-ink bg-ink text-white shadow-xs'
-                  : 'border-line bg-white/90 text-muted hover:border-line-strong hover:text-ink shadow-2xs',
+                  : 'border-line/90 bg-white text-muted hover:border-line-strong hover:text-ink shadow-2xs',
               )}
             >
-              {opt.label}
+              <span>{opt.label}</span>
+              <span
+                className={cn(
+                  'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums',
+                  active
+                    ? 'bg-white/20 text-white'
+                    : 'bg-canvas text-muted',
+                )}
+              >
+                {opt.count}
+              </span>
             </button>
-          ))}
+          )
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
+          <EmptyState icon="shield" title="No executions in this stage">
+            {filter === 'all'
+              ? 'Submit a migration draft, rollback, or forward to start a Migration Execution.'
+              : 'No executions currently match this filter.'}
+          </EmptyState>
         </div>
-      </div>
-
-      <div className="space-y-3">
-        {filtered.map((exec) => (
-          <ExecutionAirlockCard
-            key={exec.id}
-            execution={exec}
-            canEdit={canEdit}
-            initiallyExpanded={focusedExecutionId === exec.id}
-            onMutated={onMutated}
-          />
-        ))}
-
-        {filtered.length === 0 && (
-          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
-            <EmptyState icon="shield" title="No executions in this stage">
-              {filter === 'all'
-                ? 'Submit a migration draft, rollback, or forward to open a Consensus Airlock.'
-                : 'No executions currently match this filter.'}
-            </EmptyState>
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-white shadow-2xs">
+          <div className="w-full overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]">
+            <table className="w-full min-w-[680px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-line bg-surface-subtle text-[11px] font-bold uppercase tracking-wider text-muted">
+                  <th className="px-5 py-3.5 whitespace-nowrap">Exec</th>
+                  <th className="px-5 py-3.5">Migration</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Type</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Submitted</th>
+                  <th className="px-5 py-3.5 text-right whitespace-nowrap">
+                    Details
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {paginatedExecutions.map((exec) => {
+                  const meta = statusMeta(exec.status, exec.type)
+                  return (
+                    <tr
+                      key={exec.id}
+                      className={cn(
+                        'transition-colors hover:bg-canvas/60',
+                        focusedExecutionId === exec.id && 'bg-violet-soft/20',
+                      )}
+                    >
+                      <td className="px-5 py-4 whitespace-nowrap font-mono font-bold text-violet-fg">
+                        #{exec.id}
+                      </td>
+                      <td className="px-5 py-4 max-w-[280px]">
+                        <div className="truncate font-bold text-ink">
+                          {cleanMigrationName(exec.name)}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted">
+                          Draft #{exec.draft_id}
+                          {exec.version != null ? ` · v${exec.version}` : ''}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span
+                          className={cn(
+                            'font-semibold',
+                            exec.type === 'rollback'
+                              ? 'text-warning-fg'
+                              : exec.type === 'forward'
+                                ? 'text-violet-fg'
+                                : 'text-ink',
+                          )}
+                        >
+                          {exec.compensation
+                            ? 'Compensation'
+                            : typeLabel(exec.type)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <Status tone={meta.tone}>{meta.label}</Status>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-muted">
+                        <div>{new Date(exec.created_at).toLocaleString()}</div>
+                        <div className="mt-0.5 text-[11px]">
+                          User #{exec.executed_by}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedId(exec.id)}
+                        >
+                          <Icon name="eye" className="size-3.5" />
+                          View More
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        </section>
+      )}
+
+      <ExecutionDetailModal
+        execution={selectedExecution}
+        canEdit={canEdit}
+        onClose={() => setSelectedId(null)}
+        onMutated={onMutated}
+      />
     </div>
   )
 }

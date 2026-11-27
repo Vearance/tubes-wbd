@@ -5,13 +5,13 @@ import { cn } from "../../lib/utils";
 
 export const surfaceClass = 'rounded-2xl border border-line/80 bg-white shadow-2xs';
 export const buttonClass =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line-strong bg-white px-[18px] text-[13px] font-bold text-ink hover:bg-canvas disabled:cursor-not-allowed disabled:border-line disabled:bg-disabled-bg disabled:text-disabled-fg";
+  "inline-flex min-h-9 sm:min-h-11 items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-line-strong bg-white px-3 sm:px-[18px] text-xs sm:text-[13px] font-bold text-ink hover:bg-canvas disabled:cursor-not-allowed disabled:border-line disabled:bg-disabled-bg disabled:text-disabled-fg";
 
 export const avatarClass =
   "grid size-9 shrink-0 place-items-center rounded-full bg-violet-soft text-xs font-extrabold text-violet-fg";
 export const glyphClass =
   "grid size-9 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet-fg";
-export const detailSectionClass = "border-b border-line p-5";
+export const detailSectionClass = "border-b border-line p-3.5 sm:p-5";
 export const assignedRowClass =
   "grid min-h-[56px] grid-cols-[36px_minmax(0,1fr)_32px] items-center gap-3 border-b border-line px-3 py-2.5 last:border-b-0 [&_b]:block [&_b]:truncate [&_b]:text-xs [&_b]:font-bold [&_b]:text-ink [&_small]:mt-0.5 [&_small]:block [&_small]:truncate [&_small]:text-xs [&_small]:text-muted";
 export const pickerOptionClass =
@@ -62,7 +62,7 @@ export function StaggerRow({
 
 export function AssignmentHeading({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 max-[600px]:flex-col max-[600px]:items-stretch [&>div]:min-w-0 [&>div]:flex-1 [&>h3]:min-w-0 [&>h3]:flex-1">
+    <div className="flex flex-wrap items-center justify-between gap-2.5 [&>div]:min-w-0 [&>div]:flex-1 [&>h3]:min-w-0 [&>h3]:flex-1">
       {children}
     </div>
   );

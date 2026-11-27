@@ -13,6 +13,7 @@ import {
   buttonVariants,
   EmptyState,
   ErrorNotice,
+  Modal,
   NullBadge,
   PageSkeleton,
   Search,
@@ -47,7 +48,7 @@ function DataGrid({
   }
 
   const cellBaseClass =
-    'h-10 overflow-hidden border-r border-b border-line text-left max-w-[280px] sm:max-w-[340px]'
+    'h-9 sm:h-10 overflow-hidden border-r border-b border-line text-left max-w-[200px] sm:max-w-[340px] whitespace-nowrap'
 
   if (rows.length === 0) {
     return (
@@ -76,13 +77,13 @@ function DataGrid({
       <div className="sr-only" role="status" aria-live="polite">
         {copiedCell ? 'Cell value copied to clipboard' : ''}
       </div>
-      <table className="w-max min-w-[max(100%,1000px)] table-fixed border-collapse text-xs">
+      <table className="w-full min-w-full table-auto min-[901px]:w-max min-[901px]:min-w-[max(100%,1000px)] min-[901px]:table-fixed border-collapse text-xs">
         <thead className="sticky top-0 z-10">
           <tr>
             <th
               className={cn(
                 cellBaseClass,
-                'h-12 w-[54px] px-2.5 sm:px-3 bg-surface-subtle font-mono text-[11px] text-muted text-center',
+                'h-10 sm:h-12 w-[44px] sm:w-[54px] px-2 sm:px-3 bg-surface-subtle font-mono text-[11px] text-muted text-center',
               )}
             >
               #
@@ -93,7 +94,7 @@ function DataGrid({
                 <th
                   className={cn(
                     cellBaseClass,
-                    'h-12 p-0 bg-surface-subtle font-semibold text-ink transition-colors hover:bg-canvas select-none',
+                    'h-10 sm:h-12 p-0 bg-surface-subtle font-semibold text-ink transition-colors hover:bg-canvas select-none',
                     isSorted && 'bg-violet-soft/40 text-violet-fg',
                   )}
                   key={c}
@@ -135,7 +136,7 @@ function DataGrid({
               <td
                 className={cn(
                   cellBaseClass,
-                  'w-[54px] px-2 text-center font-mono text-[11px] text-muted bg-surface-subtle/40 select-none',
+                  'w-[44px] sm:w-[54px] px-2 text-center font-mono text-[11px] text-muted bg-surface-subtle/40 select-none',
                 )}
               >
                 {i + 1}
@@ -194,7 +195,7 @@ function DefinitionTable({
   typeColumnIndex?: number
   emptyMessage?: string
 }) {
-  const cellClass = 'h-11 border border-line px-4 text-left text-xs'
+  const cellClass = 'h-9 sm:h-11 border border-line px-2.5 py-1.5 sm:px-4 text-left text-xs'
 
   if (rows.length === 0) {
     return (
@@ -211,7 +212,7 @@ function DefinitionTable({
 
   return (
     <div className="w-full min-w-0 max-w-full overflow-auto overscroll-x-contain [scrollbar-width:thin] touch-pan-x">
-      <table className="w-full min-w-[720px] border-collapse">
+      <table className="w-full min-w-full min-[901px]:min-w-[720px] border-collapse">
         <thead>
           <tr>
             {headers.map((h) => (
@@ -275,6 +276,9 @@ export function TablePage() {
   const [search, setSearch] = useState('')
   const [sortCol, setSortCol] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [tablePickerOpen, setTablePickerOpen] = useState(false)
+  const [tablePickerSearch, setTablePickerSearch] = useState('')
+  const [schemaPickerOpen, setSchemaPickerOpen] = useState(false)
 
   const { databases } = useWorkspaceContext()
   const databaseName =
@@ -360,26 +364,49 @@ export function TablePage() {
             </Link>
             <span className="shrink-0">/</span>
             {schemas.data && schemas.data.length > 1 ? (
-              <select
+              <button
+                type="button"
                 aria-label="Select schema"
-                value={schema}
-                onChange={(e) =>
-                  navigate(`/databases/${id}/${e.target.value}/tables`)
-                }
-                className="max-w-[120px] shrink-0 rounded-lg border border-line bg-canvas px-2 py-0.5 font-mono text-base sm:text-xs text-ink outline-none focus:border-violet focus:ring-2 focus:ring-violet/25 cursor-pointer"
+                aria-expanded={schemaPickerOpen}
+                onClick={() => setSchemaPickerOpen(true)}
+                className="inline-flex max-w-[130px] shrink-0 items-center gap-1 rounded-md border border-line bg-canvas px-2 py-0.5 font-mono text-xs font-semibold text-ink transition-colors hover:border-violet hover:text-violet-fg cursor-pointer"
               >
-                {schemas.data.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                <span className="truncate">{schema}</span>
+                <Icon name="chevrons-up-down" className="size-3 shrink-0 text-muted" />
+              </button>
             ) : (
               <span className="shrink-0">{schema}</span>
             )}
           </span>
         }
-        title={selected || 'Tables'}
+        title={
+          <>
+            <span className="hidden min-[901px]:inline">
+              {selected || 'Tables'}
+            </span>
+            {(tables.data?.length ?? 0) > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTablePickerSearch('')
+                  setTablePickerOpen(true)
+                }}
+                aria-label="Switch table"
+                aria-expanded={tablePickerOpen}
+                className="inline-flex min-w-0 max-w-[240px] items-center gap-1.5 rounded-xl border border-line-strong bg-white px-2.5 py-1 font-mono text-sm font-bold text-ink shadow-2xs transition-colors hover:border-violet hover:bg-violet-soft/20 cursor-pointer min-[901px]:hidden"
+              >
+                <Icon name="table" className="size-4 text-violet-fg shrink-0" />
+                <span className="truncate">{selected || 'Tables'}</span>
+                <Icon
+                  name="chevrons-up-down"
+                  className="size-3.5 text-muted shrink-0"
+                />
+              </button>
+            ) : (
+              <span className="min-[901px]:hidden">Tables</span>
+            )}
+          </>
+        }
         status={
           isLoading
             ? 'Reading table data and schema…'
@@ -389,7 +416,7 @@ export function TablePage() {
         }
         actions={
           selected ? (
-            <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 min-[901px]:w-auto">
               <Link
                 to={`/databases/${id}/${schema}/query?table=${encodeURIComponent(selected)}`}
                 className={cn(
@@ -579,6 +606,124 @@ export function TablePage() {
           </m.div>
         )}
       </AnimatePresence>
+
+      <Modal
+        open={tablePickerOpen}
+        onOpenChange={setTablePickerOpen}
+        title="Switch Table"
+        description={`Tables in ${schema} schema`}
+        size="sm"
+      >
+        <div className="space-y-3">
+          {(tables.data?.length ?? 0) > 4 && (
+            <Search
+              value={tablePickerSearch}
+              onChange={setTablePickerSearch}
+              placeholder="Filter tables…"
+              className="w-full"
+            />
+          )}
+          <div className="max-h-[50dvh] space-y-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+            {(tables.data ?? [])
+              .filter((t) =>
+                t.name.toLowerCase().includes(tablePickerSearch.toLowerCase()),
+              )
+              .map((entry) => {
+                const isCurrent = entry.name === selected
+                return (
+                  <button
+                    key={`${entry.schema}.${entry.name}`}
+                    type="button"
+                    onClick={() => {
+                      setTablePickerOpen(false)
+                      navigate(
+                        `/databases/${id}/${entry.schema}/${encodeURIComponent(entry.name)}`,
+                      )
+                    }}
+                    className={cn(
+                      'flex min-h-10 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left font-mono text-xs transition-colors cursor-pointer',
+                      isCurrent
+                        ? 'border-violet bg-violet-soft/60 font-bold text-violet-fg shadow-2xs'
+                        : 'border-line/70 bg-white text-ink hover:bg-canvas',
+                    )}
+                  >
+                    <Icon
+                      name="table"
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        isCurrent ? 'text-violet-fg' : 'text-muted',
+                      )}
+                    />
+                    <span className="flex-1 truncate">{entry.name}</span>
+                    {entry.kind === 'view' && (
+                      <span className="rounded bg-accent-soft px-1.5 py-0.5 font-sans text-[11px] font-bold uppercase text-accent-fg">
+                        View
+                      </span>
+                    )}
+                    {isCurrent && (
+                      <Icon
+                        name="check"
+                        className="size-3.5 shrink-0 text-violet-fg"
+                      />
+                    )}
+                  </button>
+                )
+              })}
+            {(tables.data ?? []).filter((t) =>
+              t.name.toLowerCase().includes(tablePickerSearch.toLowerCase()),
+            ).length === 0 && (
+              <p className="m-0 py-4 text-center text-xs text-muted italic">
+                No tables match &ldquo;{tablePickerSearch}&rdquo;
+              </p>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={schemaPickerOpen}
+        onOpenChange={setSchemaPickerOpen}
+        title="Switch Schema"
+        description={`Schemas in ${databaseName}`}
+        size="sm"
+      >
+        <div className="max-h-[50dvh] space-y-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+          {(schemas.data ?? []).map((s) => {
+            const isCurrent = s === schema
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setSchemaPickerOpen(false)
+                  navigate(`/databases/${id}/${encodeURIComponent(s)}/tables`)
+                }}
+                className={cn(
+                  'flex min-h-10 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left font-mono text-xs transition-colors cursor-pointer',
+                  isCurrent
+                    ? 'border-violet bg-violet-soft/60 font-bold text-violet-fg shadow-2xs'
+                    : 'border-line/70 bg-white text-ink hover:bg-canvas',
+                )}
+              >
+                <Icon
+                  name="schema"
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    isCurrent ? 'text-violet-fg' : 'text-muted',
+                  )}
+                />
+                <span className="flex-1 truncate">{s}</span>
+                {isCurrent && (
+                  <Icon
+                    name="check"
+                    className="size-3.5 shrink-0 text-violet-fg"
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </Modal>
     </>
   )
 }

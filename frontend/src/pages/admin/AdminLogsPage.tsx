@@ -51,7 +51,7 @@ export function AdminLogsPage() {
 
   const isLoading = governance.loading && !governance.data;
 
-  const users = governance.data?.users ?? [];
+  const users = (governance.data?.users ?? []).filter((u) => !u.is_admin);
   const groups = governance.data?.groups ?? [];
   const databases: ManagedDatabase[] = governance.data?.databases ?? [];
   const groupDetails = governance.data?.groupDetails ?? [];

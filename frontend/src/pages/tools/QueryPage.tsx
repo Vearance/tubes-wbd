@@ -3,7 +3,7 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { AnimatePresence, m } from 'motion/react'
 import { api, type QueryResult, type TableStructure } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
@@ -186,6 +186,7 @@ export function QueryPage() {
   const databaseName = activeDb?.name ?? `Database #${id}`
   const canEdit = activeDb?.permission === 'view_edit'
 
+  const schemas = useResource(() => api.schemas(id), [id])
   const tables = useResource(() => api.tables(id, schema), [id, schema])
 
   const initialSqlParam = searchParams.get('sql')
@@ -224,6 +225,7 @@ export function QueryPage() {
   const [copied, setCopied] = useState(false)
   const [copiedCell, setCopiedCell] = useState<string | null>(null)
   const [mobileSchemaOpen, setMobileSchemaOpen] = useState(false)
+  const [schemaPickerOpen, setSchemaPickerOpen] = useState(false)
 
   const lineNumbersRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -399,7 +401,34 @@ export function QueryPage() {
     <>
       <UtilityHeader
         backTo="/databases"
-        path={`${databaseName} / ${schema}`}
+        path={
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Link
+              to="/databases"
+              className="truncate hover:underline hover:text-ink transition-colors"
+            >
+              {databaseName}
+            </Link>
+            <span className="shrink-0">/</span>
+            {schemas.data && schemas.data.length > 1 ? (
+              <button
+                type="button"
+                aria-label="Select schema"
+                aria-expanded={schemaPickerOpen}
+                onClick={() => setSchemaPickerOpen(true)}
+                className="inline-flex max-w-[130px] shrink-0 items-center gap-1 rounded-md border border-line bg-canvas px-2 py-0.5 font-mono text-xs font-semibold text-ink transition-colors hover:border-violet hover:text-violet-fg cursor-pointer"
+              >
+                <span className="truncate">{schema}</span>
+                <Icon
+                  name="chevrons-up-down"
+                  className="size-3 shrink-0 text-muted"
+                />
+              </button>
+            ) : (
+              <span className="shrink-0">{schema}</span>
+            )}
+          </span>
+        }
         title="SQL editor"
         actions={
           <>
@@ -1019,6 +1048,53 @@ export function QueryPage() {
               </p>
             )}
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={schemaPickerOpen}
+        onOpenChange={setSchemaPickerOpen}
+        title="Switch Schema"
+        description={`Schemas in ${databaseName}`}
+        size="sm"
+      >
+        <div className="max-h-[50dvh] space-y-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+          {(schemas.data ?? []).map((s) => {
+            const isCurrent = s === schema
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  setSchemaPickerOpen(false)
+                  setExpandedTable(null)
+                  setEditedSql(null)
+                  navigate(`/databases/${id}/${encodeURIComponent(s)}/query`)
+                }}
+                className={cn(
+                  'flex min-h-10 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left font-mono text-xs transition-colors cursor-pointer',
+                  isCurrent
+                    ? 'border-violet bg-violet-soft/60 font-bold text-violet-fg shadow-2xs'
+                    : 'border-line/70 bg-white text-ink hover:bg-canvas',
+                )}
+              >
+                <Icon
+                  name="schema"
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    isCurrent ? 'text-violet-fg' : 'text-muted',
+                  )}
+                />
+                <span className="flex-1 truncate">{s}</span>
+                {isCurrent && (
+                  <Icon
+                    name="check"
+                    className="size-3.5 shrink-0 text-violet-fg"
+                  />
+                )}
+              </button>
+            )
+          })}
         </div>
       </Modal>
     </>

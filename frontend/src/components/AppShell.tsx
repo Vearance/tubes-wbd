@@ -60,7 +60,7 @@ export function AppShell({
   const isAdminRoute = location.pathname.startsWith('/admin')
   const [tableSearch, setTableSearch] = useState('')
   const [switcherOpen, setSwitcherOpen] = useState(false)
-  const [mobileSheet, setMobileSheet] = useState<'none' | 'menu' | 'tables'>('none')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const switcherRef = useRef<HTMLDivElement>(null)
 
   const databases = useResource(
@@ -83,7 +83,7 @@ export function AppShell({
   const [prevPathname, setPrevPathname] = useState(location.pathname)
   if (prevPathname !== location.pathname) {
     setPrevPathname(location.pathname)
-    setMobileSheet('none')
+    setMobileMenuOpen(false)
   }
 
   useEffect(() => {
@@ -411,18 +411,6 @@ export function AppShell({
             <span className="font-black">BScheme</span>
           </Link>
 
-          {!isAdminRoute && activeDatabase && (
-            <button
-              type="button"
-              onClick={() => setMobileSheet('menu')}
-              className="flex min-w-0 items-center gap-1.5 rounded-full border border-line bg-canvas/70 px-2.5 py-1.5 text-xs font-semibold text-ink max-w-[170px] sm:max-w-[230px] cursor-pointer hover:bg-canvas"
-            >
-              <span className="size-1.5 rounded-full bg-success shrink-0" />
-              <span className="truncate">{activeDatabase.name}</span>
-              <Icon name="chevrons-up-down" className="size-3 text-muted shrink-0" />
-            </button>
-          )}
-
           {isAdminRoute && (
             <span className="rounded-full border border-violet/20 bg-violet-soft/80 px-2.5 py-0.5 text-[11px] font-bold text-violet-fg">
               Admin
@@ -431,10 +419,10 @@ export function AppShell({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {dbPendingCount > 0 && !isAdminRoute && (
+          {!isAdminRoute && dbPendingCount > 0 && (
             <Link
               to={`/databases/${databaseId}/migrations`}
-              className="relative grid size-10 place-items-center rounded-xl bg-warning-soft/80 text-warning-fg border border-warning/25 no-underline"
+              className="relative grid size-9 place-items-center rounded-xl bg-warning-soft/80 text-warning-fg border border-warning/25 no-underline"
               aria-label={`${dbPendingCount} pending approvals`}
             >
               <Icon name="migration" className="size-4" />
@@ -446,234 +434,119 @@ export function AppShell({
 
           <button
             type="button"
-            onClick={() =>
-              setMobileSheet((prev) => (prev === 'menu' ? 'none' : 'menu'))
-            }
-            className="grid size-10 place-items-center rounded-xl border border-line/80 bg-white text-ink hover:bg-canvas transition-colors cursor-pointer shadow-2xs"
-            aria-label={mobileSheet === 'menu' ? 'Close menu' : 'Open menu'}
-            aria-expanded={mobileSheet === 'menu'}
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line/80 bg-white px-2 text-ink hover:bg-canvas transition-colors cursor-pointer shadow-2xs"
+            aria-label={mobileMenuOpen ? 'Close account menu' : 'Open account menu'}
+            aria-expanded={mobileMenuOpen}
           >
-            <Icon name={mobileSheet === 'menu' ? 'close' : 'grid'} className="size-4" />
+            <span className="grid size-6 place-items-center rounded-full bg-violet-soft text-[11px] font-black text-violet-fg">
+              {user.username.slice(0, 2).toUpperCase()}
+            </span>
+            <Icon
+              name={mobileMenuOpen ? 'close' : 'chevrons-up-down'}
+              className="size-3.5 text-muted"
+            />
           </button>
         </div>
       </header>
 
-      {/* ─── MOBILE DRAWER MENU / TABLES SHEET (< 901px) ─── */}
+      {/* ─── MOBILE ACCOUNT & DB POPOVER (< 901px) ─── */}
       <AnimatePresence>
-        {mobileSheet !== 'none' && (
+        {mobileMenuOpen && (
           <>
             <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs min-[901px]:hidden"
-              onClick={() => setMobileSheet('none')}
+              className="fixed inset-0 z-40 bg-black/25 backdrop-blur-xs min-[901px]:hidden"
+              onClick={() => setMobileMenuOpen(false)}
             />
-            {mobileSheet === 'menu' ? (
-              <m.div
-                key="mobile-menu-sheet"
-                initial={reduceMotion ? { opacity: 0 } : { y: -12, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={reduceMotion ? { opacity: 0 } : { y: -12, opacity: 0 }}
-                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="fixed inset-x-0 top-14 z-50 max-h-[calc(100dvh-60px)] overflow-y-auto border-b border-line-strong bg-white p-4 shadow-2xl min-[901px]:hidden flex flex-col space-y-4 [scrollbar-width:thin]"
-              >
-                {/* Database Switcher in Mobile Drawer */}
-                {!isAdminRoute && allDatabases.length > 0 && (
-                  <div className="space-y-1.5 rounded-2xl border border-line bg-canvas/40 p-3">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-muted">
-                        Target Database
-                      </span>
-                      <Link
-                        to="/databases"
-                        onClick={() => setMobileSheet('none')}
-                        className="text-xs font-bold text-violet-fg hover:underline"
-                      >
-                        All databases →
-                      </Link>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                      {allDatabases.map((db) => {
-                        const isCurrent = String(db.id) === databaseId
-                        return (
-                          <button
-                            key={db.id}
-                            type="button"
-                            onClick={() => {
-                              setMobileSheet('none')
-                              navigate(`/databases/${db.id}/public/tables`)
-                            }}
-                            className={cn(
-                              'flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs transition-colors cursor-pointer border',
-                              isCurrent
-                                ? 'border-violet bg-violet-soft/60 text-violet-fg font-bold'
-                                : 'border-line/70 bg-white text-ink hover:bg-canvas',
-                            )}
-                          >
-                            <DatabaseMark
-                              connected={isCurrent}
-                              className="relative grid size-6 shrink-0 place-items-center rounded-lg bg-violet-soft text-violet-fg"
-                            />
-                            <span className="truncate flex-1 font-semibold">{db.name}</span>
-                            {isCurrent && (
-                              <Icon name="check" className="size-3.5 text-violet-fg shrink-0" />
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Workspace Navigation Links */}
-                {nav.length > 0 && (
-                  <div className="space-y-1.5">
-                    <span className="px-1 text-[11px] font-extrabold uppercase tracking-wider text-muted block">
-                      {isAdminRoute ? 'Admin Management' : 'Workspace Views'}
+            <m.div
+              key="mobile-menu-popover"
+              initial={reduceMotion ? { opacity: 0 } : { y: -8, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { y: -8, opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-x-3 top-[60px] z-50 rounded-2xl border border-line-strong bg-white p-3 shadow-xl min-[901px]:hidden sm:left-auto sm:right-3 sm:w-80 flex flex-col space-y-3"
+            >
+              {!isAdminRoute && allDatabases.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-line bg-canvas/40 p-2.5">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-muted">
+                      Target Database
                     </span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {nav.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          end={item.end}
-                          onClick={() => setMobileSheet('none')}
-                          className={({ isActive }) =>
-                            cn(
-                              'flex min-h-11 items-center gap-2.5 rounded-xl px-3 text-xs font-semibold no-underline transition-colors border',
-                              isActive
-                                ? 'bg-violet text-white border-violet shadow-xs'
-                                : 'border-line/80 bg-canvas/30 text-ink hover:bg-violet-soft/30',
-                            )
-                          }
-                          to={item.to}
-                        >
-                          {({ isActive }) => (
-                            <>
-                              <Icon name={item.icon} className="size-4 shrink-0" />
-                              <span className="truncate flex-1">{item.label}</span>
-                              {item.badge !== undefined && item.badge > 0 && (
-                                <span
-                                  className={cn(
-                                    'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-black',
-                                    isActive
-                                      ? 'bg-white/20 text-white'
-                                      : 'bg-warning-fg text-white',
-                                  )}
-                                >
-                                  {item.badge}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </NavLink>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* User Profile & Logout in Drawer */}
-                <div className="flex items-center justify-between border-t border-line pt-3 px-1">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="grid size-9 place-items-center rounded-full bg-violet-soft text-xs font-black text-violet-fg shadow-xs shrink-0">
-                      {user.username.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <strong className="block truncate text-xs font-bold text-ink">
-                        {user.username}
-                      </strong>
-                      <small className="block truncate text-xs text-muted">
-                        {user.is_admin ? 'Administrator' : 'Database user'}
-                      </small>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="flex min-h-10 items-center gap-1.5 rounded-xl border border-danger/20 bg-danger-soft/60 px-3.5 py-1.5 text-xs font-bold text-danger-fg hover:bg-danger-soft cursor-pointer transition-colors"
-                  >
-                    <Icon name="logout" className="size-3.5" />
-                    <span>Log out</span>
-                  </button>
-                </div>
-              </m.div>
-            ) : !isAdminRoute && databaseId ? (
-              <m.div
-                key="mobile-tables-sheet"
-                initial={reduceMotion ? { opacity: 0 } : { y: 16, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={reduceMotion ? { opacity: 0 } : { y: 16, opacity: 0 }}
-                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-50 max-h-[70dvh] overflow-y-auto rounded-t-2xl border-t border-line-strong bg-white p-4 shadow-2xl min-[901px]:hidden flex flex-col space-y-3 [scrollbar-width:thin]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-muted">
-                      Tables ({tables.data?.length ?? 0})
-                    </span>
-                    <span className="rounded-md border border-line bg-surface-subtle px-2 py-0.5 font-mono text-[11px] font-semibold text-violet-fg">
-                      {schema}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setMobileSheet('none')}
-                    className="grid size-9 place-items-center rounded-xl border border-line bg-canvas text-muted hover:text-ink cursor-pointer"
-                    aria-label="Close tables list"
-                  >
-                    <Icon name="close" className="size-4" />
-                  </button>
-                </div>
-
-                {(tables.data?.length ?? 0) > 4 && (
-                  <input
-                    type="text"
-                    aria-label="Filter tables"
-                    placeholder="Filter tables…"
-                    value={tableSearch}
-                    onChange={(e) => setTableSearch(e.target.value)}
-                    className="w-full rounded-xl border border-line bg-surface-subtle px-3 py-2 text-base sm:text-xs text-ink placeholder:text-muted/70 outline-none focus:border-violet focus:ring-2 focus:ring-violet/25"
-                  />
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                  {tables.loading && !tables.data && (
-                    <div className="col-span-full py-4 text-center text-xs text-muted">
-                      Loading tables…
-                    </div>
-                  )}
-                  {filteredTables.map((entry) => (
-                    <NavLink
-                      key={`${entry.schema}.${entry.name}`}
-                      onClick={() => setMobileSheet('none')}
-                      className={({ isActive }) =>
-                        cn(
-                          'flex min-h-10 items-center gap-2 rounded-xl px-3 font-mono text-xs text-muted no-underline transition-colors hover:bg-canvas hover:text-ink',
-                          isActive &&
-                            'bg-violet-soft font-semibold text-violet-fg shadow-2xs',
-                        )
-                      }
-                      to={`/databases/${databaseId}/${entry.schema}/${entry.name}`}
+                    <Link
+                      to="/databases"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="text-xs font-bold text-violet-fg hover:underline"
                     >
-                      <span className="size-1.5 shrink-0 rounded-full bg-violet" />
-                      <span className="truncate flex-1">{entry.name}</span>
-                      {entry.kind === 'view' && (
-                        <b className="font-sans text-[11px] font-bold text-muted uppercase">
-                          View
-                        </b>
-                      )}
-                    </NavLink>
-                  ))}
-                  {!tables.loading && filteredTables.length === 0 && (
-                    <div className="col-span-full py-3 text-center text-xs text-muted italic">
-                      No tables match
-                    </div>
-                  )}
+                      All databases →
+                    </Link>
+                  </div>
+                  <div className="max-h-44 space-y-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                    {allDatabases.map((db) => {
+                      const isCurrent = String(db.id) === databaseId
+                      return (
+                        <button
+                          key={db.id}
+                          type="button"
+                          onClick={() => {
+                            setMobileMenuOpen(false)
+                            navigate(`/databases/${db.id}/public/tables`)
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs transition-colors cursor-pointer border',
+                            isCurrent
+                              ? 'border-violet bg-violet-soft/60 text-violet-fg font-bold'
+                              : 'border-line/70 bg-white text-ink hover:bg-canvas',
+                          )}
+                        >
+                          <DatabaseMark
+                            connected={isCurrent}
+                            className="relative grid size-6 shrink-0 place-items-center rounded-lg bg-violet-soft text-violet-fg"
+                          />
+                          <span className="truncate flex-1 font-semibold">{db.name}</span>
+                          {isCurrent && (
+                            <Icon name="check" className="size-3.5 text-violet-fg shrink-0" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              </m.div>
-            ) : null}
+              )}
+
+              <div
+                className={cn(
+                  'flex items-center justify-between px-1',
+                  !isAdminRoute && allDatabases.length > 0 && 'border-t border-line pt-2.5',
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="grid size-8 place-items-center rounded-full bg-violet-soft text-xs font-black text-violet-fg shadow-xs shrink-0">
+                    {user.username.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <strong className="block truncate text-xs font-bold text-ink">
+                      {user.username}
+                    </strong>
+                    <small className="block truncate text-[11px] text-muted">
+                      {user.is_admin ? 'Administrator' : 'Database user'}
+                    </small>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="flex min-h-9 items-center gap-1.5 rounded-xl border border-danger/20 bg-danger-soft/60 px-3 py-1.5 text-xs font-bold text-danger-fg hover:bg-danger-soft cursor-pointer transition-colors"
+                >
+                  <Icon name="logout" className="size-3.5" />
+                  <span>Log out</span>
+                </button>
+              </div>
+            </m.div>
           </>
         )}
       </AnimatePresence>
@@ -729,22 +602,18 @@ export function AppShell({
             )}
           </NavLink>
 
-          <button
-            type="button"
-            aria-expanded={mobileSheet === 'tables'}
-            onClick={() =>
-              setMobileSheet((prev) => (prev === 'tables' ? 'none' : 'tables'))
-            }
+          <NavLink
+            to={`/databases/${databaseId}/${schema}/${tables.data?.[0]?.name ?? 'tables'}`}
             className={cn(
-              'flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-2.5 text-[11px] font-semibold transition-colors cursor-pointer',
-              isTableRoute || mobileSheet === 'tables'
+              'flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-2.5 text-[11px] font-semibold transition-colors no-underline',
+              isTableRoute
                 ? 'text-violet-fg font-bold'
                 : 'text-muted hover:text-ink',
             )}
           >
             <Icon name="table" className="size-4.5" />
             <span>Tables</span>
-          </button>
+          </NavLink>
         </nav>
       ) : isAdminRoute ? (
         <nav className="fixed inset-x-0 bottom-0 z-30 flex min-h-14 items-center justify-around border-t border-line/80 bg-white/95 px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur-md min-[901px]:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
@@ -798,13 +667,13 @@ export function UtilityHeader({
   backTo?: string
 }) {
   return (
-    <header className="mb-5 flex min-w-0 flex-col gap-3.5 border-b border-line/60 pb-4 min-[901px]:mb-4 min-[901px]:min-h-[58px] min-[901px]:flex-row min-[901px]:items-center min-[901px]:justify-between min-[901px]:gap-4 min-[901px]:pb-3">
-      <div className="flex min-w-0 flex-col gap-2 min-[901px]:flex-row min-[901px]:flex-wrap min-[901px]:items-center min-[901px]:gap-3">
+    <header className="mb-3.5 flex min-w-0 flex-col gap-2 border-b border-line/60 pb-3 min-[901px]:mb-4 min-[901px]:min-h-[58px] min-[901px]:flex-row min-[901px]:items-center min-[901px]:justify-between min-[901px]:gap-4 min-[901px]:pb-3">
+      <div className="flex min-w-0 flex-col gap-1.5 min-[901px]:flex-row min-[901px]:flex-wrap min-[901px]:items-center min-[901px]:gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {backTo && (
             <Link
               to={backTo}
-              className="grid size-9 shrink-0 place-items-center rounded-xl border border-line/80 bg-white/90 text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink"
+              className="grid size-8 min-[901px]:size-9 shrink-0 place-items-center rounded-xl border border-line/80 bg-white/90 text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink"
               aria-label="Go back"
             >
               <Icon name="chevron-left" className="size-4" />
@@ -817,7 +686,7 @@ export function UtilityHeader({
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h1 className="m-0 min-w-0 break-words text-xl leading-tight font-bold tracking-tight text-ink">
+          <h1 className="m-0 min-w-0 break-words text-lg leading-tight font-bold tracking-tight text-ink min-[901px]:text-xl">
             {title}
           </h1>
           {status && (
@@ -829,7 +698,7 @@ export function UtilityHeader({
       </div>
 
       {actions && (
-        <div className="flex min-w-0 w-full flex-wrap items-center gap-2.5 min-[901px]:ml-auto min-[901px]:w-auto min-[901px]:justify-end">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 min-[901px]:ml-auto min-[901px]:w-auto min-[901px]:justify-end min-[901px]:gap-2.5">
           {actions}
         </div>
       )}

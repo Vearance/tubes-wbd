@@ -234,7 +234,7 @@ export function PageSkeleton({
       )}
 
       {variant === 'admin-split' && (
-        <div className="grid grid-cols-1 gap-5 min-[901px]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-5 min-[1220px]:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
           <div className="rounded-2xl border border-line/80 bg-white overflow-hidden shadow-2xs divide-y divide-line">
             <div className="p-4">
               <Skeleton className="h-10 w-full rounded-lg" />

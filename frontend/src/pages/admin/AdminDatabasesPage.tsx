@@ -247,11 +247,13 @@ export function AdminDatabasesPage() {
     setMessage("");
     setAccessError("");
     navigate(`/admin/databases/${db.id}`);
-    if (typeof window !== "undefined" && window.innerWidth <= 900) {
-      setTimeout(() => {
-        document.getElementById("db-detail-view")?.scrollIntoView({ behavior: "smooth" });
-      }, 50);
-    }
+  }
+
+  function clearSelection() {
+    setSelectedState(null);
+    setMessage("");
+    setAccessError("");
+    navigate("/admin/databases");
   }
 
   async function test(id: number) {
@@ -423,8 +425,8 @@ export function AdminDatabasesPage() {
       {(databases.error || groupMatrix.error) && (
         <ErrorNotice message={databases.error || groupMatrix.error} />
       )}
-      <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
-        <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>
+      <div className="grid min-w-0 grid-cols-1 gap-3 min-[1220px]:min-h-[calc(100dvh-110px)] min-[1220px]:grid-cols-[360px_minmax(560px,1fr)]">
+        <section className={cn(surfaceClass, "min-w-0 overflow-hidden", selected && "max-[1219px]:hidden")}>
           <header className="flex min-h-16 items-center justify-between gap-2 border-b border-line px-4 py-3">
             <h2 className="m-0 text-xs font-bold uppercase tracking-wider text-muted">
               Databases
@@ -481,21 +483,26 @@ export function AdminDatabasesPage() {
           )}
         </section>
 
-        <section id="db-detail-view" className={cn(surfaceClass, "relative min-w-0 overflow-auto shadow-xs")}>
+        <section
+          id="db-detail-view"
+          className={cn(
+            surfaceClass,
+            "relative min-w-0 overflow-auto shadow-xs",
+            !selected && "max-[1219px]:hidden",
+          )}
+        >
           {selected ? (
             <div>
-              <div className="flex flex-wrap items-center gap-4 border-b border-line p-5">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 border-b border-line p-3.5 sm:p-5">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    className="min-[901px]:hidden flex items-center gap-1 text-xs font-bold text-violet-fg bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+                    onClick={clearSelection}
+                    className="min-[1220px]:hidden grid size-8 shrink-0 place-items-center rounded-xl border border-line/80 bg-white text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink cursor-pointer"
+                    aria-label="Back to databases list"
                     title="Back to databases list"
                   >
-                    <Icon name="chevron-left" className="size-3.5" />
-                    <span>List</span>
+                    <Icon name="chevron-left" className="size-4" />
                   </button>
                   <div className="min-w-0 flex-1">
                     <h2 className="my-1 truncate text-xl font-bold">{selected.name}</h2>
