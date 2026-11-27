@@ -13,6 +13,7 @@ import {
   ErrorNotice,
   Status,
 } from '../../../components/ui'
+import { cn } from '../../../lib/utils'
 
 function HistoryEntryRow({
   databaseId,
@@ -49,63 +50,45 @@ function HistoryEntryRow({
     }
   }
 
-  return (
-    <article className="overflow-hidden rounded-2xl border border-line bg-white p-4.5 shadow-2xs">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-          <div className="min-w-16">
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
-              Version
-            </span>
-            <strong className="mt-0.5 block font-mono text-sm font-extrabold text-violet-fg">
-              v{entry.version}
-            </strong>
-          </div>
+  const isFailed = entry.status === 'failed'
+  const isRollback = entry.execution_type === 'rollback'
 
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="m-0 truncate text-sm font-bold text-ink">
-                {entry.name}
-              </h3>
-              <Status tone={entry.status === 'failed' ? 'red' : 'green'}>
-                {entry.status.toUpperCase()}
-              </Status>
-              <Status tone="gray">Attempt {entry.attempt_number}</Status>
-              {isHead && (
-                <Status tone="violet" className="gap-1">
-                  <span className="size-1.5 rounded-full bg-violet animate-pulse" />
-                  HEAD · Active Schema
-                </Status>
-              )}
-            </div>
-            <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-              {entry.execution_type && (
-                <>
-                  <span
-                    className={
-                      entry.execution_type === 'rollback'
-                        ? 'font-bold uppercase text-warning-fg'
-                        : entry.execution_type === 'forward'
-                          ? 'font-bold uppercase text-violet-fg'
-                          : 'font-bold uppercase text-success-fg'
-                    }
-                  >
-                    {entry.execution_type}
-                  </span>
-                  <span>·</span>
-                </>
-              )}
-              <span>
-                Executed by user #{entry.executed_by} ·{' '}
-                {new Date(entry.executed_at).toLocaleString()}
-                {entry.execution_id ? ` · Execution #${entry.execution_id}` : ''}
-              </span>
-            </p>
-          </div>
+  return (
+    <article
+      className={cn(
+        'overflow-hidden rounded-2xl border bg-white shadow-2xs transition-colors',
+        isHead
+          ? 'border-violet/40 ring-1 ring-violet/10'
+          : isFailed
+            ? 'border-danger/30'
+            : 'border-line',
+      )}
+    >
+      {/* Card Header */}
+      <header className="flex flex-col gap-2.5 border-b border-line bg-surface-subtle/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-3.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="inline-flex shrink-0 items-center rounded-md bg-violet-soft/80 px-2 py-0.5 font-mono text-xs font-extrabold text-violet-fg">
+            v{entry.version}
+          </span>
+          <h3 className="m-0 min-w-0 break-words text-sm font-bold text-ink">
+            {entry.name}
+          </h3>
+          {isHead && (
+            <Status tone="violet" className="gap-1">
+              <span className="size-1.5 rounded-full bg-violet animate-pulse" />
+              HEAD
+            </Status>
+          )}
+          <Status tone={isFailed ? 'red' : 'green'}>
+            {entry.status.toUpperCase()}
+          </Status>
+          {entry.attempt_number > 1 && (
+            <Status tone="gray">Attempt {entry.attempt_number}</Status>
+          )}
         </div>
 
-        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
-          <span className="rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-xs text-muted tabular-nums">
+        <div className="flex items-center justify-between gap-2 sm:shrink-0 sm:justify-end">
+          <span className="rounded-lg border border-line bg-white px-2.5 py-1 font-mono text-xs text-muted tabular-nums">
             {entry.duration_ms} ms
           </span>
           <Button variant="outline" size="sm" onClick={toggleDetail}>
@@ -113,50 +96,86 @@ function HistoryEntryRow({
             {open ? 'Hide SQL' : 'Inspect SQL'}
           </Button>
         </div>
-      </div>
+      </header>
 
-      {entry.status === 'failed' && (
-        <p className="mt-3 mb-0 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger">
-          {entry.error_code ? `${entry.error_code}: ` : ''}
-          {entry.error_message || 'This migration attempt failed.'}
-        </p>
-      )}
-
-      {open && (
-        <div className="mt-3 rounded-xl border border-line bg-surface-subtle p-4 space-y-3">
-          {loading && (
-            <span className="text-xs text-muted">Loading SQL snapshot…</span>
-          )}
-          {error && <ErrorNotice message={error} />}
-          {detail && (
+      {/* Card Body */}
+      <div className="px-4 py-3 sm:px-5 sm:py-3.5 space-y-3">
+        <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-relaxed text-muted">
+          {entry.execution_type && (
             <>
-              <div>
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
-                  Executed SQL
-                </span>
-                <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
-                  {detail.sql}
-                </pre>
-              </div>
-              {detail.down_sql ? (
-                <div>
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
-                    Rollback Plan (Down SQL)
-                  </span>
-                  <pre className="m-0 max-h-36 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
-                    {detail.down_sql}
-                  </pre>
-                </div>
-              ) : (
-                <p className="m-0 text-xs font-medium text-warning-fg">
-                  Irreversible:{' '}
-                  {detail.irreversible_reason || 'No Down SQL provided.'}
-                </p>
-              )}
+              <span
+                className={cn(
+                  'font-bold uppercase',
+                  isRollback
+                    ? 'text-warning-fg'
+                    : entry.execution_type === 'forward'
+                      ? 'text-violet-fg'
+                      : isFailed
+                        ? 'text-danger-fg'
+                        : 'text-success-fg',
+                )}
+              >
+                {entry.execution_type}
+              </span>
+              <span aria-hidden="true">·</span>
             </>
           )}
-        </div>
-      )}
+          <span>Executed by User #{entry.executed_by}</span>
+          <span aria-hidden="true">·</span>
+          <span>{new Date(entry.executed_at).toLocaleString()}</span>
+          {entry.execution_id && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono text-[11px]">
+                Exec #{entry.execution_id}
+              </span>
+            </>
+          )}
+        </p>
+
+        {isFailed && (
+          <p className="m-0 rounded-xl border border-danger/20 bg-danger-soft/80 px-3.5 py-2.5 font-mono text-xs leading-relaxed text-danger-fg break-words">
+            {entry.error_code ? `${entry.error_code}: ` : ''}
+            {entry.error_message || 'This migration attempt failed.'}
+          </p>
+        )}
+
+        {open && (
+          <div className="rounded-xl border border-line bg-surface-subtle p-3.5 sm:p-4 space-y-3">
+            {loading && (
+              <span className="text-xs text-muted">Loading SQL snapshot…</span>
+            )}
+            {error && <ErrorNotice message={error} />}
+            {detail && (
+              <>
+                <div>
+                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Executed SQL
+                  </span>
+                  <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
+                    {detail.sql}
+                  </pre>
+                </div>
+                {detail.down_sql ? (
+                  <div>
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
+                      Rollback Plan (Down SQL)
+                    </span>
+                    <pre className="m-0 max-h-36 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
+                      {detail.down_sql}
+                    </pre>
+                  </div>
+                ) : (
+                  <p className="m-0 text-xs font-medium text-warning-fg">
+                    Irreversible:{' '}
+                    {detail.irreversible_reason || 'No Down SQL provided.'}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </article>
   )
 }
@@ -187,10 +206,10 @@ export function HeadLedger({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3 rounded-2xl border border-line/80 bg-white p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-4.5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
           <h2 className="m-0 text-base font-bold text-ink">Migration History</h2>
-          <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-bold text-violet-fg">
+          <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-bold text-violet-fg whitespace-nowrap">
             {latestActive ? `v${latestActive.version} HEAD` : 'Empty schema'}
           </span>
           <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted">

@@ -54,7 +54,7 @@ export function DatabaseListPage() {
             ? 'Loading databases…'
             : `${databases.length} accessible${
                 pendingApprovals.length > 0
-                  ? ` · ${pendingApprovals.length} awaiting seal`
+                  ? ` · ${pendingApprovals.length} awaiting approval`
                   : ''
               }`
         }
@@ -168,7 +168,7 @@ export function DatabaseListPage() {
                     PostgreSQL · #{db.id}
                     {dbPending > 0 && (
                       <span className="ml-1.5 font-bold text-warning-fg">
-                        · {dbPending} seal{dbPending === 1 ? '' : 's'}
+                        · {dbPending} approval{dbPending === 1 ? '' : 's'}
                       </span>
                     )}
                   </small>

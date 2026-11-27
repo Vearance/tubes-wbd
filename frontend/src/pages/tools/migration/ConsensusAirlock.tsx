@@ -113,7 +113,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
       <div className="mt-2.5 pt-2 border-t border-black/5 text-xs">
         {isApproved && (
           <span className="font-semibold text-success-fg">
-            Sealed by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
+            Approved by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
             {approval.decided_at
               ? ` · ${new Date(approval.decided_at).toLocaleTimeString()}`
               : ''}
@@ -121,7 +121,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
         )}
         {isRejected && (
           <span className="font-semibold text-danger-fg">
-            Tripped by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
+            Rejected by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
           </span>
         )}
         {!isApproved && !isRejected && (
@@ -130,7 +130,7 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
           </span>
         )}
         {approval.note && (
-          <p className="mt-1 mb-0 rounded bg-white/80 px-2 py-1 text-xs text-ink border border-line/60">
+          <p className="mt-1.5 mb-0 rounded-lg bg-white/85 px-2.5 py-1.5 text-xs text-ink border border-line/60">
             &ldquo;{approval.note}&rdquo;
           </p>
         )}
@@ -186,8 +186,8 @@ function ExecutionAirlockCard({
       setNote('')
       await onMutated(
         updated.execution_status === 'approved'
-          ? `Execution #${execution.id} reached full consensus and is ready to queue!`
-          : `Seal recorded for Execution #${execution.id}. Waiting for remaining team Keyholders.`,
+          ? `Execution #${execution.id} received all group approvals and is ready to queue!`
+          : `Approval recorded for Execution #${execution.id}. Waiting for remaining team Keyholders.`,
       )
     } catch (err) {
       setActionError(
@@ -278,19 +278,19 @@ function ExecutionAirlockCard({
               : 'border-line',
       )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4.5">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5">
+        <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 truncate text-sm font-bold text-ink">
+            <h3 className="m-0 min-w-0 break-words text-sm font-bold text-ink">
               {execution.name}
             </h3>
             <Status tone={meta.tone}>{meta.label}</Status>
           </div>
-          <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-relaxed text-muted">
             <span className="font-mono font-semibold text-violet-fg">
               #{execution.id}
             </span>
-            <span>·</span>
+            <span aria-hidden="true">·</span>
             <span
               className={cn(
                 'font-semibold',
@@ -305,22 +305,22 @@ function ExecutionAirlockCard({
             </span>
             {totalCount > 0 && (
               <>
-                <span>·</span>
+                <span aria-hidden="true">·</span>
                 <span className="font-semibold text-ink tabular-nums">
-                  {approvedCount}/{totalCount} seals
+                  {approvedCount}/{totalCount} approval{totalCount === 1 ? '' : 's'}
                 </span>
               </>
             )}
-            <span>·</span>
-            <span>
-              Draft #{execution.draft_id} · Submitted by user #
-              {execution.executed_by} ·{' '}
-              {new Date(execution.created_at).toLocaleString()}
-            </span>
+            <span aria-hidden="true">·</span>
+            <span>Draft #{execution.draft_id}</span>
+            <span aria-hidden="true">·</span>
+            <span>User #{execution.executed_by}</span>
+            <span aria-hidden="true">·</span>
+            <span>{new Date(execution.created_at).toLocaleString()}</span>
           </p>
         </div>
 
-        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-3 sm:shrink-0 sm:border-0 sm:pt-0">
           <Button
             variant="outline"
             size="sm"
@@ -360,7 +360,7 @@ function ExecutionAirlockCard({
         </div>
       )}
 
-      <div className="border-t border-line p-4.5 space-y-4">
+      <div className="border-t border-line p-4 sm:p-5 space-y-4">
           {actionError && (
             <ErrorNotice
               message={actionError}
@@ -370,7 +370,7 @@ function ExecutionAirlockCard({
 
           {summaryLoading && !summary && (
             <p className="m-0 text-xs text-muted">
-              Loading multi-team consensus seals…
+              Loading group approvals…
             </p>
           )}
 
@@ -386,7 +386,7 @@ function ExecutionAirlockCard({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="font-bold text-ink">
-                    Consensus Seals ({approvedCount}/{totalCount})
+                    Group Approvals ({approvedCount}/{totalCount})
                   </span>
                   <span className="font-mono text-[11px] text-muted tabular-nums">
                     {totalCount > 0
@@ -408,7 +408,7 @@ function ExecutionAirlockCard({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2.5">
                 {summary.approvals.map((approval) => (
                   <SealSlot key={approval.group_id} approval={approval} />
                 ))}
@@ -456,7 +456,7 @@ function ExecutionAirlockCard({
                     className="flex-1 sm:flex-initial"
                   >
                     <Icon name="shield" className="size-3.5" />
-                    Engage Seal (Approve)
+                    Approve
                   </Button>
                 </div>
               </div>
@@ -471,8 +471,8 @@ function ExecutionAirlockCard({
                 </span>
                 <strong className="text-xs font-bold text-ink">
                   {canEdit
-                    ? 'Consensus Unlocked · Ready for Queue'
-                    : 'Consensus Unlocked · Awaiting Editor to Queue'}
+                    ? 'All Groups Approved · Ready to Queue'
+                    : 'All Groups Approved · Awaiting Editor to Queue'}
                 </strong>
               </div>
               {canEdit && (
@@ -501,12 +501,12 @@ function ExecutionAirlockCard({
             execution.status === 'compensation_pending' ||
             execution.status === 'compensating' ||
             execution.status === 'compensated') && (
-            <div className="rounded-xl border border-line bg-canvas/70 p-3.5 text-xs space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="rounded-xl border border-line bg-canvas/70 p-3.5 text-xs space-y-2.5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <span className="font-bold text-ink">
                   Worker Telemetry · Attempt #{execution.attempt}
                 </span>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
                   {execution.queued_at && (
                     <span>
                       Queued {new Date(execution.queued_at).toLocaleTimeString()}
@@ -654,24 +654,26 @@ export function ConsensusAirlock({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <h2 className="m-0 text-base font-bold text-ink">Migration Execution</h2>
-          <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg">
-            {counts.pending_review > 0
-              ? `${counts.pending_review} awaiting sign-off`
-              : 'Consensus settled'}
-          </span>
+      <div className="flex flex-col gap-3 rounded-2xl border border-line/80 bg-white p-4 sm:p-4.5 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <h2 className="m-0 text-base font-bold text-ink">Migration Execution</h2>
+            <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg whitespace-nowrap">
+              {counts.pending_review > 0
+                ? `${counts.pending_review} awaiting sign-off`
+                : 'All settled'}
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
           {filterOptions.map((opt) => (
             <button
               key={opt.key}
               type="button"
               onClick={() => onFilterChange(opt.key)}
               className={cn(
-                'rounded-full border px-3 py-1 text-xs font-semibold transition-colors cursor-pointer',
+                'shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition-colors cursor-pointer',
                 filter === opt.key
                   ? 'border-ink bg-ink text-white shadow-xs'
                   : 'border-line bg-white/90 text-muted hover:border-line-strong hover:text-ink shadow-2xs',

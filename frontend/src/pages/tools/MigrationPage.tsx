@@ -137,7 +137,7 @@ export function MigrationPage() {
         status={
           isLoading
             ? 'Loading migrations…'
-            : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} history entries`
+            : `${draftList.length} drafts · ${pendingReviewCount} pending · ${historyList.length} history`
         }
         actions={
           <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">

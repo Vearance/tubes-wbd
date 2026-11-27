@@ -52,21 +52,21 @@ function DraftCard({
 
   return (
     <article className="overflow-hidden rounded-2xl border border-line bg-white shadow-2xs transition-colors hover:border-line-strong">
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4.5">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-3.5 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5">
+        <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 truncate text-sm font-bold text-ink">
+            <h3 className="m-0 min-w-0 break-words text-sm font-bold text-ink">
               {draft.name}
             </h3>
             <Status tone={draftStatusTone(draft.status)}>
               {draft.status.replace('_', ' ')}
             </Status>
           </div>
-          <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-relaxed text-muted">
             <span className="font-mono font-semibold text-violet-fg">
               #{draft.id}
             </span>
-            <span>·</span>
+            <span aria-hidden="true">·</span>
             {hasDownSql ? (
               <span className="inline-flex items-center gap-1 font-semibold text-success-fg">
                 <Icon name="undo" className="size-3" />
@@ -80,21 +80,20 @@ function DraftCard({
             )}
             {draft.applied_version != null && (
               <>
-                <span>·</span>
+                <span aria-hidden="true">·</span>
                 <span className="font-mono font-semibold text-violet-fg">
                   v{draft.applied_version}
                 </span>
               </>
             )}
-            <span>·</span>
-            <span>
-              Created by user #{draft.created_by} · Updated{' '}
-              {new Date(draft.updated_at).toLocaleString()}
-            </span>
+            <span aria-hidden="true">·</span>
+            <span>User #{draft.created_by}</span>
+            <span aria-hidden="true">·</span>
+            <span>Updated {new Date(draft.updated_at).toLocaleString()}</span>
           </p>
         </div>
 
-        <div className="flex max-w-full flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-3 sm:shrink-0 sm:border-0 sm:pt-0">
           <Button
             variant="outline"
             size="sm"
