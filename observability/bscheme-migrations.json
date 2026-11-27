@@ -170,14 +170,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (type) (bscheme_migration_batches_processed_total)",
+          "expr": "max by (type) (bscheme_migration_batches_committed)",
           "interval": "5s",
           "legendFormat": "batches ({{type}})",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (type) (bscheme_migration_batch_rows_processed_total)",
+          "expr": "max by (type) (bscheme_migration_rows_committed)",
           "interval": "5s",
           "legendFormat": "rows ({{type}})",
           "refId": "B"
