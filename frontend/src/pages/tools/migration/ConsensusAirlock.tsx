@@ -14,7 +14,7 @@ import {
   Modal,
   Status,
 } from '../../../components/ui'
-import { cn } from '../../../lib/utils'
+import { cleanMigrationName, cn } from '../../../lib/utils'
 import { TablePagination } from './TablePagination'
 
 export type AirlockFilter =
@@ -287,7 +287,7 @@ function ExecutionDetailModal({
           onClose()
         }
       }}
-      title={execution ? execution.name : 'Execution Details'}
+      title={execution ? cleanMigrationName(execution.name) : 'Execution Details'}
       description={
         execution
           ? `Execution #${execution.id} · Draft #${execution.draft_id}`
@@ -745,7 +745,7 @@ export function ConsensusAirlock({
                       </td>
                       <td className="px-5 py-4 max-w-[280px]">
                         <div className="truncate font-bold text-ink">
-                          {exec.name}
+                          {cleanMigrationName(exec.name)}
                         </div>
                         <div className="mt-0.5 text-[11px] text-muted">
                           Draft #{exec.draft_id}

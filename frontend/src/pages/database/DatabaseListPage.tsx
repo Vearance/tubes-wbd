@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { AnimatePresence, m } from 'motion/react'
-import { api, type MigrationExecution } from '../../api'
+import { api } from '../../api'
 import { UtilityHeader } from '../../components/AppShell'
 import { InteractiveLinkCard } from '../../components/aceternity/InteractiveLinkCard'
 import { DatabaseMark, Icon } from '../../components/Icon'
@@ -12,20 +11,9 @@ import {
   ErrorNotice,
   PageSkeleton,
   Search,
-  Status,
 } from '../../components/ui'
 import { useResource } from '../../hooks'
 import { cn } from '../../lib/utils'
-
-function executionTypeMeta(type: MigrationExecution['type']) {
-  if (type === 'rollback') {
-    return { label: 'Rollback', tone: 'amber' as const }
-  }
-  if (type === 'forward') {
-    return { label: 'Forward', tone: 'violet' as const }
-  }
-  return { label: 'Schema Up', tone: 'accent' as const }
-}
 
 export function DatabaseListPage() {
   const { data, error, loading, reload } = useResource(
@@ -36,7 +24,6 @@ export function DatabaseListPage() {
   const [search, setSearch] = useState('')
 
   const databases = data ?? []
-  const dbNameById = new Map(databases.map((db) => [db.id, db.name]))
 
   const filtered = databases.filter(
     (db) =>
@@ -92,56 +79,6 @@ export function DatabaseListPage() {
           >
 
       {error && <ErrorNotice message={error} />}
-
-      {pendingApprovals.length > 0 && (
-        <section className="mb-5 overflow-hidden rounded-2xl border border-warning/35 bg-warning-tint shadow-xs">
-          <div className="flex items-center justify-between gap-3 border-b border-warning/20 bg-warning-soft/50 px-4 py-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-warning text-white shadow-2xs">
-                <Icon name="shield" className="size-4" />
-              </span>
-              <h2 className="m-0 truncate text-xs font-bold uppercase tracking-wider text-ink">
-                Migration Execution · Pending Your Sign-off
-              </h2>
-            </div>
-            <Status tone="amber">{pendingApprovals.length}</Status>
-          </div>
-
-          <div className="divide-y divide-warning/15">
-            {pendingApprovals.map((exec) => {
-              const meta = executionTypeMeta(exec.type)
-              const dbName =
-                dbNameById.get(exec.database_id) ?? `Database #${exec.database_id}`
-              return (
-                <div
-                  key={exec.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white/80 hover:bg-white transition-colors"
-                >
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    <span className="rounded-md border border-line bg-canvas px-1.5 py-0.5 font-mono text-[11px] font-bold text-violet-fg shrink-0">
-                      #{exec.id}
-                    </span>
-                    <strong className="truncate text-xs font-bold text-ink">
-                      {exec.name}
-                    </strong>
-                    <Status tone={meta.tone}>{meta.label}</Status>
-                    <span className="text-xs text-muted truncate">
-                      {dbName}
-                    </span>
-                  </div>
-                  <Link
-                    to={`/databases/${exec.database_id}/migrations?tab=airlock&executionId=${exec.id}`}
-                    className="inline-flex min-h-8 items-center justify-center gap-1 rounded-xl bg-ink px-3.5 text-xs font-bold text-white no-underline hover:bg-ink-strong transition-colors shrink-0 shadow-xs"
-                  >
-                    Review
-                    <Icon name="chevron" className="size-3.5" />
-                  </Link>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
 
       {databases.length > 0 && (
         <div className="grid min-w-0 grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">

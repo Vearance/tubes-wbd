@@ -14,7 +14,7 @@ import {
   Modal,
   Status,
 } from '../../../components/ui'
-import { cn } from '../../../lib/utils'
+import { cleanMigrationName, cn } from '../../../lib/utils'
 import { TablePagination } from './TablePagination'
 
 function HistoryDetailModal({
@@ -79,7 +79,9 @@ function HistoryDetailModal({
             >
               v{entry.version}
             </span>
-            <span className="break-words">{entry.name}</span>
+            <span className="break-words">
+              {cleanMigrationName(entry.name)}
+            </span>
           </span>
         ) : (
           'Migration Details'
@@ -325,7 +327,7 @@ export function HeadLedger({
                               : 'font-bold text-ink',
                           )}
                         >
-                          {entry.name}
+                          {cleanMigrationName(entry.name)}
                         </div>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
