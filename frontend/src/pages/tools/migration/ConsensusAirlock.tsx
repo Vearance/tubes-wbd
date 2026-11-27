@@ -628,18 +628,24 @@ export function ConsensusAirlock({
     )
   })
 
-  const filterOptions: Array<{ key: AirlockFilter; label: string }> = [
-    { key: 'all', label: `All (${counts.all})` },
+  const filterOptions: Array<{
+    key: AirlockFilter
+    label: string
+    count: number
+  }> = [
+    { key: 'all', label: 'All', count: counts.all },
     {
       key: 'pending_review',
-      label: `Awaiting Sign-off (${counts.pending_review})`,
+      label: 'Awaiting Sign-off',
+      count: counts.pending_review,
     },
-    { key: 'approved', label: `Ready to Queue (${counts.approved})` },
+    { key: 'approved', label: 'Ready to Queue', count: counts.approved },
     {
       key: 'queue_running',
-      label: `Queue / Running / Partial (${counts.queue_running})`,
+      label: 'In Progress',
+      count: counts.queue_running,
     },
-    { key: 'completed', label: `Completed / Rejected (${counts.completed})` },
+    { key: 'completed', label: 'Completed', count: counts.completed },
   ]
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -650,38 +656,53 @@ export function ConsensusAirlock({
   )
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3.5 rounded-2xl border border-line/80 bg-white p-5 sm:px-6 sm:py-5 shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <h2 className="m-0 text-base font-bold text-ink">
-              Migration Execution
-            </h2>
-            <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg whitespace-nowrap">
-              {counts.pending_review > 0
-                ? `${counts.pending_review} awaiting sign-off`
-                : 'All settled'}
-            </span>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white px-5 py-4 sm:px-6 sm:py-5 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="m-0 text-base font-bold text-ink">
+            Migration Execution
+          </h2>
+          <span className="rounded-full bg-violet-soft border border-violet/20 px-3 py-1 text-xs font-bold text-violet-fg whitespace-nowrap">
+            {counts.pending_review > 0
+              ? `${counts.pending_review} awaiting sign-off`
+              : 'All settled'}
+          </span>
         </div>
+      </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
-          {filterOptions.map((opt) => (
+      <div
+        className="flex items-center gap-2 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-2.5 sm:overflow-visible"
+        role="group"
+        aria-label="Filter executions by status"
+      >
+        {filterOptions.map((opt) => {
+          const active = filter === opt.key
+          return (
             <button
               key={opt.key}
               type="button"
               onClick={() => onFilterChange(opt.key)}
               className={cn(
-                'shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold transition-colors cursor-pointer',
-                filter === opt.key
+                'inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer',
+                active
                   ? 'border-ink bg-ink text-white shadow-xs'
-                  : 'border-line bg-white/90 text-muted hover:border-line-strong hover:text-ink shadow-2xs',
+                  : 'border-line/90 bg-white text-muted hover:border-line-strong hover:text-ink shadow-2xs',
               )}
             >
-              {opt.label}
+              <span>{opt.label}</span>
+              <span
+                className={cn(
+                  'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums',
+                  active
+                    ? 'bg-white/20 text-white'
+                    : 'bg-canvas text-muted',
+                )}
+              >
+                {opt.count}
+              </span>
             </button>
-          ))}
-        </div>
+          )
+        })}
       </div>
 
       {filtered.length === 0 ? (
