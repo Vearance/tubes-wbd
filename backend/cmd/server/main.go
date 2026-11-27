@@ -158,11 +158,8 @@ func run() error {
 	if err := tel.RegisterDBPoolStats(sqlDB, func() telemetry.TargetPoolStats {
 		s := targetManager.Stats()
 		return telemetry.TargetPoolStats{
-			ActivePools:  s.ActivePools,
 			ActiveConns:  s.ActiveConns,
 			IdleConns:    s.IdleConns,
-			TotalConns:   s.TotalConns,
-			MaxConns:     s.MaxConns,
 			WaitCount:    s.WaitCount,
 			WaitDuration: s.WaitDuration,
 		}
@@ -175,9 +172,8 @@ func run() error {
 		statusMu     sync.Mutex
 		cachedAt     time.Time
 		cachedCounts map[string]int64
-		cachedPend   int64
 	)
-	if err := tel.RegisterMigrationStatusCollector(func(collectCtx context.Context) (map[string]int64, int64, error) {
+	if err := tel.RegisterMigrationStatusCollector(func(collectCtx context.Context) (map[string]int64, error) {
 		statusMu.Lock()
 		defer statusMu.Unlock()
 
@@ -186,7 +182,7 @@ func run() error {
 			for k, v := range cachedCounts {
 				copyCounts[k] = v
 			}
-			return copyCounts, cachedPend, nil
+			return copyCounts, nil
 		}
 
 		queryCtx, cancel := context.WithTimeout(telemetry.WithSkipDBTelemetry(collectCtx), 2*time.Second)
@@ -202,29 +198,20 @@ func run() error {
 			Select("status, COUNT(*) AS count").
 			Group("status").
 			Scan(&rows).Error; err != nil {
-			return nil, 0, fmt.Errorf("querying migration execution status counts: %w", err)
+			return nil, fmt.Errorf("querying migration execution status counts: %w", err)
 		}
 		counts := make(map[string]int64, len(rows))
 		for _, row := range rows {
 			counts[row.Status] = row.Count
 		}
 
-		var pending int64
-		if err := db.WithContext(queryCtx).
-			Table("migration_execution_outbox").
-			Where("published_at IS NULL").
-			Count(&pending).Error; err != nil {
-			return nil, 0, fmt.Errorf("querying pending outbox count: %w", err)
-		}
-
 		cachedCounts = counts
-		cachedPend = pending
 		cachedAt = time.Now()
 		copyCounts := make(map[string]int64, len(counts))
 		for k, v := range counts {
 			copyCounts[k] = v
 		}
-		return copyCounts, pending, nil
+		return copyCounts, nil
 	}); err != nil {
 		return fmt.Errorf("registering migration status metrics: %w", err)
 	}

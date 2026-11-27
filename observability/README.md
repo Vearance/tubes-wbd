@@ -56,9 +56,9 @@ Exposed endpoints:
 | Jobs per Status (Waiting / Running / Succeeded / Failed) | `bscheme_migration_jobs{status}`, `bscheme_migration_executions_total{type,status}` | **Migration Jobs per Status** |
 | Queue & Lock Wait Duration | `bscheme_migration_queue_wait_duration_seconds_{bucket,sum,count}{type}`, `bscheme_migration_lock_wait_duration_seconds_{bucket,sum,count}{type,lock_scope}` | **Queue & Lock Wait Duration (p50 / p95)** |
 | Migration Duration | `bscheme_migration_execution_duration_seconds_{bucket,sum,count}{type,status}` | **Migration Execution Duration (p50 / p95)** |
-| Batches, Rows Processed & Retries | `bscheme_migration_batches_processed_total{type}`, `bscheme_migration_batch_rows_processed_total{type}`, `bscheme_migration_retries_total{type,reason}` | **Batches, Rows Processed & Retries (5m count)** |
+| Batches, Rows Processed & Retries | `bscheme_migration_batches_processed_total{type}`, `bscheme_migration_batch_rows_processed_total{type}`, `bscheme_migration_retries_total{type,reason}` | **Batches, Rows Processed & Retries** |
 | DB Pool Active / Idle | `bscheme_db_pool_connections{db_role,state}` | **DB Connection Pool — Active vs Idle Connections** |
-| DB Pool Wait Time & Count | `bscheme_db_pool_wait_duration_seconds_total{db_role}`, `bscheme_db_pool_wait_count_total{db_role}` | **DB Connection Pool — Connection Wait Time (5m)**, **DB Connection Pool — Connection Wait Count (5m)** |
+| DB Pool Wait Time & Count | `bscheme_db_pool_wait_duration_seconds_total{db_role}`, `bscheme_db_pool_wait_count_total{db_role}` | **DB Connection Pool — Connection Wait Time**, **DB Connection Pool — Connection Wait Count** |
 
 ## Grafana Screenshots
 

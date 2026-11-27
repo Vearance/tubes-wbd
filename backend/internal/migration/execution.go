@@ -797,8 +797,6 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	defer span.End()
 
 	spanCtx = telemetry.WithActor(telemetry.WithDatabase(telemetry.WithMigrationMeta(spanCtx, meta), dbLabel), actor)
-	metrics.AddWorkerInFlight(spanCtx, string(execution.Type), 1)
-	defer metrics.AddWorkerInFlight(spanCtx, string(execution.Type), -1)
 
 	workCtx, cancel := context.WithTimeout(context.WithoutCancel(spanCtx), w.service.opts.StatementTimeout+10*time.Second)
 	defer cancel()

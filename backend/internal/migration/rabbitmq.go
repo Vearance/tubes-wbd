@@ -180,7 +180,6 @@ func (r *OutboxRelay) publishMessage(ctx context.Context, confirms <-chan amqp.C
 	recordError := func(err error) error {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, telemetry.SanitizeError(err))
-		telemetry.Metrics().RecordOutboxPublish(pubCtx, "error")
 		slog.ErrorContext(pubCtx, "failed publishing migration execution to queue",
 			"event", "migration.outbox.published",
 			"outbox_id", message.ID,
@@ -221,7 +220,6 @@ func (r *OutboxRelay) publishMessage(ctx context.Context, confirms <-chan amqp.C
 		Update("published_at", publishedAt).Error; err != nil {
 		return recordError(fmt.Errorf("marking migration outbox message published: %w", err))
 	}
-	telemetry.Metrics().RecordOutboxPublish(pubCtx, "success")
 	slog.InfoContext(pubCtx, "published migration execution to queue",
 		"event", "migration.outbox.published",
 		"outbox_id", message.ID,
@@ -284,10 +282,8 @@ func (w *ExecutionWorker) handleDelivery(ctx context.Context, queue string, deli
 	consumeCtx = telemetry.WithActor(consumeCtx, "system:worker")
 	defer span.End()
 
-	metrics := telemetry.Metrics()
 	var message executionMessage
 	if err := json.Unmarshal(delivery.Body, &message); err != nil || message.ExecutionID == 0 {
-		metrics.RecordWorkerMessage(consumeCtx, "reject")
 		span.SetStatus(codes.Error, "invalid migration message")
 		slog.WarnContext(consumeCtx, "rejecting invalid migration message",
 			"event", "migration.worker.consumed",
@@ -311,9 +307,8 @@ func (w *ExecutionWorker) handleDelivery(ctx context.Context, queue string, deli
 		delay := time.Second
 		if errors.Is(err, ErrExecutionBusy) {
 			delay = 2 * time.Second
-			metrics.RecordMigrationRetry(consumeCtx, "unknown", "execution_busy")
+			telemetry.Metrics().RecordMigrationRetry(consumeCtx, "unknown", "execution_busy")
 		}
-		metrics.RecordWorkerMessage(consumeCtx, "nack")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, telemetry.SanitizeError(err))
 		slog.WarnContext(consumeCtx, "requeueing migration execution delivery",
@@ -338,7 +333,6 @@ func (w *ExecutionWorker) handleDelivery(ctx context.Context, queue string, deli
 		}
 		return nil
 	}
-	metrics.RecordWorkerMessage(consumeCtx, "ack")
 	if err := delivery.Ack(false); err != nil {
 		return fmt.Errorf("acking migration execution %d: %w", message.ExecutionID, err)
 	}

@@ -107,11 +107,8 @@ func run() error {
 	if err := tel.RegisterDBPoolStats(sqlDB, func() telemetry.TargetPoolStats {
 		s := targetManager.Stats()
 		return telemetry.TargetPoolStats{
-			ActivePools:  s.ActivePools,
 			ActiveConns:  s.ActiveConns,
 			IdleConns:    s.IdleConns,
-			TotalConns:   s.TotalConns,
-			MaxConns:     s.MaxConns,
 			WaitCount:    s.WaitCount,
 			WaitDuration: s.WaitDuration,
 		}

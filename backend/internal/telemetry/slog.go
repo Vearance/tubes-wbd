@@ -5,15 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
+	"strings"
+	"time"
+	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TraceLogHandler wraps a base slog.Handler and enriches every record with:
-//   - scrubbed attributes (masking credentials, tokens, sessions, and DSN secrets)
-//   - standard context fields (event, actor, database, correlation_id)
-//   - active OpenTelemetry trace_id and span_id
-//   - active migration execution/draft/attempt/batch identifiers
+// TraceLogHandler enriches structured slog records with scrubbed attributes,
+// actor/database/correlation_id context, OTel trace_id/span_id, and migration metadata.
 type TraceLogHandler struct {
 	inner slog.Handler
 }
@@ -35,70 +37,56 @@ func (h *TraceLogHandler) Handle(ctx context.Context, record slog.Record) error 
 	seen := make(map[string]struct{}, record.NumAttrs()+8)
 
 	record.Attrs(func(attr slog.Attr) bool {
-		if attr.Key == "" {
-			return true
+		if attr.Key != "" {
+			seen[attr.Key] = struct{}{}
+			cleaned.AddAttrs(scrubAttr(attr))
 		}
-		seen[attr.Key] = struct{}{}
-		cleaned.AddAttrs(scrubAttr(attr))
 		return true
 	})
 
-	if _, ok := seen["event"]; !ok && record.Message != "" {
-		cleaned.AddAttrs(slog.String("event", record.Message))
-	}
-	if _, ok := seen["actor"]; !ok {
-		actor := ActorFromContext(ctx)
-		if actor == "" {
-			actor = "system"
+	addIfMissing := func(key string, val slog.Attr) {
+		if _, ok := seen[key]; !ok {
+			cleaned.AddAttrs(val)
 		}
-		cleaned.AddAttrs(slog.String("actor", actor))
 	}
-	if _, ok := seen["database"]; !ok {
-		if db := DatabaseFromContext(ctx); db != "" {
-			cleaned.AddAttrs(slog.String("database", db))
-		}
+
+	if record.Message != "" {
+		addIfMissing("event", slog.String("event", record.Message))
+	}
+	actor := ActorFromContext(ctx)
+	if actor == "" {
+		actor = "system"
+	}
+	addIfMissing("actor", slog.String("actor", actor))
+	if db := DatabaseFromContext(ctx); db != "" {
+		addIfMissing("database", slog.String("database", db))
 	}
 
 	sc := trace.SpanContextFromContext(ctx)
-	if _, ok := seen["correlation_id"]; !ok {
-		corrID := CorrelationIDFromContext(ctx)
-		if corrID == "" && sc.IsValid() {
-			corrID = sc.TraceID().String()
-		}
-		if corrID != "" {
-			cleaned.AddAttrs(slog.String("correlation_id", corrID))
-		}
+	corrID := CorrelationIDFromContext(ctx)
+	if corrID == "" && sc.IsValid() {
+		corrID = sc.TraceID().String()
 	}
-
+	if corrID != "" {
+		addIfMissing("correlation_id", slog.String("correlation_id", corrID))
+	}
 	if sc.IsValid() {
-		if _, ok := seen["trace_id"]; !ok {
-			cleaned.AddAttrs(slog.String("trace_id", sc.TraceID().String()))
-		}
-		if _, ok := seen["span_id"]; !ok {
-			cleaned.AddAttrs(slog.String("span_id", sc.SpanID().String()))
-		}
+		addIfMissing("trace_id", slog.String("trace_id", sc.TraceID().String()))
+		addIfMissing("span_id", slog.String("span_id", sc.SpanID().String()))
 	}
 
 	meta := MigrationMetaFromContext(ctx)
 	if meta.ExecutionID > 0 {
-		if _, ok := seen["execution_id"]; !ok {
-			cleaned.AddAttrs(slog.Uint64("execution_id", uint64(meta.ExecutionID)))
-		}
+		addIfMissing("execution_id", slog.Uint64("execution_id", uint64(meta.ExecutionID)))
 	}
 	if meta.DraftID > 0 {
-		if _, ok := seen["draft_id"]; !ok {
-			cleaned.AddAttrs(slog.Uint64("draft_id", uint64(meta.DraftID)))
-		}
+		addIfMissing("draft_id", slog.Uint64("draft_id", uint64(meta.DraftID)))
 	}
 	if meta.Attempt > 0 {
-		if _, ok := seen["attempt"]; !ok {
-			cleaned.AddAttrs(slog.Int("attempt", meta.Attempt))
-		}
+		addIfMissing("attempt", slog.Int("attempt", meta.Attempt))
 	}
 	if meta.BatchNumber > 0 {
-		if _, ok := seen["batch_number"]; !ok {
-			cleaned.AddAttrs(slog.Int("batch_number", meta.BatchNumber))
-		}
+		addIfMissing("batch_number", slog.Int("batch_number", meta.BatchNumber))
 	}
 
 	return h.inner.Handle(ctx, cleaned)
@@ -121,7 +109,6 @@ func scrubAttr(attr slog.Attr) slog.Attr {
 	if IsSensitiveLogKey(attr.Key) {
 		return slog.String(attr.Key, "[REDACTED]")
 	}
-
 	switch attr.Value.Kind() {
 	case slog.KindString:
 		s := attr.Value.String()
@@ -137,25 +124,22 @@ func scrubAttr(attr slog.Attr) slog.Attr {
 		}
 		return slog.Attr{Key: attr.Key, Value: slog.GroupValue(next...)}
 	case slog.KindAny:
-		anyVal := attr.Value.Any()
-		if err, ok := anyVal.(error); ok && err != nil {
+		val := attr.Value.Any()
+		if err, ok := val.(error); ok && err != nil {
 			return slog.String(attr.Key, SanitizeError(err))
 		}
-		if anyVal != nil {
-			if s, ok := anyVal.(fmt.Stringer); ok {
-				str := s.String()
-				if looksLikeSecretValue(str) {
-					return slog.String(attr.Key, "[REDACTED]")
-				}
-				return slog.String(attr.Key, ScrubString(str))
+		if s, ok := val.(fmt.Stringer); ok {
+			str := s.String()
+			if looksLikeSecretValue(str) {
+				return slog.String(attr.Key, "[REDACTED]")
 			}
+			return slog.String(attr.Key, ScrubString(str))
 		}
 	}
 	return attr
 }
 
-// MultiLogHandler fans out structured log records to multiple slog.Handler destinations
-// (such as stdout JSON logging and the OpenTelemetry OTLP logs bridge).
+// MultiLogHandler fans out structured log records to multiple slog.Handler destinations.
 type MultiLogHandler struct {
 	handlers []slog.Handler
 }
@@ -183,11 +167,8 @@ func (m *MultiLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
 func (m *MultiLogHandler) Handle(ctx context.Context, record slog.Record) error {
 	var errs error
 	for _, h := range m.handlers {
-		if !h.Enabled(ctx, record.Level) {
-			continue
-		}
-		if err := h.Handle(ctx, record.Clone()); err != nil {
-			errs = errors.Join(errs, err)
+		if h.Enabled(ctx, record.Level) {
+			errs = errors.Join(errs, h.Handle(ctx, record.Clone()))
 		}
 	}
 	return errs
@@ -207,4 +188,157 @@ func (m *MultiLogHandler) WithGroup(name string) slog.Handler {
 		next[i] = h.WithGroup(name)
 	}
 	return &MultiLogHandler{handlers: next}
+}
+
+var (
+	sqlStringLiteralPattern = regexp.MustCompile(`'(?:''|[^'])*'`)
+	sqlLineCommentPattern   = regexp.MustCompile(`--[^\r\n]*`)
+	sqlBlockCommentPattern  = regexp.MustCompile(`(?s)/\*.*?\*/`)
+	sqlDollarLiteralPattern = regexp.MustCompile(`(?s)\$[A-Za-z_0-9]*\$.*?\$[A-Za-z_0-9]*\$`)
+	sqlNumberPattern        = regexp.MustCompile(`(\$[0-9]+)|\b[0-9]+(?:\.[0-9]+)?\b`)
+	sqlDDLPasswordPattern   = regexp.MustCompile(`(?i)\bPASSWORD\s+(?:'\[REDACTED\]'|[^\s;]+)`)
+
+	sessionsTablePattern  = regexp.MustCompile(`(?i)\bsessions\b`)
+	sensitiveFieldPattern = regexp.MustCompile(`(?i)\b(password|passwd|password_hash|encrypted_password|token|token_hash|csrf|csrf_token_hash|secret|cookie|credential|api_key|private_key|authorization|managed_databases)\b`)
+
+	urlCredentialPattern = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:)([^@\s/]+)(@)`)
+	authHeaderPattern    = regexp.MustCompile(`(?i)\b(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s;,&"']+`)
+	kvSecretPattern      = regexp.MustCompile(`(?i)\b(password|passwd|secret|token|csrf|csrf_token|cookie|labpro_sucks|api_key)\b(\s*[:=]\s*)([^\s;,&"']+)`)
+	bearerTokenPattern   = regexp.MustCompile(`(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+`)
+	hexSecretPattern     = regexp.MustCompile(`^[a-fA-F0-9]{32,}$`)
+)
+
+// SanitizeSQL keeps query shapes debuggable while masking literals, comments, passwords, and numbers.
+func SanitizeSQL(rawSQL string) string {
+	s := sqlLineCommentPattern.ReplaceAllString(rawSQL, "--[REDACTED]")
+	s = sqlBlockCommentPattern.ReplaceAllString(s, "/*[REDACTED]*/")
+	s = sqlStringLiteralPattern.ReplaceAllString(s, "'[REDACTED]'")
+	s = sqlDollarLiteralPattern.ReplaceAllString(s, "$tag$[REDACTED]$tag$")
+	s = sqlDDLPasswordPattern.ReplaceAllString(s, "PASSWORD '[REDACTED]'")
+	s = sqlNumberPattern.ReplaceAllStringFunc(s, func(val string) string {
+		if len(val) > 0 && val[0] == '$' {
+			return val
+		}
+		return "[NUMBER]"
+	})
+	s = strings.TrimSpace(s)
+	if len(s) > 4096 {
+		s = strings.TrimSpace(s[:4096]) + "... [truncated]"
+	}
+	return s
+}
+
+// SanitizeSQLParams formats query parameters safely, masking sessions and secret-like values.
+func SanitizeSQLParams(rawSQL string, args []any) []any {
+	if len(args) == 0 {
+		return []any{}
+	}
+	touchSessions := sessionsTablePattern.MatchString(rawSQL)
+	touchSensitive := touchSessions || sensitiveFieldPattern.MatchString(rawSQL)
+	out := make([]any, len(args))
+	for i, arg := range args {
+		if touchSessions {
+			out[i] = "[REDACTED]"
+		} else {
+			out[i] = sanitizeParamValue(arg, touchSensitive)
+		}
+	}
+	return out
+}
+
+func sanitizeParamValue(v any, sensitive bool) any {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case string:
+		if sensitive || looksLikeSecretValue(val) {
+			return "[REDACTED]"
+		}
+		return truncateRunes(ScrubString(val), 120)
+	case []byte:
+		return fmt.Sprintf("[BYTES len=%d]", len(val))
+	case []int64:
+		if len(val) <= 10 {
+			return append([]int64(nil), val...)
+		}
+		return fmt.Sprintf("[int64 len=%d first=%d last=%d]", len(val), val[0], val[len(val)-1])
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
+		return val
+	case time.Time:
+		return val.UTC().Format(time.RFC3339Nano)
+	case *time.Time:
+		if val == nil {
+			return nil
+		}
+		return val.UTC().Format(time.RFC3339Nano)
+	case fmt.Stringer:
+		s := val.String()
+		if sensitive || looksLikeSecretValue(s) {
+			return "[REDACTED]"
+		}
+		return truncateRunes(ScrubString(s), 120)
+	default:
+		if sensitive {
+			return "[REDACTED]"
+		}
+		return fmt.Sprintf("[%T]", v)
+	}
+}
+
+func looksLikeSecretValue(s string) bool {
+	t := strings.TrimSpace(s)
+	lower := strings.ToLower(t)
+	return t != "" && (strings.HasPrefix(t, "$2a$") || strings.HasPrefix(t, "$2b$") || strings.HasPrefix(t, "$2y$") ||
+		strings.HasPrefix(t, "eyJ") || strings.HasPrefix(lower, "bearer ") ||
+		strings.Contains(lower, "labpro_sucks=") || hexSecretPattern.MatchString(t))
+}
+
+func truncateRunes(s string, max int) string {
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	return string([]rune(s)[:max]) + "...[truncated]"
+}
+
+// ScrubString redacts inline URL passwords, key=value credentials, and Bearer tokens.
+func ScrubString(s string) string {
+	if s == "" {
+		return ""
+	}
+	s = urlCredentialPattern.ReplaceAllString(s, "${1}[REDACTED]${3}")
+	s = authHeaderPattern.ReplaceAllString(s, "${1}[REDACTED]")
+	s = bearerTokenPattern.ReplaceAllString(s, "Bearer [REDACTED]")
+	return kvSecretPattern.ReplaceAllString(s, "$1$2[REDACTED]")
+}
+
+// SanitizeError formats an error message with embedded credentials or tokens scrubbed.
+func SanitizeError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return ScrubString(err.Error())
+}
+
+// SQLState extracts the PostgreSQL SQLSTATE code from err when available.
+func SQLState(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code
+	}
+	return ""
+}
+
+// IsSensitiveLogKey reports whether an attribute key may hold credentials, tokens, or sessions.
+func IsSensitiveLogKey(key string) bool {
+	lower := strings.ToLower(key)
+	for _, needle := range []string{
+		"password", "passwd", "secret", "token", "cookie", "session",
+		"authorization", "csrf", "credential", "encryption_key", "private_key", "api_key", "dsn",
+	} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
 }

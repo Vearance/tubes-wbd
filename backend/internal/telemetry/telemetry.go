@@ -2,12 +2,18 @@ package telemetry
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -28,9 +34,76 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Config holds OpenTelemetry and Prometheus configuration for a BScheme service.
+type Config struct {
+	ServiceName    string
+	ServiceVersion string
+	Environment    string
+	OTLPEndpoint   string
+	TracesExporter string
+	SampleRatio    float64
+	MetricsAddr    string
+}
+
+// LoadConfig reads telemetry configuration from standard OTEL_* and APP_* environment variables.
+func LoadConfig(defaultServiceName string) (Config, error) {
+	serviceName := envOrDefault("OTEL_SERVICE_NAME", defaultServiceName)
+	serviceVersion := envOrDefault("OTEL_SERVICE_VERSION", "dev")
+	environment := envOrDefault("OTEL_ENVIRONMENT", envOrDefault("APP_ENV", "development"))
+	otlpEndpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+
+	tracesExporter := strings.ToLower(strings.TrimSpace(os.Getenv("OTEL_TRACES_EXPORTER")))
+	if tracesExporter != "" {
+		for _, part := range strings.Split(tracesExporter, ",") {
+			switch strings.TrimSpace(part) {
+			case "otlp", "console", "none":
+			default:
+				return Config{}, fmt.Errorf("OTEL_TRACES_EXPORTER contains unsupported exporter %q", strings.TrimSpace(part))
+			}
+		}
+	}
+
+	sampleRatio := 1.0
+	if raw := strings.TrimSpace(os.Getenv("OTEL_TRACES_SAMPLER_ARG")); raw != "" {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil || parsed < 0 || parsed > 1 {
+			return Config{}, fmt.Errorf("OTEL_TRACES_SAMPLER_ARG must be a float between 0 and 1: %q", raw)
+		}
+		sampleRatio = parsed
+	}
+
+	return Config{
+		ServiceName:    serviceName,
+		ServiceVersion: serviceVersion,
+		Environment:    environment,
+		OTLPEndpoint:   otlpEndpoint,
+		TracesExporter: tracesExporter,
+		SampleRatio:    sampleRatio,
+		MetricsAddr:    envOrDefault("APP_METRICS_ADDR", ":9091"),
+	}, nil
+}
+
+func envOrDefault(key, fallback string) string {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		return val
+	}
+	return fallback
+}
+
+func parseOTLPEndpoint(raw string) (hostPort string, insecure bool) {
+	trimmed := strings.TrimRight(strings.TrimSpace(raw), "/")
+	switch {
+	case strings.HasPrefix(trimmed, "https://"):
+		return strings.TrimPrefix(trimmed, "https://"), false
+	case strings.HasPrefix(trimmed, "http://"):
+		return strings.TrimPrefix(trimmed, "http://"), true
+	default:
+		return trimmed, true
+	}
+}
+
 // Provider coordinates OpenTelemetry tracing, logging, and Prometheus metrics exposition.
 type Provider struct {
-	cfg            Config
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
 	loggerProvider *sdklog.LoggerProvider
@@ -57,18 +130,17 @@ func Init(ctx context.Context, cfg Config) (*Provider, error) {
 	}
 
 	enableOTLPTraces, enableConsoleTraces := parseTraceExporters(cfg.TracesExporter, cfg.OTLPEndpoint != "")
-
 	traceOpts := []sdktrace.TracerProviderOption{
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))),
 	}
 	if enableOTLPTraces {
 		endpoint, insecure := parseOTLPEndpoint(cfg.OTLPEndpoint)
-		expOpts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(endpoint)}
+		opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(endpoint)}
 		if insecure {
-			expOpts = append(expOpts, otlptracehttp.WithInsecure())
+			opts = append(opts, otlptracehttp.WithInsecure())
 		}
-		traceExp, err := otlptracehttp.New(ctx, expOpts...)
+		traceExp, err := otlptracehttp.New(ctx, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("creating OTLP trace exporter: %w", err)
 		}
@@ -80,30 +152,22 @@ func Init(ctx context.Context, cfg Config) (*Provider, error) {
 
 	tp := sdktrace.NewTracerProvider(traceOpts...)
 	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
-	stdoutHandler := slog.NewJSONHandler(os.Stdout, nil)
-	handlers := []slog.Handler{stdoutHandler}
-
+	handlers := []slog.Handler{slog.NewJSONHandler(os.Stdout, nil)}
 	var lp *sdklog.LoggerProvider
 	if cfg.OTLPEndpoint != "" {
 		endpoint, insecure := parseOTLPEndpoint(cfg.OTLPEndpoint)
-		logOpts := []otlploghttp.Option{otlploghttp.WithEndpoint(endpoint)}
+		opts := []otlploghttp.Option{otlploghttp.WithEndpoint(endpoint)}
 		if insecure {
-			logOpts = append(logOpts, otlploghttp.WithInsecure())
+			opts = append(opts, otlploghttp.WithInsecure())
 		}
-		logExp, err := otlploghttp.New(ctx, logOpts...)
+		logExp, err := otlploghttp.New(ctx, opts...)
 		if err != nil {
 			_ = tp.Shutdown(ctx)
 			return nil, fmt.Errorf("creating OTLP log exporter: %w", err)
 		}
-		lp = sdklog.NewLoggerProvider(
-			sdklog.WithResource(res),
-			sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)),
-		)
+		lp = sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)))
 		otel.SetLoggerProvider(lp)
 		handlers = append(handlers, otelslog.NewHandler(cfg.ServiceName, otelslog.WithLoggerProvider(lp)))
 	}
@@ -118,19 +182,12 @@ func Init(ctx context.Context, cfg Config) (*Provider, error) {
 		return nil, fmt.Errorf("registering Process runtime collector: %w", err)
 	}
 
-	promExp, err := otelprometheus.New(
-		otelprometheus.WithRegisterer(registry),
-		otelprometheus.WithoutScopeInfo(),
-	)
+	promExp, err := otelprometheus.New(otelprometheus.WithRegisterer(registry), otelprometheus.WithoutScopeInfo())
 	if err != nil {
 		_ = shutdownProviders(ctx, tp, lp, nil)
 		return nil, fmt.Errorf("creating Prometheus metric exporter: %w", err)
 	}
-
-	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithResource(res),
-		sdkmetric.WithReader(promExp),
-	)
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(promExp))
 	otel.SetMeterProvider(mp)
 
 	meter := mp.Meter("tubes-wbd")
@@ -141,23 +198,19 @@ func Init(ctx context.Context, cfg Config) (*Provider, error) {
 	}
 	activeMetrics.Store(appMetrics)
 
-	var baseHandler slog.Handler
-	if len(handlers) == 1 {
-		baseHandler = handlers[0]
-	} else {
+	baseHandler := handlers[0]
+	if len(handlers) > 1 {
 		baseHandler = NewMultiLogHandler(handlers...)
 	}
-	logHandler := NewTraceLogHandler(baseHandler, cfg.ServiceName)
 
 	return &Provider{
-		cfg:            cfg,
 		tracerProvider: tp,
 		meterProvider:  mp,
 		loggerProvider: lp,
 		registry:       registry,
 		meter:          meter,
 		metrics:        appMetrics,
-		logHandler:     logHandler,
+		logHandler:     NewTraceLogHandler(baseHandler, cfg.ServiceName),
 	}, nil
 }
 
@@ -167,24 +220,16 @@ func (p *Provider) MetricsHandler() http.Handler {
 }
 
 // LogHandler returns the configured structured slog.Handler (JSON stdout + OTLP when enabled).
-func (p *Provider) LogHandler() slog.Handler {
-	return p.logHandler
-}
+func (p *Provider) LogHandler() slog.Handler { return p.logHandler }
 
 // Meter returns the OpenTelemetry Meter bound to the provider's Prometheus exporter.
-func (p *Provider) Meter() metric.Meter {
-	return p.meter
-}
+func (p *Provider) Meter() metric.Meter { return p.meter }
 
-// RegisterMigrationStatusCollector registers observable gauges for migration job counts per
-// bounded status and pending outbox items. Call only on the API server to avoid double-counting.
-func (p *Provider) RegisterMigrationStatusCollector(
-	fn func(context.Context) (statusCounts map[string]int64, outboxPending int64, err error),
-) error {
+// RegisterMigrationStatusCollector registers the bscheme_migration_jobs observable gauge.
+func (p *Provider) RegisterMigrationStatusCollector(fn func(context.Context) (map[string]int64, error)) error {
 	if fn == nil {
 		return errors.New("migration status collector callback is nil")
 	}
-
 	jobsGauge, err := p.meter.Int64ObservableGauge(
 		"bscheme_migration_jobs",
 		metric.WithDescription("Current number of migration executions per status"),
@@ -193,31 +238,18 @@ func (p *Provider) RegisterMigrationStatusCollector(
 		return fmt.Errorf("creating bscheme_migration_jobs gauge: %w", err)
 	}
 
-	outboxGauge, err := p.meter.Int64ObservableGauge(
-		"bscheme_migration_outbox_pending",
-		metric.WithDescription("Current number of unpublished migration execution outbox records"),
-	)
-	if err != nil {
-		return fmt.Errorf("creating bscheme_migration_outbox_pending gauge: %w", err)
-	}
-
 	_, err = p.meter.RegisterCallback(func(ctx context.Context, obs metric.Observer) error {
-		counts, pending, err := fn(ctx)
+		counts, err := fn(ctx)
 		if err != nil {
 			slog.WarnContext(ctx, "collecting migration status gauges", "error", err)
 			return nil
 		}
-
 		for _, status := range KnownMigrationStatuses {
 			obs.ObserveInt64(jobsGauge, counts[status], metric.WithAttributes(attribute.String("status", status)))
 		}
-		obs.ObserveInt64(outboxGauge, pending)
 		return nil
-	}, jobsGauge, outboxGauge)
-	if err != nil {
-		return fmt.Errorf("registering migration status callback: %w", err)
-	}
-	return nil
+	}, jobsGauge)
+	return err
 }
 
 // Shutdown flushes and closes trace, log, and metric providers.
@@ -229,12 +261,7 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return shutdownProviders(ctx, p.tracerProvider, p.loggerProvider, p.meterProvider)
 }
 
-func shutdownProviders(
-	ctx context.Context,
-	tp *sdktrace.TracerProvider,
-	lp *sdklog.LoggerProvider,
-	mp *sdkmetric.MeterProvider,
-) error {
+func shutdownProviders(ctx context.Context, tp *sdktrace.TracerProvider, lp *sdklog.LoggerProvider, mp *sdkmetric.MeterProvider) error {
 	var errs error
 	if tp != nil {
 		errs = errors.Join(errs, tp.Shutdown(ctx))
@@ -249,9 +276,7 @@ func shutdownProviders(
 }
 
 // Tracer returns an instrumentation tracer from the global TracerProvider.
-func Tracer(name string) trace.Tracer {
-	return otel.Tracer(name)
-}
+func Tracer(name string) trace.Tracer { return otel.Tracer(name) }
 
 func parseTraceExporters(raw string, hasOTLPEndpoint bool) (enableOTLP, enableConsole bool) {
 	trimmed := strings.TrimSpace(strings.ToLower(raw))
@@ -261,9 +286,7 @@ func parseTraceExporters(raw string, hasOTLPEndpoint bool) (enableOTLP, enableCo
 	for _, part := range strings.Split(trimmed, ",") {
 		switch strings.TrimSpace(part) {
 		case "otlp":
-			if hasOTLPEndpoint {
-				enableOTLP = true
-			}
+			enableOTLP = hasOTLPEndpoint
 		case "console":
 			enableConsole = true
 		case "none":
@@ -271,4 +294,102 @@ func parseTraceExporters(raw string, hasOTLPEndpoint bool) (enableOTLP, enableCo
 		}
 	}
 	return enableOTLP, enableConsole
+}
+
+// ConsoleSpanExporter writes completed OpenTelemetry spans as scrubbed single-line JSON.
+type ConsoleSpanExporter struct {
+	mu  sync.Mutex
+	out io.Writer
+}
+
+// NewConsoleSpanExporter creates a ConsoleSpanExporter writing to out (os.Stderr if nil).
+func NewConsoleSpanExporter(out io.Writer) *ConsoleSpanExporter {
+	if out == nil {
+		out = os.Stderr
+	}
+	return &ConsoleSpanExporter{out: out}
+}
+
+type consoleSpanRecord struct {
+	Type         string         `json:"type"`
+	Service      string         `json:"service,omitempty"`
+	TraceID      string         `json:"trace_id"`
+	SpanID       string         `json:"span_id"`
+	ParentSpanID string         `json:"parent_span_id,omitempty"`
+	Name         string         `json:"name"`
+	Kind         string         `json:"kind"`
+	StartTime    string         `json:"start_time"`
+	EndTime      string         `json:"end_time"`
+	DurationMs   float64        `json:"duration_ms"`
+	StatusCode   string         `json:"status_code"`
+	Attributes   map[string]any `json:"attributes,omitempty"`
+}
+
+// ExportSpans serializes each span to single-line JSON with sensitive fields scrubbed.
+func (e *ConsoleSpanExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	if err := ctx.Err(); err != nil || len(spans) == 0 {
+		return err
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for _, span := range spans {
+		sc := span.SpanContext()
+		parentID := ""
+		if p := span.Parent(); p.IsValid() {
+			parentID = p.SpanID().String()
+		}
+		service := ""
+		if res := span.Resource(); res != nil {
+			for _, kv := range res.Attributes() {
+				if kv.Key == semconv.ServiceNameKey {
+					service = kv.Value.AsString()
+					break
+				}
+			}
+		}
+		attrs := make(map[string]any, len(span.Attributes()))
+		for _, kv := range span.Attributes() {
+			k := string(kv.Key)
+			if IsSensitiveLogKey(k) {
+				attrs[k] = "[REDACTED]"
+			} else if s, ok := kv.Value.AsInterface().(string); ok {
+				attrs[k] = ScrubString(s)
+			} else {
+				attrs[k] = kv.Value.AsInterface()
+			}
+		}
+		line, err := json.Marshal(consoleSpanRecord{
+			Type:         "otel_span",
+			Service:      service,
+			TraceID:      sc.TraceID().String(),
+			SpanID:       sc.SpanID().String(),
+			ParentSpanID: parentID,
+			Name:         span.Name(),
+			Kind:         span.SpanKind().String(),
+			StartTime:    span.StartTime().UTC().Format(time.RFC3339Nano),
+			EndTime:      span.EndTime().UTC().Format(time.RFC3339Nano),
+			DurationMs:   RoundMillis(span.EndTime().Sub(span.StartTime())),
+			StatusCode:   span.Status().Code.String(),
+			Attributes:   attrs,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := e.out.Write(append(line, '\n')); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Shutdown implements sdktrace.SpanExporter.
+func (e *ConsoleSpanExporter) Shutdown(context.Context) error { return nil }
+
+// RoundMillis formats a duration in milliseconds rounded to three decimal places.
+func RoundMillis(d time.Duration) float64 {
+	if d < 0 {
+		return 0
+	}
+	return math.Round(float64(d.Microseconds())) / 1000.0
 }

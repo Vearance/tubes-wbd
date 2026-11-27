@@ -140,7 +140,6 @@ func (s *AuthService) Login(
 		}
 		durationMs := telemetry.RoundMillis(time.Since(start))
 		span.SetAttributes(attribute.String("auth.outcome", outcome))
-		telemetry.Metrics().RecordAuthLogin(spanCtx, outcome)
 
 		switch outcome {
 		case "success":

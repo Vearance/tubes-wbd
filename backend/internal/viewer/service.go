@@ -89,7 +89,6 @@ func startViewerSpan(ctx context.Context, userID, dbID uint, op string, extraAtt
 			span.RecordError(err)
 			span.SetStatus(codes.Error, telemetry.SanitizeError(err))
 		}
-		telemetry.Metrics().RecordViewerOperation(spanCtx, op, status)
 
 		logAttrs := []any{
 			"event", "viewer." + op,
