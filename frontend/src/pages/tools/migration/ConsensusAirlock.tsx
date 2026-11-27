@@ -63,6 +63,10 @@ function typeLabel(type: MigrationExecution['type']) {
   return 'Schema Up'
 }
 
+function formatCount(value: number | undefined) {
+  return new Intl.NumberFormat().format(value ?? 0)
+}
+
 function SealSlot({ approval }: { approval: MigrationApproval }) {
   const isApproved = approval.decision === 'approved'
   const isRejected = approval.decision === 'rejected'
@@ -275,6 +279,22 @@ function ExecutionDetailModal({
   const approvedCount =
     summary?.approvals.filter((a) => a.decision === 'approved').length ?? 0
   const totalCount = summary?.approvals.length ?? 0
+  const batchProgressLabel =
+    execution?.status === 'partial'
+      ? execution.batch_done
+        ? 'Scope complete · execution partial'
+        : 'Paused · resumable'
+      : execution?.batch_done
+        ? 'Scope complete'
+        : execution?.status === 'queued'
+          ? 'Waiting for worker'
+          : 'In progress'
+  const batchProgressTone =
+    execution?.status === 'partial'
+      ? 'amber'
+      : execution?.batch_done
+        ? 'green'
+        : 'violet'
 
   return (
     <Modal
@@ -464,6 +484,34 @@ function ExecutionDetailModal({
                   )}
                 </div>
               </div>
+              {execution.batch && (
+                <div className="rounded-xl border border-violet/25 bg-violet-soft/20 p-3.5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-xs font-bold text-ink">
+                      Batch Commit Progress
+                    </strong>
+                    <Status tone={batchProgressTone}>{batchProgressLabel}</Status>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="rounded-lg border border-line/70 bg-white/80 px-3 py-2.5">
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
+                        Committed batches
+                      </span>
+                      <strong className="mt-1 block font-mono text-base tabular-nums text-ink">
+                        {formatCount(execution.batch_count)}
+                      </strong>
+                    </div>
+                    <div className="rounded-lg border border-line/70 bg-white/80 px-3 py-2.5">
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
+                        Committed rows
+                      </span>
+                      <strong className="mt-1 block font-mono text-base tabular-nums text-ink">
+                        {formatCount(execution.rows_processed)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 {canEdit && execution.status === 'partial' && execution.batch && (
                   <ConfirmAction
@@ -770,6 +818,12 @@ export function ConsensusAirlock({
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         <Status tone={meta.tone}>{meta.label}</Status>
+                        {exec.batch && (
+                          <div className="mt-1.5 space-y-0.5 text-[11px] tabular-nums text-muted">
+                            <div>{formatCount(exec.batch_count)} batches committed</div>
+                            <div>{formatCount(exec.rows_processed)} rows committed</div>
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap text-muted">
                         <div>{new Date(exec.created_at).toLocaleString()}</div>

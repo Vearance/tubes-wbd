@@ -29,7 +29,7 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int, hideRollbac
 
 	offset := int64(page-1) * int64(pageSize)
 	rows, err := tx.Query(ctx,
-		`SELECT h.version, h.execution_id, h.attempt_number, h.status, h.error_code, h.error_message,
+		`SELECT h.version, h.migration_id, h.execution_id, h.attempt_number, h.status, h.error_code, h.error_message,
 			h.execution_type, h.target_execution_id, h.active, h.name, h.executed_by, h.executed_at, h.duration_ms
 		FROM _dbm.migration_history h
 		WHERE NOT $1::boolean OR (
@@ -60,6 +60,7 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int, hideRollbac
 	entries, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (HistorySummary, error) {
 		var (
 			e               HistorySummary
+			migrationID     pgtype.Int8
 			executionID     pgtype.Int8
 			targetID        pgtype.Int8
 			executionType   string
@@ -67,10 +68,11 @@ func listHistory(ctx context.Context, tx pgx.Tx, page, pageSize int, hideRollbac
 			executedBy      int64
 			durationMS      int64
 		)
-		if err := row.Scan(&e.Version, &executionID, &e.AttemptNumber, &executionStatus, &e.ErrorCode, &e.ErrorMessage,
+		if err := row.Scan(&e.Version, &migrationID, &executionID, &e.AttemptNumber, &executionStatus, &e.ErrorCode, &e.ErrorMessage,
 			&executionType, &targetID, &e.Active, &e.Name, &executedBy, &e.ExecutedAt, &durationMS); err != nil {
 			return HistorySummary{}, err
 		}
+		e.MigrationID = optionalHistoryID(migrationID)
 		if executionID.Valid {
 			id := uint(executionID.Int64)
 			e.ExecutionID = &id
@@ -107,6 +109,7 @@ func getExecutionHistoryByID(ctx context.Context, tx pgx.Tx, executionID uint) (
 	}
 	var (
 		entry           HistoryEntry
+		migrationID     pgtype.Int8
 		storedExecution pgtype.Int8
 		targetExecution pgtype.Int8
 		executionType   string
@@ -115,12 +118,12 @@ func getExecutionHistoryByID(ctx context.Context, tx pgx.Tx, executionID uint) (
 		durationMS      int64
 	)
 	err = tx.QueryRow(ctx,
-		`SELECT version, execution_id, attempt_number, status, error_code, error_message,
+		`SELECT version, migration_id, execution_id, attempt_number, status, error_code, error_message,
 					execution_type, target_execution_id, active, name, sql, down_sql,
 					irreversible_reason, executed_by, executed_at, duration_ms
 				 FROM _dbm.migration_history WHERE execution_id = $1 AND status = 'success'
 				 ORDER BY version DESC LIMIT 1`, int64(executionID)).Scan(
-		&entry.Version, &storedExecution, &entry.AttemptNumber, &executionStatus, &entry.ErrorCode, &entry.ErrorMessage,
+		&entry.Version, &migrationID, &storedExecution, &entry.AttemptNumber, &executionStatus, &entry.ErrorCode, &entry.ErrorMessage,
 		&executionType, &targetExecution, &entry.Active, &entry.Name, &entry.SQL, &entry.DownSQL,
 		&entry.IrreversibleReason, &executedBy, &entry.ExecutedAt, &durationMS,
 	)
@@ -130,6 +133,7 @@ func getExecutionHistoryByID(ctx context.Context, tx pgx.Tx, executionID uint) (
 	if err != nil {
 		return nil, fmt.Errorf("migration: get execution history: %w", err)
 	}
+	entry.MigrationID = optionalHistoryID(migrationID)
 	if storedExecution.Valid {
 		entry.ExecutionID = uint(storedExecution.Int64)
 	}
@@ -257,6 +261,7 @@ func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEnt
 
 	var (
 		e               HistoryEntry
+		migrationID     pgtype.Int8
 		executionID     pgtype.Int8
 		targetExecution pgtype.Int8
 		executionType   string
@@ -265,12 +270,12 @@ func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEnt
 		durationMS      int64
 	)
 	err = tx.QueryRow(ctx,
-		`SELECT version, execution_id, attempt_number, status, error_code, error_message,
+		`SELECT version, migration_id, execution_id, attempt_number, status, error_code, error_message,
 			execution_type, target_execution_id, active, name, sql, down_sql,
 			irreversible_reason, executed_by, executed_at, duration_ms
 		FROM _dbm.migration_history
 		WHERE version = $1`, version).Scan(
-		&e.Version, &executionID, &e.AttemptNumber, &executionStatus, &e.ErrorCode, &e.ErrorMessage,
+		&e.Version, &migrationID, &executionID, &e.AttemptNumber, &executionStatus, &e.ErrorCode, &e.ErrorMessage,
 		&executionType, &targetExecution, &e.Active, &e.Name, &e.SQL, &e.DownSQL, &e.IrreversibleReason,
 		&executedBy, &e.ExecutedAt, &durationMS,
 	)
@@ -280,6 +285,7 @@ func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEnt
 	if err != nil {
 		return nil, fmt.Errorf("migration: get history entry: %w", err)
 	}
+	e.MigrationID = optionalHistoryID(migrationID)
 
 	if executionID.Valid {
 		e.ExecutionID = uint(executionID.Int64)
@@ -293,4 +299,12 @@ func getHistoryEntry(ctx context.Context, tx pgx.Tx, version int64) (*HistoryEnt
 	e.ExecutedBy = uint(executedBy)
 	e.Duration = time.Duration(durationMS) * time.Millisecond
 	return &e, nil
+}
+
+func optionalHistoryID(value pgtype.Int8) *uint {
+	if !value.Valid {
+		return nil
+	}
+	id := uint(value.Int64)
+	return &id
 }

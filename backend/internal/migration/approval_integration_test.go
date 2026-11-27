@@ -6,6 +6,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -227,4 +228,40 @@ func TestIntegrationRollbackNeedsItsOwnApproval(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, summary.Approvals, 1)
 	require.Equal(t, ApprovalDecisionPending, summary.Approvals[0].Decision)
+}
+
+func TestIntegrationPermissionGrantWaitsForInFlightApprovalCheck(t *testing.T) {
+	env := newDraftEnv(t, "")
+	ctx := context.Background()
+	group := access.Group{Name: "Late Group"}
+	require.NoError(t, env.platform.Create(&group).Error)
+
+	tx := env.platform.Begin()
+	require.NoError(t, tx.Error)
+	_, err := requiredApproverGroups(tx, env.dbID)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- access.NewGormRepository(env.platform).UpsertDatabasePermission(ctx, &access.GroupDatabasePermission{
+			GroupID: group.ID, ManagedDatabaseID: env.dbID, Permission: access.PermissionViewEdit,
+		})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("grant committed while an approval check was in flight: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	require.NoError(t, tx.Commit().Error)
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("grant did not proceed after the approval check committed")
+	}
+
+	groups, err := requiredApproverGroups(env.platform, env.dbID)
+	require.NoError(t, err)
+	require.Contains(t, groups, approverGroup{ID: group.ID, Name: group.Name})
 }

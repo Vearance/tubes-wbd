@@ -35,7 +35,8 @@ func (e targetCommitError) Is(target error) bool {
 	return target == errTargetCommitOutcomeUnknown
 }
 
-const ensureBatchSchemaSQL = `
+var ensureBatchSchemaSQL = `
+SELECT pg_advisory_xact_lock(hashtext('dbm.migration.history_schema'));
 CREATE SCHEMA IF NOT EXISTS _dbm;
 CREATE TABLE IF NOT EXISTS _dbm.migration_batch_progress (
 	execution_id bigint PRIMARY KEY,
@@ -59,7 +60,9 @@ CREATE TABLE IF NOT EXISTS _dbm.migration_batch_scope (
 	execution_id bigint NOT NULL,
 	key bigint NOT NULL,
 	PRIMARY KEY (execution_id, key)
-);`
+);
+ALTER TABLE _dbm.migration_batch_commits ADD COLUMN IF NOT EXISTS restore_rows jsonb;` +
+	ensureInternalGuardsSQL("migration_batch_commits", "migration_batch_scope")
 
 type batchProgress struct {
 	LastCursor    int64
@@ -247,6 +250,8 @@ func (s *MigrationService) runOneBatch(
 	var committedRows int64
 	err := withTargetTransaction(batchCtx, conn, func(tx pgx.Tx) error {
 		var keys []int64
+		var originalRestore *string
+		var originalBatch int
 		nextCursor := progress.LastCursor
 		if execution.Type == ExecutionTypeRollback {
 			if execution.TargetExecutionID == nil {
@@ -256,16 +261,17 @@ func (s *MigrationService) runOneBatch(
 			if beforeBatch == 0 {
 				beforeBatch = math.MaxInt32
 			}
-			var originalBatch int
 			err := tx.QueryRow(batchCtx,
-				`SELECT batch_number, keys FROM _dbm.migration_batch_commits
+				`SELECT batch_number, keys, restore_rows::text FROM _dbm.migration_batch_commits
 				 WHERE execution_id = $1 AND batch_number < $2
 				 ORDER BY batch_number DESC LIMIT 1`, int64(*execution.TargetExecutionID), beforeBatch,
-			).Scan(&originalBatch, &keys)
+			).Scan(&originalBatch, &keys, &originalRestore)
 			if errors.Is(err, pgx.ErrNoRows) {
 				keys = nil
 			} else if err != nil {
 				return fmt.Errorf("selecting batch keys for rollback: %w", err)
+			} else if execution.Compensation && originalRestore == nil {
+				return fmt.Errorf("%w: batch %d was committed without pre-batch row values, so its compensation cannot be verified; create a new corrective migration instead", ErrInvalidCompensation, originalBatch)
 			} else {
 				nextCursor = int64(originalBatch)
 			}
@@ -326,14 +332,34 @@ func (s *MigrationService) runOneBatch(
 			"status", "started",
 			"query", safeSQLForLog(execution.SQL),
 		)
+		before, err := captureBatchRows(batchCtx, tx, execution.Batch, keys)
+		if err != nil {
+			return err
+		}
+		internalBefore, err := internalStateFingerprint(batchCtx, tx)
+		if err != nil {
+			return err
+		}
 		command, err := tx.Exec(batchCtx, execution.SQL, keys)
 		if err != nil {
-			return fmt.Errorf("executing batch SQL: %w", err)
+			return fmt.Errorf("executing batch SQL: %w", internalStateError(err))
+		}
+		if execution.Compensation && originalRestore != nil {
+			if err := verifyBatchCompensated(batchCtx, tx, execution.Batch, originalBatch, *originalRestore); err != nil {
+				return err
+			}
+		}
+		if err := requireInternalStateUnchanged(batchCtx, tx, internalBefore); err != nil {
+			return err
+		}
+		restore, err := changedBatchRows(batchCtx, tx, execution.Batch, keys, before)
+		if err != nil {
+			return err
 		}
 		rowsAffected := command.RowsAffected()
 		if _, err := tx.Exec(batchCtx,
-			`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed)
-			 VALUES ($1, $2, $3, $4)`, int64(execution.ID), nextBatchNumber, keys, rowsAffected); err != nil {
+			`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed, restore_rows)
+			 VALUES ($1, $2, $3, $4, $5::jsonb)`, int64(execution.ID), nextBatchNumber, keys, rowsAffected, restore); err != nil {
 			return fmt.Errorf("recording committed batch keys: %w", err)
 		}
 		if _, err := tx.Exec(batchCtx,
@@ -514,19 +540,19 @@ func finishBatchHistory(ctx context.Context, conn *pgxpool.Conn, execution *Exec
 			targetID = int64(*execution.TargetExecutionID)
 		}
 		entry = &HistoryEntry{
-			Version: version, ExecutionID: execution.ID, AttemptNumber: historyAttemptNumber(execution),
-			Status: RunStatusSuccess, Type: execution.Type, TargetExecutionID: execution.TargetExecutionID,
+			Version: version, MigrationID: historyMigrationID(execution), ExecutionID: execution.ID,
+			AttemptNumber: historyAttemptNumber(execution), Status: RunStatusSuccess, Type: execution.Type, TargetExecutionID: execution.TargetExecutionID,
 			Active: execution.Type != ExecutionTypeRollback, Name: execution.Name, SQL: execution.SQL,
 			DownSQL: execution.DownSQL, IrreversibleReason: execution.IrreversibleReason,
 			ExecutedBy: execution.ExecutedBy, Duration: duration,
 		}
 		return tx.QueryRow(ctx,
 			`INSERT INTO _dbm.migration_history
-				(version, execution_id, attempt_number, status, execution_type, target_execution_id,
+				(version, migration_id, execution_id, attempt_number, status, execution_type, target_execution_id,
 				 active, name, sql, down_sql, irreversible_reason, executed_by, duration_ms)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			 RETURNING executed_at`,
-			version, executionID, historyAttemptNumber(execution), RunStatusSuccess, execution.Type, targetID,
+			version, historyMigrationIDArg(execution), executionID, historyAttemptNumber(execution), RunStatusSuccess, execution.Type, targetID,
 			entry.Active, execution.Name, execution.SQL, execution.DownSQL, execution.IrreversibleReason,
 			int64(execution.ExecutedBy), duration.Milliseconds()).Scan(&entry.ExecutedAt)
 	})

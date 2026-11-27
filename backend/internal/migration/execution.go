@@ -809,7 +809,7 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	)
 	if err := w.service.authz.RequireEdit(workCtx, execution.ExecutedBy, execution.ManagedDatabaseID); err != nil {
 		if execution.Batch != nil {
-			completed, reconcileErr := w.reconcileBatchExecution(workCtx, execution)
+			completed, reconcileErr := w.reconcileExecution(workCtx, execution)
 			if reconcileErr != nil {
 				return errors.Join(err, reconcileErr)
 			}
@@ -840,10 +840,11 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	}
 	entry, runErr := w.service.runExecution(workCtx, execution)
 	if runErr != nil {
-		if execution.Batch != nil {
-			completed, reconcileErr := w.reconcileBatchExecution(workCtx, execution)
+		outcomeUnknown := errors.Is(runErr, errTargetCommitOutcomeUnknown)
+		if execution.Batch != nil || outcomeUnknown {
+			completed, reconcileErr := w.reconcileExecution(workCtx, execution)
 			if reconcileErr != nil {
-				if !errors.Is(runErr, errBatchReconciliationRequired) &&
+				if !outcomeUnknown && execution.Batch != nil && !errors.Is(runErr, errBatchReconciliationRequired) &&
 					retryableExecutionError(runErr) && execution.Attempt < maxExecutionAttempts {
 					delay := time.Second << (execution.Attempt - 1)
 					if err := w.repo.RetryExecution(workCtx, execution.ID, delay, runErr.Error()); err != nil {
@@ -855,6 +856,11 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 			}
 			if completed {
 				return nil
+			}
+			if outcomeUnknown {
+				if err := w.recordTargetFailure(workCtx, execution, runErr, time.Since(execStart)); err != nil {
+					return errors.Join(runErr, err)
+				}
 			}
 		}
 		if retryableExecutionError(runErr) && execution.Attempt < maxExecutionAttempts {
@@ -1000,13 +1006,19 @@ func (w *ExecutionWorker) recoverStaleExecution(ctx context.Context, execution *
 		return nil
 	}
 	_ = tx.Rollback(ctx)
+	var elapsed time.Duration
+	if execution.StartedAt != nil {
+		elapsed = time.Since(*execution.StartedAt)
+	}
+	interruptedErr := errors.New("worker stopped before completing the execution")
+	if execution.Batch == nil {
+		if err := w.recordTargetFailure(ctx, execution, interruptedErr, elapsed); err != nil {
+			return err
+		}
+	}
 	if execution.Attempt >= maxExecutionAttempts {
 		terminalStatus := executionFailureStatus(execution)
-		var elapsed time.Duration
-		if execution.StartedAt != nil {
-			elapsed = time.Since(*execution.StartedAt)
-		}
-		if err := w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", "worker stopped before completing the execution"); err != nil {
+		if err := w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", interruptedErr.Error()); err != nil {
 			return err
 		}
 		telemetry.Metrics().RecordMigrationExecution(ctx, string(execution.Type), string(terminalStatus), elapsed)
@@ -1030,7 +1042,7 @@ func (w *ExecutionWorker) recoverStaleExecution(ctx context.Context, execution *
 	return nil
 }
 
-func (w *ExecutionWorker) reconcileBatchExecution(ctx context.Context, execution *Execution) (bool, error) {
+func (w *ExecutionWorker) reconcileExecution(ctx context.Context, execution *Execution) (bool, error) {
 	pool, closePool, err := w.service.executionPool(ctx, execution)
 	if err != nil {
 		return false, batchReconciliationError("connecting to target database", err)
@@ -1066,6 +1078,20 @@ func (w *ExecutionWorker) reconcileBatchExecution(ctx context.Context, execution
 		return false, batchReconciliationError("finishing execution found in target history", err)
 	}
 	return true, nil
+}
+
+func (w *ExecutionWorker) recordTargetFailure(ctx context.Context, execution *Execution, attemptErr error, duration time.Duration) error {
+	pool, closePool, err := w.service.executionPool(ctx, execution)
+	if err != nil {
+		return err
+	}
+	if closePool {
+		defer pool.Close()
+	}
+	if err := ensureHistorySchema(ctx, pool, true); err != nil {
+		return err
+	}
+	return recordFailedHistoryAttempt(ctx, pool, execution, attemptErr, duration)
 }
 
 func (w *ExecutionWorker) reconcileTargetExecutionState(
@@ -1162,7 +1188,7 @@ func executionFailureStatus(execution *Execution) ExecutionStatus {
 
 func retryableExecutionError(err error) bool {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01") {
+	if errors.As(err, &pgErr) && transientSQLState(pgErr.Code) {
 		return true
 	}
 	return pgconn.SafeToRetry(err) ||
@@ -1171,4 +1197,8 @@ func retryableExecutionError(err error) bool {
 		errors.Is(err, targetdb.ErrTimeout) ||
 		errors.Is(err, targetdb.ErrConnectionFailed) ||
 		errors.Is(err, ErrMigrationInProgress)
+}
+
+func transientSQLState(code string) bool {
+	return code == "40001" || code == "40P01"
 }

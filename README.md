@@ -197,6 +197,15 @@ The script is safe to run repeatedly and does not overwrite an existing user pas
 
 The migration workflow/approval component must call the migration service's `ApproveExecution` only after all required group-leader approvals, then call `EnqueueApprovedExecution`. Enqueueing updates execution state and inserts the outbox message in one Platform-DB transaction. A relay publishes the execution ID to RabbitMQ with publisher confirms; workers load immutable execution snapshots from the Platform DB and acknowledge only after the result is persisted. Up, rollback, and forward each create immutable execution snapshots; target history is append-only.
 
+- Migration SQL cannot reference `_dbm`; the worker also fails any attempt that changes `_dbm`, and guard triggers make its history tables append-only.
+- Per-batch up/down SQL must be a single `UPDATE ... = ANY($1::bigint[])`. Compensation runs the approved Down SQL and is rejected if the recorded pre-batch values are not restored.
+- Permission changes and approval checks for the same database are serialized, so a newly granted group always becomes a required approver.
+- Transient errors (`40001`, `40P01`) are retried with backoff.
+
+### lock recovery when a worker fails
+
+If a worker dies, PostgreSQL rolls back its open transaction and releases the target advisory lock; committed batches and checkpoints stay. Every 30 s, other workers pick up `running` executions that have gone stale: if the target history shows the attempt committed, it is marked `success`; otherwise it is requeued (batches resume from the checkpoint), up to 3 attempts.
+
 ## large dataset and batch migration test
 
 [`scripts/seed-bulk.sql`](scripts/seed-bulk.sql) adds `training_sessions` to the Tracen seed: 1,000,000 training sessions for the 60 trainees, each linked to a matching G1 target race. [`scripts/bench-batch.sh`](scripts/bench-batch.sh) seeds a separate `benchdb`, then runs `UPDATE training_sessions SET report_status = 'published'` without batching (psql), as a normal migration, its rollback, and a per-batch migration on the same data.

@@ -176,6 +176,7 @@ export type MigrationExecution = {
 };
 export type MigrationHistoryEntry = {
 	version: number;
+	migration_id?: number | null;
 	attempt_number: number;
 	status: "success" | "failed";
 	error_code?: string;

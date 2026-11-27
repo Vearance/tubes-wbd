@@ -17,6 +17,15 @@ import {
 import { cleanMigrationName, cn } from '../../../lib/utils'
 import { TablePagination } from './TablePagination'
 
+function historyIdentity(entry: MigrationHistoryEntry) {
+  return [
+    entry.migration_id ? `Migration #${entry.migration_id}` : null,
+    entry.execution_id ? `Execution #${entry.execution_id}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function HistoryDetailModal({
   databaseId,
   entry,
@@ -87,9 +96,7 @@ function HistoryDetailModal({
           'Migration Details'
         )
       }
-      description={
-        entry?.execution_id ? `Execution #${entry.execution_id}` : undefined
-      }
+      description={entry ? historyIdentity(entry) : undefined}
       size="lg"
     >
       {entry && (
@@ -329,6 +336,11 @@ export function HeadLedger({
                         >
                           {cleanMigrationName(entry.name)}
                         </div>
+                        {historyIdentity(entry) && (
+                          <div className="mt-0.5 text-xs text-muted font-mono tabular-nums">
+                            {historyIdentity(entry)}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         {entry.execution_type ? (

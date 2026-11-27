@@ -2030,6 +2030,11 @@ components:
         version:
           type: integer
           format: int64
+        migration_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: ID of the migration (draft) this attempt ran; null for history recorded before it was tracked.
         attempt_number:
           type: integer
         status:

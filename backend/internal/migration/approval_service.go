@@ -250,6 +250,9 @@ type approverGroup struct {
 }
 
 func requiredApproverGroups(tx *gorm.DB, databaseID uint) ([]approverGroup, error) {
+	if err := access.LockDatabaseAccess(tx, databaseID, false); err != nil {
+		return nil, err
+	}
 	var groups []approverGroup
 	if err := tx.Table("group_database_permissions AS p").
 		Select("g.id, g.name, g.leader_user_id").

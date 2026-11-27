@@ -77,6 +77,46 @@ func TestValidateDefinition(t *testing.T) {
 			},
 			wantError: ErrInvalidInput,
 		},
+		{
+			name: "batch up SQL must be an UPDATE",
+			migration: Migration{
+				Name:    "batch delete",
+				SQL:     "DELETE FROM users WHERE id = ANY($1::bigint[])",
+				DownSQL: "UPDATE users SET email = email WHERE id = ANY($1::bigint[])",
+				Batch:   &BatchDefinition{Schema: "public", Table: "users", KeyColumn: "id", BatchSize: 500},
+			},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name: "batch down SQL must be an UPDATE",
+			migration: Migration{
+				Name:    "batch no-op down",
+				SQL:     "UPDATE users SET email = lower(email) WHERE id = ANY($1::bigint[])",
+				DownSQL: "SELECT 1 WHERE $1::bigint[] IS NOT NULL",
+				Batch:   &BatchDefinition{Schema: "public", Table: "users", KeyColumn: "id", BatchSize: 500},
+			},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name:      "SQL referencing the internal schema is rejected",
+			migration: Migration{Name: "wipe history", SQL: "TRUNCATE _dbm.migration_history"},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name:      "down SQL referencing the internal schema is rejected",
+			migration: Migration{Name: "wipe on rollback", SQL: "SELECT 1", DownSQL: "DELETE FROM _DBM.migration_history"},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name:      "quoted internal schema identifier is rejected",
+			migration: Migration{Name: "quoted wipe", SQL: `TRUNCATE "_dbm".migration_history`},
+			wantError: ErrInvalidInput,
+		},
+		{
+			name:      "internal schema name inside a string literal is allowed",
+			migration: Migration{Name: "note", SQL: "COMMENT ON TABLE items IS 'not _dbm'", DownSQL: "COMMENT ON TABLE items IS NULL"},
+			wantDown:  "COMMENT ON TABLE items IS NULL",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

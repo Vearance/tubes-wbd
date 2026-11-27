@@ -67,11 +67,12 @@ func (o Options) withDefaults() Options {
 }
 
 type MigrationService struct {
-	authz     Authorizer
-	pools     PoolProvider
-	repo      Repository
-	opts      Options
-	snapshots TargetConfigSnapshotter
+	authz          Authorizer
+	pools          PoolProvider
+	repo           Repository
+	opts           Options
+	snapshots      TargetConfigSnapshotter
+	commitTargetTx func(context.Context, pgx.Tx) error
 }
 
 func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, opts Options, snapshots ...TargetConfigSnapshotter) (*MigrationService, error) {
@@ -134,7 +135,7 @@ func (s *MigrationService) runExecution(ctx context.Context, execution *Executio
 		}
 		_ = tx.Rollback(ctx)
 	}
-	return applyExecution(ctx, pool, execution, s.opts)
+	return applyExecutionWithCommit(ctx, pool, execution, s.opts, s.commitTargetTx)
 }
 
 func (s *MigrationService) executionPool(ctx context.Context, execution *Execution) (*pgxpool.Pool, bool, error) {
@@ -298,8 +299,8 @@ func validateDefinition(m Migration) (Migration, error) {
 		if err := validateBatchDefinition(batch); err != nil {
 			return m, err
 		}
-		if len(statements(m.SQL)) != 1 || !strings.Contains(m.SQL, "$1") {
-			return m, fmt.Errorf("%w: batch up SQL must be one statement using $1 as the selected bigint key array", ErrInvalidInput)
+		if !isSingleBatchUpdate(m.SQL) {
+			return m, fmt.Errorf("%w: batch up SQL must be one UPDATE statement using $1 as the selected bigint key array; deletes and other changes that cannot be compensated per batch must run as a normal migration", ErrInvalidInput)
 		}
 	}
 	switch {
@@ -320,8 +321,8 @@ func validateDefinition(m Migration) (Migration, error) {
 			return m, fmt.Errorf("invalid down SQL: %w", err)
 		}
 		m.DownSQL = down.SQL
-		if m.Batch != nil && (len(statements(m.DownSQL)) != 1 || !strings.Contains(m.DownSQL, "$1")) {
-			return m, fmt.Errorf("%w: batch down SQL must be one statement using $1 as the selected bigint key array", ErrInvalidInput)
+		if m.Batch != nil && !isSingleBatchUpdate(m.DownSQL) {
+			return m, fmt.Errorf("%w: batch down SQL must be one UPDATE statement using $1 as the selected bigint key array", ErrInvalidInput)
 		}
 	}
 	return m, nil
@@ -348,5 +349,13 @@ func validate(m Migration) (Migration, error) {
 	if keyword, found := transactionControl(stmts); found {
 		return m, fmt.Errorf("%w: %s", ErrTransactionControl, strings.ToUpper(keyword))
 	}
+	if referencesInternalSchema(m.SQL) {
+		return m, fmt.Errorf("%w: SQL must not reference the platform-managed _dbm schema", ErrInvalidInput)
+	}
 	return m, nil
+}
+
+func isSingleBatchUpdate(sql string) bool {
+	stmts := statements(sql)
+	return len(stmts) == 1 && stmts[0][0] == "update" && strings.Contains(sql, "$1")
 }

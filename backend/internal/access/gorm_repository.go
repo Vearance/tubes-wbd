@@ -228,20 +228,24 @@ func (r *GormRepository) UpsertDatabasePermission(
 	permission *GroupDatabasePermission,
 ) error {
 	permission.UpdatedAt = time.Now()
-	if err := r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "group_id"}, {Name: "managed_database_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"permission", "updated_at"}),
-		}).
-		Create(permission).
-		Error; err != nil {
-		if isForeignKeyViolation(err) {
-			return manageddb.ErrNotFound
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockDatabaseAccess(tx, permission.ManagedDatabaseID, true); err != nil {
+			return err
 		}
-		return fmt.Errorf("saving group database permission: %w", err)
-	}
-
-	return nil
+		if err := tx.
+			Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "group_id"}, {Name: "managed_database_id"}},
+				DoUpdates: clause.AssignmentColumns([]string{"permission", "updated_at"}),
+			}).
+			Create(permission).
+			Error; err != nil {
+			if isForeignKeyViolation(err) {
+				return manageddb.ErrNotFound
+			}
+			return fmt.Errorf("saving group database permission: %w", err)
+		}
+		return nil
+	})
 }
 
 func (r *GormRepository) DeleteDatabasePermission(
@@ -249,17 +253,21 @@ func (r *GormRepository) DeleteDatabasePermission(
 	groupID uint,
 	managedDatabaseID uint,
 ) error {
-	result := r.db.WithContext(ctx).
-		Where("group_id = ? AND managed_database_id = ?", groupID, managedDatabaseID).
-		Delete(&GroupDatabasePermission{})
-	if result.Error != nil {
-		return fmt.Errorf("deleting group database permission: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return ErrPermissionNotFound
-	}
-
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockDatabaseAccess(tx, managedDatabaseID, true); err != nil {
+			return err
+		}
+		result := tx.
+			Where("group_id = ? AND managed_database_id = ?", groupID, managedDatabaseID).
+			Delete(&GroupDatabasePermission{})
+		if result.Error != nil {
+			return fmt.Errorf("deleting group database permission: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrPermissionNotFound
+		}
+		return nil
+	})
 }
 
 func (r *GormRepository) ListDatabasePermissions(

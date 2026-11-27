@@ -17,6 +17,8 @@ var (
 	ErrDraftNotFound       = errors.New("migration: draft not found")
 	ErrDraftNotEditable    = errors.New("migration: draft cannot be edited while running or after it is applied")
 	ErrDraftNotExecutable  = errors.New("migration: draft cannot be executed while running or after it is applied")
+
+	ErrInternalStateModified = errors.New("migration: SQL modified the platform-managed _dbm schema")
 )
 
 type ExecutionError struct {
@@ -25,6 +27,7 @@ type ExecutionError struct {
 	Detail   string
 	Hint     string
 	Position int32
+	cause    error
 }
 
 func (e *ExecutionError) Error() string {
@@ -32,3 +35,5 @@ func (e *ExecutionError) Error() string {
 }
 
 func (e *ExecutionError) Is(target error) bool { return target == ErrExecutionFailed }
+
+func (e *ExecutionError) Unwrap() error { return e.cause }
