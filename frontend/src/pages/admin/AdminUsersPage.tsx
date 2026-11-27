@@ -376,9 +376,11 @@ export function AdminUsersPage() {
     (groups.loading && !groups.data) ||
     (databases.loading && !databases.data);
 
+  const regularUsers = users.data?.filter((user) => !user.is_admin) ?? [];
+
   const selected =
     (userId
-      ? users.data?.find((user) => String(user.id) === userId)
+      ? regularUsers.find((user) => String(user.id) === userId)
       : null) ?? selectedState;
 
   function selectUser(user: AdminUser) {
@@ -391,10 +393,9 @@ export function AdminUsersPage() {
     navigate("/admin/users");
   }
 
-  const shown =
-    users.data?.filter((user) =>
-      user.username.toLowerCase().includes(search.toLowerCase()),
-    ) ?? [];
+  const shown = regularUsers.filter((user) =>
+    user.username.toLowerCase().includes(search.toLowerCase()),
+  );
 
   async function toggle(user: AdminUser) {
     const updated = await api.updateUser(user.id, !user.disabled);
@@ -428,7 +429,7 @@ export function AdminUsersPage() {
         path="Administration"
         title="Users"
         status={
-          isLoading ? "Loading users…" : `${users.data?.length ?? 0} users`
+          isLoading ? "Loading users…" : `${regularUsers.length} users`
         }
         actions={
           <Button variant="dark" onClick={() => setShowCreate(true)}>
