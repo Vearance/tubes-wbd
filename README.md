@@ -197,6 +197,11 @@ The script is safe to run repeatedly and does not overwrite an existing user pas
 
 The migration workflow/approval component must call the migration service's `ApproveExecution` only after all required group-leader approvals, then call `EnqueueApprovedExecution`. Enqueueing updates execution state and inserts the outbox message in one Platform-DB transaction. A relay publishes the execution ID to RabbitMQ with publisher confirms; workers load immutable execution snapshots from the Platform DB and acknowledge only after the result is persisted. Up, rollback, and forward each create immutable execution snapshots; target history is append-only.
 
+- Migration SQL cannot reference `_dbm`; the worker also fails any attempt that changes `_dbm`, and guard triggers make its history tables append-only.
+- Per-batch up/down SQL must be a single `UPDATE ... = ANY($1::bigint[])`. Compensation runs the approved Down SQL and is rejected if the recorded pre-batch values are not restored.
+- Permission changes and approval checks for the same database are serialized, so a newly granted group always becomes a required approver.
+- Transient errors (`40001`, `40P01`) are retried with backoff.
+
 ## integration tests
 
 Integration tests use Testcontainers and require Docker:
