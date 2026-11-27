@@ -2,12 +2,14 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 
 	"tubes-wbd/internal/database/targetdb"
+	"tubes-wbd/internal/telemetry"
 )
 
 func TestRetryableExecutionErrorRecognizesTransientPostgresErrors(t *testing.T) {
@@ -15,6 +17,19 @@ func TestRetryableExecutionErrorRecognizesTransientPostgresErrors(t *testing.T) 
 		require.True(t, retryableExecutionError(&pgconn.PgError{Code: code}), "SQLSTATE %s", code)
 	}
 	require.False(t, retryableExecutionError(&pgconn.PgError{Code: "23505"}))
+}
+
+func TestRetryableExecutionErrorRecognizesWrappedTransientErrors(t *testing.T) {
+	for _, code := range []string{"40001", "40P01"} {
+		wrapped := executionError(&pgconn.PgError{Code: code, Message: "transient"})
+		require.Equal(t, code, telemetry.SQLState(wrapped))
+		require.ErrorIs(t, wrapped, ErrExecutionFailed)
+		require.True(t, retryableExecutionError(wrapped), "wrapped SQLSTATE %s", code)
+		require.True(t, retryableExecutionError(errors.Join(wrapped, errors.New("history write failed"))),
+			"joined SQLSTATE %s", code)
+	}
+	require.False(t, retryableExecutionError(executionError(&pgconn.PgError{Code: "23505"})))
+	require.False(t, retryableExecutionError(executionError(&pgconn.PgError{Code: "42601"})))
 }
 
 type fixedConfigSnapshots struct {

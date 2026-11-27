@@ -1162,7 +1162,7 @@ func executionFailureStatus(execution *Execution) ExecutionStatus {
 
 func retryableExecutionError(err error) bool {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01") {
+	if errors.As(err, &pgErr) && transientSQLState(pgErr.Code) {
 		return true
 	}
 	return pgconn.SafeToRetry(err) ||
@@ -1171,4 +1171,8 @@ func retryableExecutionError(err error) bool {
 		errors.Is(err, targetdb.ErrTimeout) ||
 		errors.Is(err, targetdb.ErrConnectionFailed) ||
 		errors.Is(err, ErrMigrationInProgress)
+}
+
+func transientSQLState(code string) bool {
+	return code == "40001" || code == "40P01"
 }
