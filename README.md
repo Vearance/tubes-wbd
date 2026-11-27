@@ -310,6 +310,15 @@ bash scripts/test-observability.sh   # generate API, migration & DB pool traffic
 
 See [`observability/README.md`](observability/README.md) for architecture details, label cardinality guardrails, screenshots, and verified log/trace correlation and `/metrics` output examples.
 
+## codeql
+
+Automated static analysis runs via GitHub Actions ([`.github/workflows/codeql.yml`](.github/workflows/codeql.yml)) for **Go** and **JavaScript/TypeScript**. Below is the summary of CodeQL alerts reported on `main`:
+
+| Alert | Rule | Severity | Code Location | Potential Impact | Decision |
+| --- | --- | --- | --- | --- | --- |
+| [#1](https://github.com/Vearance/tubes-wbd/security/code-scanning/1) | `go/cookie-secure-not-set` (CWE-614) | Medium (`warning`) | [`backend/internal/http/middleware/session.go:40-48`](backend/internal/http/middleware/session.go#L40-L48) | Session cookies sent without the `Secure` flag can be transmitted over cleartext HTTP and intercepted by an attacker (session hijacking). | **Not a false positive — Dismissed (`used in tests`).** `Secure` is intentionally configurable via `APP_COOKIE_SECURE` (`CookieOptions.Secure`) to support local HTTP development and automated tests. Production deployments over HTTPS should set `APP_COOKIE_SECURE=true`. This is referred in the specification made by the assistant. |
+| [#2](https://github.com/Vearance/tubes-wbd/security/code-scanning/2) | `go/uncontrolled-allocation-size` (CWE-770) | High (`error`) | [`backend/internal/viewer/query.go:129`](backend/internal/viewer/query.go#L129) | Allocating a slice capacity directly from untrusted user input could allow an attacker to trigger excessive memory allocation and cause an OOM Denial of Service (DoS). | **False positive — Dismissed (`false positive`).** `pageSize` is validated (`>= 0`) and clamped to the server-configured `s.config.MaxPageSize` (default `100`) in `normalizePage` before `executeQuery` allocates the slice. |
+
 ## contributors
 
 | Nama | NIM |
