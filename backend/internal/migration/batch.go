@@ -86,6 +86,15 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 		defer cancel()
 		_, _ = conn.Exec(unlockCtx, "SELECT pg_advisory_unlock(hashtext($1))", lockName)
 	}()
+	if _, err := conn.Exec(ctx, fmt.Sprintf("SET statement_timeout = %d; SET lock_timeout = %d",
+		s.opts.StatementTimeout.Milliseconds(), s.opts.LockTimeout.Milliseconds())); err != nil {
+		return nil, fmt.Errorf("setting batch migration timeouts: %w", err)
+	}
+	defer func() {
+		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
+		defer cancel()
+		_, _ = conn.Exec(resetCtx, "RESET statement_timeout; RESET lock_timeout")
+	}()
 
 	var prior *HistoryEntry
 	if err := withTargetTransaction(ctx, conn, func(tx pgx.Tx) error {

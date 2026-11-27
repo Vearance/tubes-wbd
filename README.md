@@ -197,6 +197,26 @@ The script is safe to run repeatedly and does not overwrite an existing user pas
 
 The migration workflow/approval component must call the migration service's `ApproveExecution` only after all required group-leader approvals, then call `EnqueueApprovedExecution`. Enqueueing updates execution state and inserts the outbox message in one Platform-DB transaction. A relay publishes the execution ID to RabbitMQ with publisher confirms; workers load immutable execution snapshots from the Platform DB and acknowledge only after the result is persisted. Up, rollback, and forward each create immutable execution snapshots; target history is append-only.
 
+## large dataset and batch migration test
+
+[`scripts/seed-bulk.sql`](scripts/seed-bulk.sql) adds `training_sessions` to the Tracen seed: 1,000,000 training sessions for the 60 trainees, each linked to a matching G1 target race. [`scripts/bench-batch.sh`](scripts/bench-batch.sh) seeds a separate `benchdb`, then runs `UPDATE training_sessions SET report_status = 'published'` without batching (psql), as a normal migration, its rollback, and a per-batch migration on the same data.
+
+```bash
+docker compose up -d --build
+bash scripts/bench-batch.sh            # options: --rows N --batch-size N
+```
+
+Result (Docker 16 CPU / 7.5 GB RAM, PostgreSQL 17, 1,000,000 rows):
+
+| Scenario | Duration |
+| --- | --- |
+| `UPDATE` without batching (psql) | 9.21 s |
+| Normal migration | 11.45 s |
+| Rollback (down) | 10.73 s |
+| Per-batch migration (200 × 5,000 rows) | 43.47 s |
+
+The per-batch migration is slower in total because each batch is its own transaction with a checkpoint, but it locks only 5,000 rows at a time and resumes from the last committed batch after a failure.
+
 ## integration tests
 
 Integration tests use Testcontainers and require Docker:
