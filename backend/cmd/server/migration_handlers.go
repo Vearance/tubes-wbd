@@ -44,6 +44,7 @@ func (s apiServer) ListMigrationHistory(
 	for _, e := range page.Entries {
 		entry := httpapi.MigrationHistoryEntry{
 			Version:           e.Version,
+			MigrationId:       uintPointerToInt64(e.MigrationID),
 			AttemptNumber:     e.AttemptNumber,
 			Status:            httpapi.MigrationHistoryEntryStatus(e.Status),
 			ErrorCode:         optionalString(e.ErrorCode),
@@ -116,6 +117,7 @@ func (s apiServer) GetMigrationHistoryEntry(
 	executionType := httpapi.MigrationHistoryDetailExecutionType(entry.Type)
 	writeJSON(w, http.StatusOK, httpapi.MigrationHistoryDetail{
 		Version:            entry.Version,
+		MigrationId:        uintPointerToInt64(entry.MigrationID),
 		AttemptNumber:      entry.AttemptNumber,
 		Status:             httpapi.MigrationHistoryDetailStatus(entry.Status),
 		ErrorCode:          optionalString(entry.ErrorCode),
