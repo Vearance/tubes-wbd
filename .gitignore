@@ -37,3 +37,4 @@ go.work.sum
 tasks/
 spek.md
 spek2.md
+loadtest/.k6-fixture.json
