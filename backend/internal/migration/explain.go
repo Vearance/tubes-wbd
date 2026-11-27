@@ -4,10 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
+	"tubes-wbd/internal/telemetry"
 )
 
 type ExplainResult struct {
@@ -24,8 +30,44 @@ func (s *MigrationService) Explain(
 	userID uint,
 	dbID uint,
 	sql string,
-) (*ExplainResult, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+) (res *ExplainResult, err error) {
+	start := time.Now()
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(dbID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+
+	spanCtx, span := telemetry.Tracer("tubes-wbd/migration").Start(ctx, "migration.explain")
+	span.SetAttributes(
+		attribute.String("actor", actor),
+		attribute.Int64("db.target_database_id", int64(dbID)),
+	)
+	spanCtx = telemetry.WithActor(telemetry.WithDatabase(spanCtx, dbLabel), actor)
+	defer func() {
+		durationMs := telemetry.RoundMillis(time.Since(start))
+		logAttrs := []any{
+			"event", "migration.explain",
+			"actor", actor,
+			"database", dbLabel,
+			"duration_ms", durationMs,
+		}
+		if res != nil {
+			logAttrs = append(logAttrs, "statement_count", len(res.Statements))
+		}
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, telemetry.SanitizeError(err))
+			logAttrs = append(logAttrs, "status", "error", "error", err)
+			if sqlstate := telemetry.SQLState(err); sqlstate != "" {
+				logAttrs = append(logAttrs, "sqlstate", sqlstate)
+			}
+			slog.WarnContext(spanCtx, "migration explain failed", logAttrs...)
+		} else {
+			slog.InfoContext(spanCtx, "migration explain completed", append(logAttrs, "status", "ok")...)
+		}
+		span.End()
+	}()
+
+	if err := s.authz.RequireView(spanCtx, userID, dbID); err != nil {
 		return nil, err
 	}
 
@@ -34,12 +76,12 @@ func (s *MigrationService) Explain(
 		return nil, err
 	}
 
-	pool, err := s.pools.Pool(ctx, dbID)
+	pool, err := s.pools.Pool(spanCtx, dbID)
 	if err != nil {
 		return nil, err
 	}
 
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{
+	tx, err := pool.BeginTx(spanCtx, pgx.TxOptions{
 		IsoLevel:   pgx.RepeatableRead,
 		AccessMode: pgx.ReadOnly,
 	})
@@ -47,7 +89,7 @@ func (s *MigrationService) Explain(
 		return nil, fmt.Errorf("migration: begin explain transaction: %w", err)
 	}
 	defer func() {
-		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(spanCtx), rollbackTimeout)
 		defer cancel()
 		_ = tx.Rollback(rollbackCtx)
 	}()
@@ -58,7 +100,7 @@ func (s *MigrationService) Explain(
 	for _, statement := range statements {
 		var rawPlan []byte
 		if err := tx.QueryRow(
-			ctx,
+			spanCtx,
 			"EXPLAIN (FORMAT JSON) "+statement,
 		).Scan(&rawPlan); err != nil {
 			return nil, executionError(err)

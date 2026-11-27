@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"tubes-wbd/internal/database/targetdb"
+	"tubes-wbd/internal/telemetry"
 )
 
 const defaultSSLMode = "prefer"
@@ -101,6 +104,17 @@ func (s *ManagedDBService) Create(ctx context.Context, in Input) (*ManagedDataba
 		return nil, err
 	}
 
+	targetDB := telemetry.TargetDatabaseLabel(d.ID)
+	telemetry.SetRequestDatabase(ctx, targetDB)
+	slog.InfoContext(ctx, "managed database registered",
+		"event", "database.created",
+		"database", targetDB,
+		"host", d.Host,
+		"port", d.Port,
+		"db_name", d.DBName,
+		"ssl_mode", d.SSLMode,
+		"status", "ok",
+	)
 	return d, nil
 }
 
@@ -138,6 +152,17 @@ func (s *ManagedDBService) Update(ctx context.Context, id uint, in Input) (*Mana
 	}
 	s.conn.Invalidate(id)
 
+	targetDB := telemetry.TargetDatabaseLabel(id)
+	telemetry.SetRequestDatabase(ctx, targetDB)
+	slog.InfoContext(ctx, "managed database updated",
+		"event", "database.updated",
+		"database", targetDB,
+		"host", d.Host,
+		"port", d.Port,
+		"db_name", d.DBName,
+		"ssl_mode", d.SSLMode,
+		"status", "ok",
+	)
 	return d, nil
 }
 
@@ -147,6 +172,13 @@ func (s *ManagedDBService) Delete(ctx context.Context, id uint) error {
 	}
 	s.conn.Invalidate(id)
 
+	targetDB := telemetry.TargetDatabaseLabel(id)
+	telemetry.SetRequestDatabase(ctx, targetDB)
+	slog.InfoContext(ctx, "managed database deleted",
+		"event", "database.deleted",
+		"database", targetDB,
+		"status", "ok",
+	)
 	return nil
 }
 
@@ -156,7 +188,7 @@ func (s *ManagedDBService) TestConnection(ctx context.Context, in Input) error {
 		return fmt.Errorf("%w: %w", ErrInvalidInput, err)
 	}
 
-	return s.conn.Test(ctx, in.connConfig())
+	return s.logConnectionTest(ctx, "target:unsaved", in.Host, in.Port, in.DBName, in.SSLMode, in.connConfig())
 }
 
 func (s *ManagedDBService) TestStored(ctx context.Context, id uint) error {
@@ -170,5 +202,41 @@ func (s *ManagedDBService) TestStored(ctx context.Context, id uint) error {
 		return fmt.Errorf("managed database %d: %w", id, err)
 	}
 
-	return s.conn.Test(ctx, d.connConfig(password))
+	targetDB := telemetry.TargetDatabaseLabel(id)
+	telemetry.SetRequestDatabase(ctx, targetDB)
+	return s.logConnectionTest(ctx, targetDB, d.Host, d.Port, d.DBName, d.SSLMode, d.connConfig(password))
+}
+
+func (s *ManagedDBService) logConnectionTest(
+	ctx context.Context,
+	dbLabel string,
+	host string,
+	port uint16,
+	dbName string,
+	sslMode string,
+	cfg targetdb.ConnConfig,
+) error {
+	start := time.Now()
+	err := s.conn.Test(ctx, cfg)
+	durationMs := telemetry.RoundMillis(time.Since(start))
+	attrs := []any{
+		"event", "database.connection.tested",
+		"database", dbLabel,
+		"host", host,
+		"port", port,
+		"db_name", dbName,
+		"ssl_mode", sslMode,
+		"duration_ms", durationMs,
+	}
+	if err != nil {
+		attrs = append(attrs, "status", "error", "error", err)
+		if sqlstate := telemetry.SQLState(err); sqlstate != "" {
+			attrs = append(attrs, "sqlstate", sqlstate)
+		}
+		slog.WarnContext(ctx, "managed database connection test failed", attrs...)
+		return err
+	}
+	attrs = append(attrs, "status", "ok")
+	slog.InfoContext(ctx, "managed database connection test succeeded", attrs...)
+	return nil
 }

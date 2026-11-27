@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -58,8 +59,20 @@ func (s *Service) CreateUser(ctx context.Context, username, password string) (*U
 
 	user := &User{Username: username, PasswordHash: passwordHash}
 	if err := s.users.Create(ctx, user); err != nil {
+		slog.ErrorContext(ctx, "creating user failed",
+			"event", "user.created",
+			"database", "platform",
+			"status", "error",
+			"error", err,
+		)
 		return nil, fmt.Errorf("creating user: %w", err)
 	}
+	slog.InfoContext(ctx, "user created",
+		"event", "user.created",
+		"database", "platform",
+		"status", "ok",
+		"target_user_id", user.ID,
+	)
 	return user, nil
 }
 
@@ -96,6 +109,19 @@ func (s *Service) SetDisabled(ctx context.Context, userID uint, disabled bool) (
 		if err := s.sessions.RevokeAllByUser(ctx, user.ID, s.now().UTC()); err != nil {
 			return nil, fmt.Errorf("revoking user sessions: %w", err)
 		}
+		slog.InfoContext(ctx, "user disabled",
+			"event", "user.disabled",
+			"database", "platform",
+			"status", "ok",
+			"target_user_id", user.ID,
+		)
+		return user, nil
 	}
+	slog.InfoContext(ctx, "user enabled",
+		"event", "user.enabled",
+		"database", "platform",
+		"status", "ok",
+		"target_user_id", user.ID,
+	)
 	return user, nil
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"tubes-wbd/internal/telemetry"
 )
 
 const (
@@ -37,23 +40,44 @@ type QueryResult struct {
 // Query executes one row-returning statement in a bounded read-only transaction.
 // Both View Only and View + Edit users are authorized through RequireView.
 func (s *ViewerService) Query(ctx context.Context, userID, dbID uint, sql string) (*QueryResult, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
-		return nil, err
-	}
-	return s.executeQuery(ctx, dbID, sql, 1, maxQueryRows)
+	return s.query(ctx, userID, dbID, sql, 1, maxQueryRows, false)
 }
 
 // QueryPage executes one row-returning statement in a bounded read-only transaction with server-side pagination.
 // Both View Only and View + Edit users are authorized through RequireView.
 func (s *ViewerService) QueryPage(ctx context.Context, userID, dbID uint, sql string, page, pageSize int) (*QueryResult, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+	return s.query(ctx, userID, dbID, sql, page, pageSize, true)
+}
+
+func (s *ViewerService) query(ctx context.Context, userID, dbID uint, sql string, page, pageSize int, normalize bool) (result *QueryResult, err error) {
+	spanCtx, finish := startViewerSpan(ctx, userID, dbID, "query")
+	safeSQL := telemetry.SanitizeSQL(sql)
+	slog.InfoContext(spanCtx, "viewer query started",
+		"event", "viewer.query.started",
+		"query", safeSQL,
+		"page", page,
+		"page_size", pageSize,
+		"status", "started",
+	)
+	defer func() {
+		attrs := []any{"query", safeSQL, "page", page, "page_size", pageSize}
+		if result != nil {
+			attrs = append(attrs, "rows_returned", len(result.Rows), "has_next", result.HasNext)
+		}
+		finish(err, attrs...)
+	}()
+
+	if err = s.authz.RequireView(spanCtx, userID, dbID); err != nil {
 		return nil, err
 	}
-	page, pageSize, err := normalizePage(page, pageSize, s.config)
-	if err != nil {
-		return nil, err
+	if normalize {
+		page, pageSize, err = normalizePage(page, pageSize, s.config)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return s.executeQuery(ctx, dbID, sql, page, pageSize)
+	result, err = s.executeQuery(spanCtx, dbID, sql, page, pageSize)
+	return result, err
 }
 
 func (s *ViewerService) executeQuery(ctx context.Context, dbID uint, sql string, page, pageSize int) (*QueryResult, error) {

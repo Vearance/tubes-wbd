@@ -27,6 +27,12 @@ services:
       APP_PING_TIMEOUT: ${APP_PING_TIMEOUT:-5s}
       APP_SHUTDOWN_TIMEOUT: ${APP_SHUTDOWN_TIMEOUT:-10s}
       TARGET_DB_ENCRYPTION_KEY: ${TARGET_DB_ENCRYPTION_KEY}
+      OTEL_SERVICE_NAME: bscheme-api
+      OTEL_SERVICE_VERSION: ${APP_VERSION:-dev}
+      OTEL_ENVIRONMENT: ${APP_ENV:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://lgtm:4318}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
     ports:
       - "${APP_PORT:-8080}:${APP_PORT:-8080}"
     depends_on:
@@ -47,6 +53,17 @@ services:
       APP_RABBITMQ_URL: ${APP_RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
       APP_RABBITMQ_QUEUE: ${APP_RABBITMQ_QUEUE:-migration.executions}
       TARGET_DB_ENCRYPTION_KEY: ${TARGET_DB_ENCRYPTION_KEY}
+      APP_MAX_OPEN_CONNS: ${APP_MAX_OPEN_CONNS:-10}
+      APP_MAX_IDLE_CONNS: ${APP_MAX_IDLE_CONNS:-5}
+      APP_METRICS_ADDR: ":9091"
+      OTEL_SERVICE_NAME: bscheme-worker
+      OTEL_SERVICE_VERSION: ${APP_VERSION:-dev}
+      OTEL_ENVIRONMENT: ${APP_ENV:-development}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://lgtm:4318}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-otlp}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
+    expose:
+      - "9091"
     depends_on:
       platform-db:
         condition: service_healthy
@@ -116,7 +133,28 @@ services:
       timeout: 5s
       retries: 5
 
+  lgtm:
+    image: grafana/otel-lgtm:0.8.6
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /otel-lgtm/dashboards/bscheme-migrations.json
+    volumes:
+      - ./observability/prometheus.yml:/otel-lgtm/prometheus.yaml:ro
+      - ./observability/dashboards.yml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
+      - ./observability/bscheme-migrations.json:/otel-lgtm/dashboards/bscheme-migrations.json:ro
+      - lgtm-data:/data
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${PROMETHEUS_PORT:-9090}:9090"
+      - "${LOKI_PORT:-3100}:3100"
+      - "${TEMPO_PORT:-3200}:3200"
+
 volumes:
   rabbitmq-data:
   platform-db-data:
   test-db-data:
+  lgtm-data:

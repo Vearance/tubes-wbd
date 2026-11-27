@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 
@@ -14,6 +15,7 @@ import (
 	"tubes-wbd/internal/http/middleware"
 	"tubes-wbd/internal/manageddb"
 	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/telemetry"
 	"tubes-wbd/internal/users"
 	"tubes-wbd/internal/viewer"
 )
@@ -59,12 +61,13 @@ func (s apiServer) PostAuthLogin(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, auth.ErrUserDisabled):
 			writeAPIError(w, http.StatusUnauthorized, "invalid credentials")
 		default:
-			log.Printf("login failed: %v", err)
+			slog.ErrorContext(r.Context(), "login failed", "event", "auth.login.error", "database", "platform", "status", "error", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
 	}
 
+	telemetry.SetRequestActor(r.Context(), telemetry.ActorUser(result.User.ID))
 	middleware.SetSessionCookie(
 		w,
 		result.Token,
@@ -99,7 +102,7 @@ func (s apiServer) PostAuthLogout(
 	}
 
 	if err := s.authService.Logout(r.Context(), cookie.Value); err != nil {
-		log.Printf("logout failed: %v", err)
+		slog.ErrorContext(r.Context(), "logout failed", "event", "auth.logout.error", "database", "platform", "status", "error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -116,7 +119,7 @@ func (s apiServer) ListAdminUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := s.userManagement.ListUsers(r.Context())
 	if err != nil {
-		log.Printf("listing admin users failed: %v", err)
+		slog.ErrorContext(r.Context(), "listing admin users failed", "event", "admin.users.list_error", "database", "platform", "status", "error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -152,7 +155,7 @@ func (s apiServer) CreateAdminUser(
 		case errors.Is(err, users.ErrUserAlreadyExists):
 			writeAPIError(w, http.StatusConflict, "username already exists")
 		default:
-			log.Printf("creating admin user failed: %v", err)
+			slog.ErrorContext(r.Context(), "creating admin user failed", "event", "admin.users.create_error", "database", "platform", "status", "error", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
@@ -189,7 +192,7 @@ func (s apiServer) UpdateAdminUser(
 		case errors.Is(err, auth.ErrUserNotFound):
 			writeAPIError(w, http.StatusNotFound, "user not found")
 		default:
-			log.Printf("updating admin user failed: %v", err)
+			slog.ErrorContext(r.Context(), "updating admin user failed", "event", "admin.users.update_error", "database", "platform", "status", "error", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
@@ -206,7 +209,7 @@ func (s apiServer) ListAdminGroups(w http.ResponseWriter, r *http.Request) {
 
 	groups, err := s.groupService.ListGroups(r.Context())
 	if err != nil {
-		log.Printf("listing admin groups failed: %v", err)
+		slog.ErrorContext(r.Context(), "listing admin groups failed", "event", "admin.groups.list_error", "database", "platform", "status", "error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -239,7 +242,7 @@ func (s apiServer) ListAdminGroupMembers(
 			writeAPIError(w, http.StatusNotFound, "group not found")
 			return
 		}
-		log.Printf("listing group members failed: %v", err)
+		slog.ErrorContext(r.Context(), "listing group members failed", "event", "admin.groups.members_error", "database", "platform", "status", "error", "error", err)
 		writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -275,7 +278,7 @@ func (s apiServer) CreateAdminGroup(
 		case errors.Is(err, access.ErrGroupAlreadyExists):
 			writeAPIError(w, http.StatusConflict, "group name already exists")
 		default:
-			log.Printf("creating admin group failed: %v", err)
+			slog.ErrorContext(r.Context(), "creating admin group failed", "event", "admin.groups.create_error", "database", "platform", "status", "error", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
@@ -317,7 +320,7 @@ func (s apiServer) AddAdminGroupMember(
 		case errors.Is(err, access.ErrMembershipExists):
 			writeAPIError(w, http.StatusConflict, "membership already exists")
 		default:
-			log.Printf("adding group member failed: %v", err)
+			slog.ErrorContext(r.Context(), "adding group member failed", "event", "admin.groups.add_member_error", "database", "platform", "status", "error", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
@@ -351,7 +354,7 @@ func (s apiServer) RemoveAdminGroupMember(
 		case errors.Is(err, access.ErrMemberIsLeader):
 			writeAPIError(w, http.StatusConflict, access.ErrMemberIsLeader.Error())
 		default:
-			log.Printf("removing group member failed: %v", err)
+			slog.ErrorContext(r.Context(), "removing group member failed", "event", "admin.groups.remove_member_error", "database", "platform", "status", "error", "error", err)
 			writeAPIError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
@@ -420,10 +423,14 @@ func ensureEndOfJSON(decoder *json.Decoder) error {
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
+	writeJSONContext(context.Background(), w, status, value)
+}
+
+func writeJSONContext(ctx context.Context, w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(value); err != nil {
-		log.Printf("writing json response: %v", err)
+		slog.ErrorContext(ctx, "writing json response", "event", "http.response.write_error", "status", "error", "error", err)
 	}
 }
 

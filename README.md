@@ -256,6 +256,39 @@ bash loadtest/run-stress-test.sh --quick # Quick run (80s, 4 tahap x 20s)
 3. **Peak Stress (`120–180s`)**: Pada `220` VU (`2,089.1 req/s`), saturasi connection pool mendorong latensi API ke `p50 = 39.6 ms` dan `p95 = 119.3 ms` (tetap di bawah threshold `500 ms` dengan `0%` error). Di sisi worker (`129` job), constraint serial per database pada `k6_same_db` memicu `ErrExecutionBusy` + backoff `2s` sehingga antrean Same-DB menumpuk (`QWait p95 = 22.75 s`, `18.25 jobs/min`), sementara `k6_diff_db_1..3` dieksekusi paralel oleh 3 worker hingga `~2×` lebih cepat (`35.00 jobs/min`, `QWait p50 = 2.24 s`).
 4. **Recovery (`180–240s`)**: Setelah beban diturunkan ke `10` VU, latensi API langsung pulih (`p50 = 7.5 ms`, `p95 = 54.1 ms < 250 ms`, `0%` error). Job awal di tahap *recovery* masih menghabiskan sisa antrean dari *peak stress* (`QWait p50 = 16.16 s`), lalu antrean terkuras habis hingga job di akhir tahap kembali ke `min = 19 ms` dengan total `213 / 213` job selesai `100%` sukses.
 
+## observability
+
+Centralized logs (Loki `:3100`), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Tempo `:3200` via OpenTelemetry Collector), Prometheus metrics (`:9090`, scraping `bscheme-api` `:8080/metrics` and every scaled `bscheme-worker` replica on `:9091/metrics` via `dns_sd_configs`), and an auto-provisioned Grafana dashboard (`:3000`, default `admin` / `admin`) run inside a single `lgtm` container (`grafana/otel-lgtm`) in the Compose stack:
+
+```bash
+docker compose up --build -d --scale worker=3
+bash scripts/test-observability.sh   # generate API, migration & DB pool traffic and verify LGTM ingestion
+```
+
+### Queue & Migration Metrics (Prometheus -> Grafana)
+
+| Requirement | Prometheus Metric(s) & Labels | Source | Grafana Panel (`bscheme-migrations`) |
+| --- | --- | --- | --- |
+| Job menunggu / berjalan / selesai / gagal | `bscheme_migration_jobs{status="queued\|running\|pending_review\|approved\|success\|failed\|partial\|rejected"}` (gauge), `bscheme_migration_executions_total{type,status}` (counter) | `bscheme-api`, `bscheme-worker` | **Migration Jobs per Status** |
+| Waktu tunggu queue & lock | `bscheme_migration_queue_wait_duration_seconds_{bucket,sum,count}{type}`, `bscheme_migration_lock_wait_duration_seconds_{bucket,sum,count}{type,lock_scope}` (`advisory`, `history_table`) | `bscheme-worker` | **Queue & Lock Wait Duration (p50 / p95)** |
+| Durasi migration | `bscheme_migration_execution_duration_seconds_{bucket,sum,count}{type,status}` (histogram) | `bscheme-worker` | **Migration Execution Duration (p50 / p95)** |
+| Batch, row diproses & retry | `bscheme_migration_batches_processed_total{type}`, `bscheme_migration_batch_rows_processed_total{type}`, `bscheme_migration_retries_total{type,reason}` | `bscheme-worker` | **Batches, Rows Processed & Retries** |
+
+### Database Connection Pool Metrics (Prometheus -> Grafana)
+
+| Requirement | Prometheus Metric(s) & Labels | Source | Grafana Panel (`bscheme-migrations`) |
+| --- | --- | --- | --- |
+| Koneksi aktif / idle (Platform & Target DB) | `bscheme_db_pool_connections{db_role="platform\|target",state="active\|idle"}` | `bscheme-api`, `bscheme-worker` | **DB Connection Pool — Active vs Idle Connections** |
+| Waktu tunggu & jumlah tunggu koneksi | `bscheme_db_pool_wait_duration_seconds_total{db_role}`, `bscheme_db_pool_wait_count_total{db_role}` | `bscheme-api`, `bscheme-worker` | **DB Connection Pool — Connection Wait Time**, **DB Connection Pool — Connection Wait Count** |
+
+### Grafana Provisioning & Dashboard Files
+
+- **Prometheus scrape config** (mounted to `/otel-lgtm/prometheus.yaml`, with `dns_sd_configs` for scaled `worker` replicas): [`observability/prometheus.yml`](observability/prometheus.yml)
+- **Dashboard auto-provisioning** (`BScheme` folder in Grafana): [`observability/dashboards.yml`](observability/dashboards.yml)
+- **Queue, Migrations & DB Pool Dashboard** (`http://localhost:3000/d/bscheme-migrations`): [`observability/bscheme-migrations.json`](observability/bscheme-migrations.json)
+- **Smoke Test Script**: [`scripts/test-observability.sh`](scripts/test-observability.sh)
+
+See [`observability/README.md`](observability/README.md) for architecture details, label cardinality guardrails, screenshots, and verified log/trace correlation and `/metrics` output examples.
 
 ## contributors
 

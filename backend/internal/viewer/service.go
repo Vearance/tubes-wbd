@@ -4,14 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
-	"tubes-wbd/internal/database/targetdb"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	"tubes-wbd/internal/database/targetdb"
+	"tubes-wbd/internal/telemetry"
 )
 
 const (
@@ -59,65 +65,118 @@ func NewViewerService(
 	return &ViewerService{authz: authz, pools: pools, config: config}, nil
 }
 
-func (s *ViewerService) ListSchemas(ctx context.Context, userID, dbID uint) ([]string, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+func startViewerSpan(ctx context.Context, userID, dbID uint, op string, extraAttrs ...any) (context.Context, func(error, ...any)) {
+	start := time.Now()
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(dbID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+
+	spanCtx, span := telemetry.Tracer("tubes-wbd/viewer").Start(ctx, "viewer."+op,
+		trace.WithAttributes(
+			attribute.String("viewer.operation", op),
+			attribute.String("actor", actor),
+			attribute.Int64("db.target_database_id", int64(dbID)),
+		),
+	)
+	spanCtx = telemetry.WithActor(spanCtx, actor)
+	spanCtx = telemetry.WithDatabase(spanCtx, dbLabel)
+
+	return spanCtx, func(err error, resultAttrs ...any) {
+		durationMs := telemetry.RoundMillis(time.Since(start))
+		status := "ok"
+		if err != nil {
+			status = "error"
+			span.RecordError(err)
+			span.SetStatus(codes.Error, telemetry.SanitizeError(err))
+		}
+
+		logAttrs := []any{
+			"event", "viewer." + op,
+			"actor", actor,
+			"database", dbLabel,
+			"status", status,
+			"duration_ms", durationMs,
+		}
+		logAttrs = append(logAttrs, extraAttrs...)
+		logAttrs = append(logAttrs, resultAttrs...)
+		if err != nil {
+			logAttrs = append(logAttrs, "error", err)
+			if sqlstate := telemetry.SQLState(err); sqlstate != "" {
+				logAttrs = append(logAttrs, "sqlstate", sqlstate)
+			}
+			slog.WarnContext(spanCtx, "viewer operation failed", logAttrs...)
+		} else {
+			slog.InfoContext(spanCtx, "viewer operation completed", logAttrs...)
+		}
+		span.End()
+	}
+}
+
+func (s *ViewerService) ListSchemas(ctx context.Context, userID, dbID uint) (schemas []string, err error) {
+	spanCtx, finish := startViewerSpan(ctx, userID, dbID, "list_schemas")
+	defer func() { finish(err) }()
+
+	if err := s.authz.RequireView(spanCtx, userID, dbID); err != nil {
 		return nil, err
 	}
 
-	var schemas []string
-	err := s.readOnly(ctx, dbID, func(tx pgx.Tx) (err error) {
-		schemas, err = listSchemas(ctx, tx)
+	err = s.readOnly(spanCtx, dbID, func(tx pgx.Tx) (err error) {
+		schemas, err = listSchemas(spanCtx, tx)
 		return err
 	})
 	return schemas, err
 }
 
-func (s *ViewerService) ListTables(ctx context.Context, userID, dbID uint, schema string) ([]Table, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+func (s *ViewerService) ListTables(ctx context.Context, userID, dbID uint, schema string) (tables []Table, err error) {
+	spanCtx, finish := startViewerSpan(ctx, userID, dbID, "list_tables", "schema", schema)
+	defer func() { finish(err) }()
+
+	if err := s.authz.RequireView(spanCtx, userID, dbID); err != nil {
 		return nil, err
 	}
 	if err := validateIdentifier("schema", schema); err != nil {
 		return nil, err
 	}
 
-	var tables []Table
-	err := s.readOnly(ctx, dbID, func(tx pgx.Tx) error {
-		exists, err := schemaExists(ctx, tx, schema)
+	err = s.readOnly(spanCtx, dbID, func(tx pgx.Tx) error {
+		exists, err := schemaExists(spanCtx, tx, schema)
 		if err != nil {
 			return err
 		}
 		if !exists {
 			return ErrSchemaNotFound
 		}
-		tables, err = listTables(ctx, tx, schema)
+		tables, err = listTables(spanCtx, tx, schema)
 		return err
 	})
 	return tables, err
 }
 
-func (s *ViewerService) DescribeTable(ctx context.Context, userID, dbID uint, schema, table string) (*TableDetail, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+func (s *ViewerService) DescribeTable(ctx context.Context, userID, dbID uint, schema, table string) (detail *TableDetail, err error) {
+	spanCtx, finish := startViewerSpan(ctx, userID, dbID, "describe_table", "schema", schema, "table", table)
+	defer func() { finish(err) }()
+
+	if err := s.authz.RequireView(spanCtx, userID, dbID); err != nil {
 		return nil, err
 	}
 	if err := validateTable(schema, table); err != nil {
 		return nil, err
 	}
 
-	var detail *TableDetail
-	err := s.readOnly(ctx, dbID, func(tx pgx.Tx) error {
-		rel, err := resolveTable(ctx, tx, schema, table)
+	err = s.readOnly(spanCtx, dbID, func(tx pgx.Tx) error {
+		rel, err := resolveTable(spanCtx, tx, schema, table)
 		if err != nil {
 			return err
 		}
 
 		d := &TableDetail{Table: rel.table}
-		if d.Columns, err = columns(ctx, tx, rel.oid); err != nil {
+		if d.Columns, err = columns(spanCtx, tx, rel.oid); err != nil {
 			return err
 		}
-		if d.Constraints, err = constraints(ctx, tx, rel.oid); err != nil {
+		if d.Constraints, err = constraints(spanCtx, tx, rel.oid); err != nil {
 			return err
 		}
-		if d.Indexes, err = indexes(ctx, tx, rel.oid); err != nil {
+		if d.Indexes, err = indexes(spanCtx, tx, rel.oid); err != nil {
 			return err
 		}
 		detail = d
@@ -126,25 +185,27 @@ func (s *ViewerService) DescribeTable(ctx context.Context, userID, dbID uint, sc
 	return detail, err
 }
 
-func (s *ViewerService) TableData(ctx context.Context, userID, dbID uint, schema, table string, page, pageSize int) (*TablePage, error) {
-	if err := s.authz.RequireView(ctx, userID, dbID); err != nil {
+func (s *ViewerService) TableData(ctx context.Context, userID, dbID uint, schema, table string, page, pageSize int) (result *TablePage, err error) {
+	spanCtx, finish := startViewerSpan(ctx, userID, dbID, "table_data", "schema", schema, "table", table, "page", page, "page_size", pageSize)
+	defer func() { finish(err) }()
+
+	if err := s.authz.RequireView(spanCtx, userID, dbID); err != nil {
 		return nil, err
 	}
 	if err := validateTable(schema, table); err != nil {
 		return nil, err
 	}
-	page, pageSize, err := normalizePage(page, pageSize, s.config)
+	page, pageSize, err = normalizePage(page, pageSize, s.config)
 	if err != nil {
 		return nil, err
 	}
 
-	var result *TablePage
-	err = s.readOnly(ctx, dbID, func(tx pgx.Tx) error {
-		rel, err := resolveTable(ctx, tx, schema, table)
+	err = s.readOnly(spanCtx, dbID, func(tx pgx.Tx) error {
+		rel, err := resolveTable(spanCtx, tx, schema, table)
 		if err != nil {
 			return err
 		}
-		result, err = tableData(ctx, tx, rel, page, pageSize)
+		result, err = tableData(spanCtx, tx, rel, page, pageSize)
 		return err
 	})
 	return result, err

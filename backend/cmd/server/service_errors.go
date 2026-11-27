@@ -1,8 +1,9 @@
 package main
 
 import (
+	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"tubes-wbd/internal/access"
@@ -29,7 +30,7 @@ func targetErrorMessage(err error) string {
 	return ""
 }
 
-func writeServiceError(w http.ResponseWriter, err error, operation string) {
+func writeServiceError(ctx context.Context, w http.ResponseWriter, err error, operation string) {
 	if message := targetErrorMessage(err); message != "" {
 		writeAPIError(w, http.StatusBadGateway, message)
 		return
@@ -87,7 +88,12 @@ func writeServiceError(w http.ResponseWriter, err error, operation string) {
 		writeAPIError(w, http.StatusUnprocessableEntity, err.Error())
 
 	default:
-		log.Printf("%s failed: %v", operation, err)
+		slog.ErrorContext(ctx, "service request failed",
+			"event", "http.service_error",
+			"operation", operation,
+			"status", "error",
+			"error", err,
+		)
 		writeAPIError(w, http.StatusInternalServerError, "internal server error")
 	}
 }

@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -15,10 +15,16 @@ type RouterConfig struct {
 	Auth            *auth.AuthService
 	AdminAuthorizer middleware.AdminAuthorizer
 	CookieOptions   middleware.CookieOptions
+	Middlewares     []func(http.Handler) http.Handler
 }
 
 func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	router := chi.NewRouter()
+	for _, mw := range config.Middlewares {
+		if mw != nil {
+			router.Use(mw)
+		}
+	}
 
 	plainWrapper := &ServerInterfaceWrapper{
 		Handler:          server,
@@ -104,11 +110,20 @@ func NewRouter(server ServerInterface, config RouterConfig) chi.Router {
 	return router
 }
 
-func openAPIErrorHandler(w http.ResponseWriter, _ *http.Request, err error) {
+func openAPIErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	ctx := r.Context()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
 	if encodeErr := json.NewEncoder(w).Encode(ErrorResponse{Message: "invalid request"}); encodeErr != nil {
-		log.Printf("writing OpenAPI error response: %v", encodeErr)
+		slog.ErrorContext(ctx, "writing OpenAPI error response",
+			"event", "http.response.write_error",
+			"status", "error",
+			"error", encodeErr,
+		)
 	}
-	log.Printf("openapi request validation failed: %v", err)
+	slog.WarnContext(ctx, "openapi request validation failed",
+		"event", "http.request.validation_failed",
+		"status", "rejected",
+		"error", err,
+	)
 }

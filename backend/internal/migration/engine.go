@@ -10,6 +10,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
+	"tubes-wbd/internal/telemetry"
 )
 
 const lockName = "dbm.migration"
@@ -83,6 +88,17 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 }
 
 func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Execution, opts Options) (*HistoryEntry, error) {
+	if telemetry.DatabaseFromContext(ctx) == "" {
+		ctx = telemetry.WithDatabase(ctx, telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID))
+	}
+	if telemetry.MigrationMetaFromContext(ctx).ExecutionID == 0 && execution.ID > 0 {
+		ctx = telemetry.WithMigrationMeta(ctx, telemetry.MigrationLogMeta{
+			ExecutionID:   execution.ID,
+			DraftID:       execution.DraftID,
+			ExecutionType: string(execution.Type),
+			Attempt:       historyAttemptNumber(execution),
+		})
+	}
 	attemptStartedAt := time.Now()
 	if err := ensureHistorySchema(ctx, pool, true); err != nil {
 		return nil, executionError(err)
@@ -106,12 +122,17 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 		return nil, attemptErr
 	}
 
-	var locked bool
-	if err := tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtext($1))", lockName).Scan(&locked); err != nil {
-		return fail(fmt.Errorf("migration: acquire lock: %w", err))
-	}
-	if !locked {
-		return fail(ErrMigrationInProgress)
+	if err := acquireTargetLock(ctx, execution.Type, "advisory", func(lockCtx context.Context) error {
+		var locked bool
+		if err := tx.QueryRow(lockCtx, "SELECT pg_try_advisory_xact_lock(hashtext($1))", lockName).Scan(&locked); err != nil {
+			return fmt.Errorf("migration: acquire lock: %w", err)
+		}
+		if !locked {
+			return ErrMigrationInProgress
+		}
+		return nil
+	}); err != nil {
+		return fail(err)
 	}
 
 	timeouts := fmt.Sprintf("SET LOCAL statement_timeout = %d; SET LOCAL lock_timeout = %d",
@@ -119,8 +140,13 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 	if _, err := tx.Exec(ctx, timeouts); err != nil {
 		return fail(fmt.Errorf("migration: set timeouts: %w", err))
 	}
-	if _, err := tx.Exec(ctx, "LOCK TABLE _dbm.migration_history IN EXCLUSIVE MODE"); err != nil {
-		return fail(executionError(err))
+	if err := acquireTargetLock(ctx, execution.Type, "history_table", func(lockCtx context.Context) error {
+		if _, err := tx.Exec(lockCtx, "LOCK TABLE _dbm.migration_history IN EXCLUSIVE MODE"); err != nil {
+			return executionError(err)
+		}
+		return nil
+	}); err != nil {
+		return fail(err)
 	}
 	if err := validateExecutionPosition(ctx, tx, execution); err != nil {
 		return fail(err)
@@ -133,32 +159,37 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 	}
 
 	start := time.Now()
-	slog.Info("migration SQL attempt started",
-		"execution_id", execution.ID,
-		"database_id", execution.ManagedDatabaseID,
-		"execution_type", execution.Type,
+	slog.InfoContext(ctx, "migration SQL attempt started",
+		"event", "migration.sql.started",
+		"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
 		"attempt", historyAttemptNumber(execution),
 		"statement_type", "migration",
-		"sql", safeSQLForLog(execution.SQL),
+		"status", "started",
+		"query", safeSQLForLog(execution.SQL),
 	)
 	command, err := tx.Exec(ctx, execution.SQL)
 	if err != nil {
-		slog.Error("migration SQL attempt failed",
-			"execution_id", execution.ID,
-			"database_id", execution.ManagedDatabaseID,
-			"execution_type", execution.Type,
+		mappedErr := executionError(err)
+		errAttrs := []any{
+			"event", "migration.sql.failed",
+			"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
 			"attempt", historyAttemptNumber(execution),
-			"duration", time.Since(start),
+			"status", "error",
+			"duration_ms", telemetry.RoundMillis(time.Since(start)),
 			"error", err,
-		)
-		return fail(executionError(err))
+		}
+		if sqlstate := telemetry.SQLState(err); sqlstate != "" {
+			errAttrs = append(errAttrs, "sqlstate", sqlstate)
+		}
+		slog.ErrorContext(ctx, "migration SQL attempt failed", errAttrs...)
+		return fail(mappedErr)
 	}
-	slog.Info("migration SQL attempt finished",
-		"execution_id", execution.ID,
-		"database_id", execution.ManagedDatabaseID,
-		"execution_type", execution.Type,
+	slog.InfoContext(ctx, "migration SQL attempt finished",
+		"event", "migration.sql.completed",
+		"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
 		"attempt", historyAttemptNumber(execution),
-		"duration", time.Since(start),
+		"status", "ok",
+		"duration_ms", telemetry.RoundMillis(time.Since(start)),
 		"rows_affected", command.RowsAffected(),
 	)
 	if tx.Conn().PgConn().TxStatus() != 'T' {
@@ -213,6 +244,65 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 	entry.TargetExecutionID = execution.TargetExecutionID
 	entry.Active = execution.Type != ExecutionTypeRollback
 	return entry, nil
+}
+
+func acquireTargetLock(
+	ctx context.Context,
+	execType ExecutionType,
+	lockScope string,
+	fn func(lockCtx context.Context) error,
+) error {
+	attrs := []attribute.KeyValue{
+		attribute.String("migration.type", string(execType)),
+		attribute.String("migration.lock_scope", lockScope),
+	}
+	meta := telemetry.MigrationMetaFromContext(ctx)
+	if meta.ExecutionID > 0 {
+		attrs = append(attrs, attribute.Int64("migration.execution_id", int64(meta.ExecutionID)))
+	}
+	if meta.Attempt > 0 {
+		attrs = append(attrs, attribute.Int("migration.attempt", meta.Attempt))
+	}
+
+	lockCtx, span := telemetry.Tracer("tubes-wbd/migration").Start(ctx, "migration.lock.acquire",
+		trace.WithAttributes(attrs...),
+	)
+	defer span.End()
+
+	start := time.Now()
+	err := fn(lockCtx)
+	wait := time.Since(start)
+	waitMs := telemetry.RoundMillis(wait)
+
+	telemetry.Metrics().RecordMigrationLockWait(lockCtx, string(execType), lockScope, wait)
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, telemetry.SanitizeError(err))
+		logAttrs := []any{
+			"event", "migration.lock.failed",
+			"lock_scope", lockScope,
+			"status", "error",
+			"duration_ms", waitMs,
+			"error", err,
+		}
+		if errors.Is(err, ErrMigrationInProgress) {
+			logAttrs = append(logAttrs, "reason", "busy")
+		}
+		if sqlstate := telemetry.SQLState(err); sqlstate != "" {
+			logAttrs = append(logAttrs, "sqlstate", sqlstate)
+		}
+		slog.WarnContext(lockCtx, "migration target lock failed", logAttrs...)
+		return err
+	}
+
+	slog.InfoContext(lockCtx, "migration target lock acquired",
+		"event", "migration.lock.acquired",
+		"lock_scope", lockScope,
+		"status", "ok",
+		"duration_ms", waitMs,
+	)
+	return nil
 }
 
 func historyAttemptNumber(execution *Execution) int {

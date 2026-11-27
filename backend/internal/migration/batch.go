@@ -10,6 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
+	"tubes-wbd/internal/telemetry"
 )
 
 var (
@@ -78,8 +82,13 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 		return nil, err
 	}
 	defer conn.Release()
-	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock(hashtext($1))", lockName); err != nil {
-		return nil, fmt.Errorf("acquiring batch migration lock: %w", err)
+	if err := acquireTargetLock(ctx, execution.Type, "advisory", func(lockCtx context.Context) error {
+		if _, err := conn.Exec(lockCtx, "SELECT pg_advisory_lock(hashtext($1))", lockName); err != nil {
+			return fmt.Errorf("acquiring batch migration lock: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	defer func() {
 		unlockCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
@@ -159,121 +168,22 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 			break
 		}
 
+		nextBatchNumber := progress.BatchCount + 1
 		nextProgress := progress
-		err = withTargetTransaction(ctx, conn, func(tx pgx.Tx) error {
-			var keys []int64
-			nextCursor := progress.LastCursor
-			if execution.Type == ExecutionTypeRollback {
-				if execution.TargetExecutionID == nil {
-					return ErrInvalidRollback
-				}
-				beforeBatch := progress.LastCursor
-				if beforeBatch == 0 {
-					beforeBatch = math.MaxInt32
-				}
-				var originalBatch int
-				err := tx.QueryRow(ctx,
-					`SELECT batch_number, keys FROM _dbm.migration_batch_commits
-					 WHERE execution_id = $1 AND batch_number < $2
-					 ORDER BY batch_number DESC LIMIT 1`, int64(*execution.TargetExecutionID), beforeBatch,
-				).Scan(&originalBatch, &keys)
-				if errors.Is(err, pgx.ErrNoRows) {
-					keys = nil
-				} else if err != nil {
-					return fmt.Errorf("selecting batch keys for rollback: %w", err)
-				} else {
-					nextCursor = int64(originalBatch)
-				}
-			} else {
-				slog.Info("selecting keys from frozen migration batch scope",
-					"execution_id", execution.ID,
-					"database_id", execution.ManagedDatabaseID,
-					"execution_type", execution.Type,
-					"attempt", execution.Attempt,
-					"batch_number", progress.BatchCount+1,
-					"schema", execution.Batch.Schema,
-					"table", execution.Batch.Table,
-					"key_column", execution.Batch.KeyColumn,
-				)
-				rows, err := tx.Query(ctx,
-					`SELECT key FROM _dbm.migration_batch_scope
-					 WHERE execution_id = $1 AND key > $2 ORDER BY key LIMIT $3`,
-					int64(scopeExecutionID), progress.LastCursor, execution.Batch.BatchSize,
-				)
-				if err != nil {
-					return fmt.Errorf("selecting batch cursor: %w", err)
-				}
-				keys, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (int64, error) {
-					var key int64
-					return key, row.Scan(&key)
-				})
-				if err != nil {
-					return fmt.Errorf("reading batch cursor: %w", err)
-				}
-				if len(keys) > 0 {
-					previous := progress.LastCursor
-					for _, key := range keys {
-						if key <= previous {
-							return fmt.Errorf("frozen batch keys must be strictly increasing positive bigints")
-						}
-						previous = key
-					}
-					nextCursor = previous
-				}
-			}
-			if len(keys) > execution.Batch.BatchSize {
-				return fmt.Errorf("batch cursor returned %d keys, exceeding configured batch size %d", len(keys), execution.Batch.BatchSize)
-			}
-			if len(keys) == 0 {
-				if _, err := tx.Exec(ctx, `UPDATE _dbm.migration_batch_progress SET completed = true WHERE execution_id = $1`, int64(execution.ID)); err != nil {
-					return fmt.Errorf("marking batch execution complete: %w", err)
-				}
-				nextProgress.Completed = true
-				return nil
-			}
-			sqlKind := "batch_up"
-			if execution.Type == ExecutionTypeRollback {
-				sqlKind = "batch_down"
-			}
-			slog.Info("migration SQL attempt started",
-				"execution_id", execution.ID,
-				"database_id", execution.ManagedDatabaseID,
-				"execution_type", execution.Type,
-				"attempt", execution.Attempt,
-				"batch_number", progress.BatchCount+1,
-				"key_count", len(keys),
-				"statement_type", sqlKind,
-				"sql", safeSQLForLog(execution.SQL),
-			)
-			command, err := tx.Exec(ctx, execution.SQL, keys)
-			if err != nil {
-				return fmt.Errorf("executing batch SQL: %w", err)
-			}
-			batchNumber := progress.BatchCount + 1
-			rowsAffected := command.RowsAffected()
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed)
-				 VALUES ($1, $2, $3, $4)`, int64(execution.ID), batchNumber, keys, rowsAffected); err != nil {
-				return fmt.Errorf("recording committed batch keys: %w", err)
-			}
-			if _, err := tx.Exec(ctx,
-				`UPDATE _dbm.migration_batch_progress
-				 SET last_cursor = $2, batch_count = $3, rows_processed = rows_processed + $4
-				 WHERE execution_id = $1`, int64(execution.ID), nextCursor, batchNumber, rowsAffected); err != nil {
-				return fmt.Errorf("recording committed batch progress: %w", err)
-			}
-			nextProgress.LastCursor = nextCursor
-			nextProgress.BatchCount = batchNumber
-			nextProgress.RowsProcessed += rowsAffected
-			return nil
-		})
-		if err != nil {
+		if _, err := s.runOneBatch(ctx, conn, execution, scopeExecutionID, &nextProgress, nextBatchNumber); err != nil {
 			if errors.Is(err, errTargetCommitOutcomeUnknown) {
 				actualProgress, committed, reconcileErr := s.reconcileBatchCommit(ctx, conn, execution, progress)
 				if reconcileErr != nil {
 					return nil, reconcileErr
 				}
 				if committed {
+					if actualProgress.BatchCount > progress.BatchCount {
+						telemetry.Metrics().RecordMigrationBatch(
+							telemetry.WithBatchNumber(ctx, actualProgress.BatchCount),
+							string(execution.Type),
+							actualProgress.RowsProcessed-progress.RowsProcessed,
+						)
+					}
 					progress = actualProgress
 					continue
 				}
@@ -282,7 +192,7 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 		}
 		progress = nextProgress
 		applyBatchProgress(execution, progress)
-		if err := s.updateExecutionProgress(ctx, execution); err != nil {
+		if err := s.updateExecutionProgress(telemetry.WithBatchNumber(ctx, progress.BatchCount), execution); err != nil {
 			return nil, batchReconciliationError("persisting batch progress to Platform DB", err)
 		}
 	}
@@ -292,6 +202,187 @@ func (s *MigrationService) runBatchExecution(ctx context.Context, execution *Exe
 		return nil, recordBatchFailure(ctx, pool, execution, err, startedAt)
 	}
 	return entry, nil
+}
+
+func (s *MigrationService) runOneBatch(
+	ctx context.Context,
+	conn *pgxpool.Conn,
+	execution *Execution,
+	scopeExecutionID uint,
+	progress *batchProgress,
+	nextBatchNumber int,
+) (int64, error) {
+	batchStart := time.Now()
+	batchSpanCtx, batchSpan := telemetry.Tracer("tubes-wbd/migration").Start(ctx, "migration.batch.run")
+	batchSpan.SetAttributes(
+		attribute.Int64("migration.execution_id", int64(execution.ID)),
+		attribute.Int64("migration.database_id", int64(execution.ManagedDatabaseID)),
+		attribute.String("migration.type", string(execution.Type)),
+		attribute.Int("migration.attempt", execution.Attempt),
+		attribute.Int("migration.batch_number", nextBatchNumber),
+		attribute.Int("migration.batch_size", execution.Batch.BatchSize),
+	)
+	batchCtx := telemetry.WithBatchNumber(batchSpanCtx, nextBatchNumber)
+	defer batchSpan.End()
+
+	slog.InfoContext(batchCtx, "migration batch started",
+		"event", "migration.batch.started",
+		"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+		"last_cursor", progress.LastCursor,
+		"batch_size", execution.Batch.BatchSize,
+		"status", "started",
+	)
+
+	finished := false
+	batchCommitted := false
+	var committedRows int64
+	err := withTargetTransaction(batchCtx, conn, func(tx pgx.Tx) error {
+		var keys []int64
+		nextCursor := progress.LastCursor
+		if execution.Type == ExecutionTypeRollback {
+			if execution.TargetExecutionID == nil {
+				return ErrInvalidRollback
+			}
+			beforeBatch := progress.LastCursor
+			if beforeBatch == 0 {
+				beforeBatch = math.MaxInt32
+			}
+			var originalBatch int
+			err := tx.QueryRow(batchCtx,
+				`SELECT batch_number, keys FROM _dbm.migration_batch_commits
+				 WHERE execution_id = $1 AND batch_number < $2
+				 ORDER BY batch_number DESC LIMIT 1`, int64(*execution.TargetExecutionID), beforeBatch,
+			).Scan(&originalBatch, &keys)
+			if errors.Is(err, pgx.ErrNoRows) {
+				keys = nil
+			} else if err != nil {
+				return fmt.Errorf("selecting batch keys for rollback: %w", err)
+			} else {
+				nextCursor = int64(originalBatch)
+			}
+		} else {
+			slog.InfoContext(batchCtx, "selecting keys from frozen migration batch scope",
+				"event", "migration.batch.scope_read",
+				"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+				"schema", execution.Batch.Schema,
+				"table", execution.Batch.Table,
+				"key_column", execution.Batch.KeyColumn,
+				"status", "started",
+			)
+			rows, err := tx.Query(batchCtx,
+				`SELECT key FROM _dbm.migration_batch_scope
+				 WHERE execution_id = $1 AND key > $2 ORDER BY key LIMIT $3`,
+				int64(scopeExecutionID), progress.LastCursor, execution.Batch.BatchSize,
+			)
+			if err != nil {
+				return fmt.Errorf("selecting batch cursor: %w", err)
+			}
+			keys, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (int64, error) {
+				var key int64
+				return key, row.Scan(&key)
+			})
+			if err != nil {
+				return fmt.Errorf("reading batch cursor: %w", err)
+			}
+			if len(keys) > 0 {
+				previous := progress.LastCursor
+				for _, key := range keys {
+					if key <= previous {
+						return fmt.Errorf("frozen batch keys must be strictly increasing positive bigints")
+					}
+					previous = key
+				}
+				nextCursor = previous
+			}
+		}
+		if len(keys) > execution.Batch.BatchSize {
+			return fmt.Errorf("batch cursor returned %d keys, exceeding configured batch size %d", len(keys), execution.Batch.BatchSize)
+		}
+		if len(keys) == 0 {
+			if _, err := tx.Exec(batchCtx, `UPDATE _dbm.migration_batch_progress SET completed = true WHERE execution_id = $1`, int64(execution.ID)); err != nil {
+				return fmt.Errorf("marking batch execution complete: %w", err)
+			}
+			finished = true
+			return nil
+		}
+		sqlKind := "batch_up"
+		if execution.Type == ExecutionTypeRollback {
+			sqlKind = "batch_down"
+		}
+		slog.InfoContext(batchCtx, "migration SQL attempt started",
+			"event", "migration.sql.started",
+			"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+			"key_count", len(keys),
+			"statement_type", sqlKind,
+			"status", "started",
+			"query", safeSQLForLog(execution.SQL),
+		)
+		command, err := tx.Exec(batchCtx, execution.SQL, keys)
+		if err != nil {
+			return fmt.Errorf("executing batch SQL: %w", err)
+		}
+		rowsAffected := command.RowsAffected()
+		if _, err := tx.Exec(batchCtx,
+			`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed)
+			 VALUES ($1, $2, $3, $4)`, int64(execution.ID), nextBatchNumber, keys, rowsAffected); err != nil {
+			return fmt.Errorf("recording committed batch keys: %w", err)
+		}
+		if _, err := tx.Exec(batchCtx,
+			`UPDATE _dbm.migration_batch_progress
+			 SET last_cursor = $2, batch_count = $3, rows_processed = rows_processed + $4
+			 WHERE execution_id = $1`, int64(execution.ID), nextCursor, nextBatchNumber, rowsAffected); err != nil {
+			return fmt.Errorf("recording committed batch progress: %w", err)
+		}
+		progress.LastCursor = nextCursor
+		progress.BatchCount = nextBatchNumber
+		progress.RowsProcessed += rowsAffected
+		committedRows = rowsAffected
+		batchCommitted = true
+		return nil
+	})
+	durationMs := telemetry.RoundMillis(time.Since(batchStart))
+	batchSpan.SetAttributes(
+		attribute.Int64("migration.batch.rows_affected", committedRows),
+		attribute.Bool("migration.batch.finished", finished),
+	)
+	if err != nil {
+		batchSpan.RecordError(err)
+		batchSpan.SetStatus(codes.Error, telemetry.SanitizeError(err))
+		errAttrs := []any{
+			"event", "migration.batch.failed",
+			"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+			"status", "error",
+			"duration_ms", durationMs,
+			"error", err,
+		}
+		if sqlstate := telemetry.SQLState(err); sqlstate != "" {
+			errAttrs = append(errAttrs, "sqlstate", sqlstate)
+		}
+		slog.ErrorContext(batchCtx, "migration batch failed", errAttrs...)
+		return 0, err
+	}
+	if batchCommitted {
+		telemetry.Metrics().RecordMigrationBatch(batchCtx, string(execution.Type), committedRows)
+		slog.InfoContext(batchCtx, "migration batch committed",
+			"event", "migration.batch.committed",
+			"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+			"rows_affected", committedRows,
+			"rows_processed_total", progress.RowsProcessed,
+			"status", "committed",
+			"duration_ms", durationMs,
+		)
+	}
+	if finished {
+		progress.Completed = true
+		slog.InfoContext(batchCtx, "migration batch cursor exhausted",
+			"event", "migration.batch.completed",
+			"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+			"rows_processed_total", progress.RowsProcessed,
+			"status", "ok",
+			"duration_ms", durationMs,
+		)
+	}
+	return committedRows, nil
 }
 
 func withTargetTransaction(ctx context.Context, conn *pgxpool.Conn, fn func(pgx.Tx) error) error {
@@ -389,7 +480,10 @@ func recordBatchFailure(ctx context.Context, pool *pgxpool.Pool, execution *Exec
 func finishBatchHistory(ctx context.Context, conn *pgxpool.Conn, execution *Execution, duration time.Duration) (*HistoryEntry, error) {
 	var entry *HistoryEntry
 	err := withTargetTransaction(ctx, conn, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "LOCK TABLE _dbm.migration_history IN EXCLUSIVE MODE"); err != nil {
+		if err := acquireTargetLock(ctx, execution.Type, "history_table", func(lockCtx context.Context) error {
+			_, err := tx.Exec(lockCtx, "LOCK TABLE _dbm.migration_history IN EXCLUSIVE MODE")
+			return err
+		}); err != nil {
 			return err
 		}
 		if err := validateExecutionPosition(ctx, tx, execution); err != nil {

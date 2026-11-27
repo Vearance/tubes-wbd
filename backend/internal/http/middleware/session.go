@@ -1,12 +1,14 @@
 package middleware
 
 import (
+	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"tubes-wbd/internal/auth"
+	"tubes-wbd/internal/telemetry"
 )
 
 const SessionCookieName = "labpro_sucks"
@@ -73,15 +75,28 @@ func Session(
 
 			cookie, err := r.Cookie(SessionCookieName)
 			if err != nil {
-				writeError(w, http.StatusUnauthorized, "authentication required")
+				slog.WarnContext(r.Context(), "session rejected",
+					"event", "auth.session.rejected",
+					"database", "platform",
+					"status", "rejected",
+					"reason", "missing_cookie",
+				)
+				writeErrorContext(r.Context(), w, http.StatusUnauthorized, "authentication required")
 				return
 			}
 
 			validation, err := service.ValidateSession(r.Context(), cookie.Value)
 			if err != nil {
-				writeAuthError(w, err)
+				writeAuthError(r.Context(), w, err)
 				return
 			}
+
+			actor := telemetry.ActorUser(validation.AuthenticatedSession.UserID)
+			telemetry.SetRequestActor(r.Context(), actor)
+			ctx := telemetry.WithActor(
+				withAuthenticatedSession(r.Context(), validation.AuthenticatedSession),
+				actor,
+			)
 
 			if validation.Rotation != nil && validation.Rotation.Token != "" {
 				SetSessionCookie(
@@ -90,27 +105,54 @@ func Session(
 					validation.Rotation.ExpiresAt,
 					cookieOptions,
 				)
+				slog.InfoContext(ctx, "session rotated",
+					"event", "auth.session.rotated",
+					"database", "platform",
+					"status", "ok",
+				)
 			}
 
-			ctx := withAuthenticatedSession(
-				r.Context(),
-				validation.AuthenticatedSession,
-			)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func writeAuthError(w http.ResponseWriter, err error) {
+func writeAuthError(ctx context.Context, w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, auth.ErrUnauthenticated),
 		errors.Is(err, auth.ErrSessionExpired),
 		errors.Is(err, auth.ErrSessionRevoked),
 		errors.Is(err, auth.ErrStaleSessionToken),
 		errors.Is(err, auth.ErrUserDisabled):
-		writeError(w, http.StatusUnauthorized, "authentication required")
+		slog.WarnContext(ctx, "session rejected",
+			"event", "auth.session.rejected",
+			"database", "platform",
+			"status", "rejected",
+			"reason", sessionRejectReason(err),
+		)
+		writeErrorContext(ctx, w, http.StatusUnauthorized, "authentication required")
 	default:
-		log.Printf("session middleware: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		slog.ErrorContext(ctx, "session validation failed",
+			"event", "auth.session.error",
+			"database", "platform",
+			"status", "error",
+			"error", err,
+		)
+		writeErrorContext(ctx, w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+func sessionRejectReason(err error) string {
+	switch {
+	case errors.Is(err, auth.ErrSessionExpired):
+		return "expired"
+	case errors.Is(err, auth.ErrSessionRevoked):
+		return "revoked"
+	case errors.Is(err, auth.ErrStaleSessionToken):
+		return "stale"
+	case errors.Is(err, auth.ErrUserDisabled):
+		return "user_disabled"
+	default:
+		return "unauthenticated"
 	}
 }

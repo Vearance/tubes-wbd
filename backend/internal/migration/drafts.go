@@ -1,6 +1,11 @@
 package migration
 
-import "context"
+import (
+	"context"
+	"log/slog"
+
+	"tubes-wbd/internal/telemetry"
+)
 
 func (s *MigrationService) CreateDraft(ctx context.Context, userID, dbID uint, m Migration) (*Draft, error) {
 	if err := s.authz.RequireEdit(ctx, userID, dbID); err != nil {
@@ -27,9 +32,21 @@ func (s *MigrationService) CreateDraft(ctx context.Context, userID, dbID uint, m
 		CreatedBy:          userID,
 		UpdatedBy:          userID,
 	}
-	if err := s.repo.CreateDraft(ctx, d); err != nil {
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(dbID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	logCtx := telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
+	if err := s.repo.CreateDraft(logCtx, d); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(logCtx, "migration draft created",
+		"event", "migration.draft.created",
+		"draft_id", d.ID,
+		"database", dbLabel,
+		"draft_status", string(d.Status),
+		"status", "ok",
+	)
 	return d, nil
 }
 
@@ -52,9 +69,22 @@ func (s *MigrationService) UpdateDraft(ctx context.Context, userID, draftID uint
 	d.Name, d.SQL, d.DownSQL, d.Batch = m.Name, m.SQL, m.DownSQL, m.Batch
 	d.Irreversible, d.IrreversibleReason = m.Irreversible, m.IrreversibleReason
 	d.UpdatedBy = userID
-	if err := s.repo.UpdateDraft(ctx, d); err != nil {
+
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(d.ManagedDatabaseID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	logCtx := telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
+	if err := s.repo.UpdateDraft(logCtx, d); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(logCtx, "migration draft updated",
+		"event", "migration.draft.updated",
+		"draft_id", d.ID,
+		"database", dbLabel,
+		"draft_status", string(d.Status),
+		"status", "ok",
+	)
 	return d, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"tubes-wbd/internal/auth"
@@ -57,6 +58,12 @@ func (s *GroupService) CreateGroup(
 		return nil, fmt.Errorf("creating group: %w", err)
 	}
 
+	slog.InfoContext(ctx, "group created",
+		"event", "group.created",
+		"database", "platform",
+		"status", "ok",
+		"group_id", group.ID,
+	)
 	return group, nil
 }
 
@@ -126,6 +133,13 @@ func (s *GroupService) AddMember(
 		return fmt.Errorf("creating group membership: %w", err)
 	}
 
+	slog.InfoContext(ctx, "group member added",
+		"event", "group.member.added",
+		"database", "platform",
+		"status", "ok",
+		"group_id", groupID,
+		"target_user_id", userID,
+	)
 	return nil
 }
 
@@ -145,6 +159,13 @@ func (s *GroupService) RemoveMember(
 		return err
 	}
 
+	slog.InfoContext(ctx, "group member removed",
+		"event", "group.member.removed",
+		"database", "platform",
+		"status", "ok",
+		"group_id", groupID,
+		"target_user_id", userID,
+	)
 	return nil
 }
 
@@ -173,9 +194,25 @@ func (s *GroupService) SetLeader(
 	if err := s.groups.SetGroupLeader(ctx, groupID, &userID); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(ctx, "group leader assigned",
+		"event", "group.leader.set",
+		"database", "platform",
+		"status", "ok",
+		"group_id", groupID,
+		"target_user_id", userID,
+	)
 	return s.groups.FindGroupByID(ctx, groupID)
 }
 
 func (s *GroupService) ClearLeader(ctx context.Context, groupID uint) error {
-	return s.groups.SetGroupLeader(ctx, groupID, nil)
+	if err := s.groups.SetGroupLeader(ctx, groupID, nil); err != nil {
+		return err
+	}
+	slog.InfoContext(ctx, "group leader cleared",
+		"event", "group.leader.cleared",
+		"database", "platform",
+		"status", "ok",
+		"group_id", groupID,
+	)
+	return nil
 }

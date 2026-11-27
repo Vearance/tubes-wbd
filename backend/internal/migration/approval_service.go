@@ -4,14 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/telemetry"
 )
 
 const maxApprovalNoteLen = 2000
@@ -87,10 +91,37 @@ func (s *MigrationService) decide(ctx context.Context, userID, executionID uint,
 	if err := s.authz.RequireView(ctx, userID, execution.ManagedDatabaseID); err != nil {
 		return nil, err
 	}
-	if err := repo.DecideExecution(ctx, executionID, userID, decision, note); err != nil {
+
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	decideCtx := telemetry.WithActor(telemetry.WithDatabase(telemetry.WithMigrationMeta(ctx, telemetry.MigrationLogMeta{
+		ExecutionID:   execution.ID,
+		DraftID:       execution.DraftID,
+		ExecutionType: string(execution.Type),
+		Attempt:       execution.Attempt,
+	}), dbLabel), actor)
+
+	if err := repo.DecideExecution(decideCtx, executionID, userID, decision, note); err != nil {
 		return nil, err
 	}
-	return approvalSummary(ctx, repo, userID, executionID)
+	summary, err := approvalSummary(decideCtx, repo, userID, executionID)
+	if err != nil {
+		return nil, err
+	}
+	event := "migration.execution.approved"
+	msg := "migration execution approved"
+	if decision == ApprovalDecisionRejected {
+		event = "migration.execution.rejected"
+		msg = "migration execution rejected"
+	}
+	slog.InfoContext(decideCtx, msg,
+		"event", event,
+		"database", dbLabel,
+		"execution_status", string(summary.ExecutionStatus),
+		"status", "ok",
+	)
+	return summary, nil
 }
 
 func (s *MigrationService) ExecutionApprovals(ctx context.Context, userID, executionID uint) (*ApprovalSummary, error) {
@@ -108,22 +139,60 @@ func (s *MigrationService) ExecutionApprovals(ctx context.Context, userID, execu
 	return approvalSummary(ctx, repo, userID, executionID)
 }
 
-func (s *MigrationService) EnqueueExecution(ctx context.Context, userID, executionID uint) (*Execution, error) {
+func (s *MigrationService) EnqueueExecution(ctx context.Context, userID, executionID uint) (res *Execution, err error) {
+	start := time.Now()
+	actor := telemetry.ActorUser(userID)
+	spanCtx, span := telemetry.Tracer("tubes-wbd/migration").Start(ctx, "migration.execution.enqueue")
+	span.SetAttributes(
+		attribute.String("actor", actor),
+		attribute.Int64("migration.execution_id", int64(executionID)),
+	)
+	spanCtx = telemetry.WithActor(spanCtx, actor)
+	defer func() {
+		durationMs := telemetry.RoundMillis(time.Since(start))
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, telemetry.SanitizeError(err))
+			slog.WarnContext(spanCtx, "enqueueing migration execution failed",
+				"event", "migration.execution.enqueue_failed",
+				"execution_id", executionID,
+				"status", "error",
+				"duration_ms", durationMs,
+				"error", err,
+			)
+		}
+		span.End()
+	}()
+
 	repo, err := s.approvalRepo()
 	if err != nil {
 		return nil, err
 	}
-	execution, err := repo.GetExecution(ctx, executionID)
+	execution, err := repo.GetExecution(spanCtx, executionID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authz.RequireEdit(ctx, userID, execution.ManagedDatabaseID); err != nil {
+	dbLabel := telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID)
+	telemetry.SetRequestDatabase(spanCtx, dbLabel)
+	span.SetAttributes(
+		attribute.Int64("migration.database_id", int64(execution.ManagedDatabaseID)),
+		attribute.Int64("migration.draft_id", int64(execution.DraftID)),
+		attribute.String("migration.type", string(execution.Type)),
+	)
+	enqCtx := telemetry.WithDatabase(telemetry.WithMigrationMeta(spanCtx, telemetry.MigrationLogMeta{
+		ExecutionID:   execution.ID,
+		DraftID:       execution.DraftID,
+		ExecutionType: string(execution.Type),
+		Attempt:       execution.Attempt,
+	}), dbLabel)
+
+	if err := s.authz.RequireEdit(enqCtx, userID, execution.ManagedDatabaseID); err != nil {
 		return nil, err
 	}
-	if err := repo.EnqueueApprovedExecution(ctx, executionID); err != nil {
+	if err := repo.EnqueueApprovedExecution(enqCtx, executionID); err != nil {
 		return nil, err
 	}
-	return repo.GetExecution(ctx, executionID)
+	return repo.GetExecution(enqCtx, executionID)
 }
 
 func (s *MigrationService) PendingApprovals(ctx context.Context, userID uint) ([]Execution, error) {
@@ -276,7 +345,7 @@ func (r *GormRepository) DecideExecution(ctx context.Context, executionID, userI
 		return fmt.Errorf("migration: invalid approval decision %q", decision)
 	}
 	now := time.Now()
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return telemetry.RunGORMTransaction(ctx, r.db, "migration.decide_execution", func(tx *gorm.DB) error {
 		var execution Execution
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&execution, executionID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
