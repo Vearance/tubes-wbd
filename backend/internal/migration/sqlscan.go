@@ -36,6 +36,10 @@ func transactionControl(stmts [][]string) (string, bool) {
 }
 
 func blankLiterals(sql string) string {
+	return blankSQL(sql, true)
+}
+
+func blankSQL(sql string, blankIdentifiers bool) string {
 	out := []byte(sql)
 	blank := func(from, to int) {
 		for i := from; i < to && i < len(out); i++ {
@@ -63,7 +67,9 @@ func blankLiterals(sql string) string {
 			i = end
 		case sql[i] == '"':
 			end := quotedEnd(sql, i, '"', false)
-			blank(i, end)
+			if blankIdentifiers {
+				blank(i, end)
+			}
 			i = end
 		case sql[i] == '$' && (i == 0 || !isIdentChar(sql[i-1])):
 			if end, ok := dollarQuotedEnd(sql, i); ok {
