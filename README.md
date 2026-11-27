@@ -202,6 +202,10 @@ The migration workflow/approval component must call the migration service's `App
 - Permission changes and approval checks for the same database are serialized, so a newly granted group always becomes a required approver.
 - Transient errors (`40001`, `40P01`) are retried with backoff.
 
+### lock recovery when a worker fails
+
+If a worker dies, PostgreSQL rolls back its open transaction and releases the target advisory lock; committed batches and checkpoints stay. Every 30 s, other workers pick up `running` executions that have gone stale: if the target history shows the attempt committed, it is marked `success`; otherwise it is requeued (batches resume from the checkpoint), up to 3 attempts.
+
 ## large dataset and batch migration test
 
 [`scripts/seed-bulk.sql`](scripts/seed-bulk.sql) adds `training_sessions` to the Tracen seed: 1,000,000 training sessions for the 60 trainees, each linked to a matching G1 target race. [`scripts/bench-batch.sh`](scripts/bench-batch.sh) seeds a separate `benchdb`, then runs `UPDATE training_sessions SET report_status = 'published'` without batching (psql), as a normal migration, its rollback, and a per-batch migration on the same data.
