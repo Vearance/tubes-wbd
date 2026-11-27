@@ -15,6 +15,7 @@ import {
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
+import { TablePagination } from './TablePagination'
 
 function HistoryDetailModal({
   databaseId,
@@ -163,9 +164,18 @@ export function HeadLedger({
 }) {
   const [selectedEntry, setSelectedEntry] =
     useState<MigrationHistoryEntry | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const latestActive = entries.find((e) => e.active !== false)
   const canProposeRollback = Boolean(latestActive)
   const canProposeForward = Boolean(forwardCandidate)
+
+  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedEntries = entries.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  )
 
   return (
     <div className="space-y-5">
@@ -271,7 +281,7 @@ export function HeadLedger({
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {entries.map((entry) => {
+                {paginatedEntries.map((entry) => {
                   const isHead = latestActive?.version === entry.version
                   const isFailed = entry.status === 'failed'
                   const isRollback = entry.execution_type === 'rollback'
@@ -371,6 +381,13 @@ export function HeadLedger({
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={entries.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </section>
       )}
 

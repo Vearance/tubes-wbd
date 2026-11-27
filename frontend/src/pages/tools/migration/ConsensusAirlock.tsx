@@ -15,6 +15,7 @@ import {
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
+import { TablePagination } from './TablePagination'
 
 export type AirlockFilter =
   | 'all'
@@ -566,6 +567,8 @@ export function ConsensusAirlock({
   const [selectedId, setSelectedId] = useState<number | null>(
     focusedExecutionId,
   )
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [prevFocusedId, setPrevFocusedId] = useState<number | null>(
     focusedExecutionId,
   )
@@ -639,6 +642,13 @@ export function ConsensusAirlock({
     { key: 'completed', label: `Completed / Rejected (${counts.completed})` },
   ]
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedExecutions = filtered.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  )
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3.5 rounded-2xl border border-line/80 bg-white p-5 sm:px-6 sm:py-5 shadow-2xs">
@@ -699,7 +709,7 @@ export function ConsensusAirlock({
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {filtered.map((exec) => {
+                {paginatedExecutions.map((exec) => {
                   const meta = statusMeta(exec.status, exec.type)
                   return (
                     <tr
@@ -762,6 +772,13 @@ export function ConsensusAirlock({
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </section>
       )}
 

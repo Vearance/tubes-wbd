@@ -17,6 +17,7 @@ import {
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
+import { TablePagination } from './TablePagination'
 
 function draftStatusTone(status: MigrationDraft['status']) {
   if (status === 'applied' || status === 'approved') return 'green' as const
@@ -180,6 +181,15 @@ export function DraftWorkbench({
   const [editingDraft, setEditingDraft] = useState<MigrationDraft | null>(null)
   const [selectedDraft, setSelectedDraft] = useState<MigrationDraft | null>(
     null,
+  )
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  const totalPages = Math.max(1, Math.ceil(drafts.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedDrafts = drafts.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
   )
   const [name, setName] = useState(initialSeed?.name ?? '')
   const [sql, setSql] = useState(initialSeed?.sql ?? '')
@@ -670,7 +680,7 @@ export function DraftWorkbench({
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {drafts.map((draft) => {
+                {paginatedDrafts.map((draft) => {
                   const hasDownSql = Boolean(
                     draft.down_sql && !draft.irreversible,
                   )
@@ -730,6 +740,13 @@ export function DraftWorkbench({
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={drafts.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </section>
       )}
 
