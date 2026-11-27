@@ -35,7 +35,8 @@ func (e targetCommitError) Is(target error) bool {
 	return target == errTargetCommitOutcomeUnknown
 }
 
-const ensureBatchSchemaSQL = `
+var ensureBatchSchemaSQL = `
+SELECT pg_advisory_xact_lock(hashtext('dbm.migration.history_schema'));
 CREATE SCHEMA IF NOT EXISTS _dbm;
 CREATE TABLE IF NOT EXISTS _dbm.migration_batch_progress (
 	execution_id bigint PRIMARY KEY,
@@ -59,7 +60,9 @@ CREATE TABLE IF NOT EXISTS _dbm.migration_batch_scope (
 	execution_id bigint NOT NULL,
 	key bigint NOT NULL,
 	PRIMARY KEY (execution_id, key)
-);`
+);
+ALTER TABLE _dbm.migration_batch_commits ADD COLUMN IF NOT EXISTS restore_rows jsonb;` +
+	ensureInternalGuardsSQL("migration_batch_commits", "migration_batch_scope")
 
 type batchProgress struct {
 	LastCursor    int64
@@ -238,6 +241,8 @@ func (s *MigrationService) runOneBatch(
 	var committedRows int64
 	err := withTargetTransaction(batchCtx, conn, func(tx pgx.Tx) error {
 		var keys []int64
+		var originalRestore *string
+		var originalBatch int
 		nextCursor := progress.LastCursor
 		if execution.Type == ExecutionTypeRollback {
 			if execution.TargetExecutionID == nil {
@@ -247,16 +252,21 @@ func (s *MigrationService) runOneBatch(
 			if beforeBatch == 0 {
 				beforeBatch = math.MaxInt32
 			}
-			var originalBatch int
 			err := tx.QueryRow(batchCtx,
-				`SELECT batch_number, keys FROM _dbm.migration_batch_commits
+				`SELECT batch_number, keys, restore_rows::text FROM _dbm.migration_batch_commits
 				 WHERE execution_id = $1 AND batch_number < $2
 				 ORDER BY batch_number DESC LIMIT 1`, int64(*execution.TargetExecutionID), beforeBatch,
-			).Scan(&originalBatch, &keys)
+			).Scan(&originalBatch, &keys, &originalRestore)
 			if errors.Is(err, pgx.ErrNoRows) {
 				keys = nil
 			} else if err != nil {
 				return fmt.Errorf("selecting batch keys for rollback: %w", err)
+			} else if originalRestore == nil {
+				invalid := ErrInvalidRollback
+				if execution.Compensation {
+					invalid = ErrInvalidCompensation
+				}
+				return fmt.Errorf("%w: batch %d was committed without pre-batch row values and cannot be restored safely", invalid, originalBatch)
 			} else {
 				nextCursor = int64(originalBatch)
 			}
@@ -317,14 +327,34 @@ func (s *MigrationService) runOneBatch(
 			"status", "started",
 			"query", safeSQLForLog(execution.SQL),
 		)
+		before, err := captureBatchRows(batchCtx, tx, execution.Batch, keys)
+		if err != nil {
+			return err
+		}
+		internalBefore, err := internalStateFingerprint(batchCtx, tx)
+		if err != nil {
+			return err
+		}
 		command, err := tx.Exec(batchCtx, execution.SQL, keys)
 		if err != nil {
-			return fmt.Errorf("executing batch SQL: %w", err)
+			return fmt.Errorf("executing batch SQL: %w", internalStateError(err))
+		}
+		if originalRestore != nil {
+			if err := restoreBatchRows(batchCtx, tx, execution.Batch, originalBatch, *originalRestore); err != nil {
+				return internalStateError(err)
+			}
+		}
+		if err := requireInternalStateUnchanged(batchCtx, tx, internalBefore); err != nil {
+			return err
+		}
+		restore, err := changedBatchRows(batchCtx, tx, execution.Batch, keys, before)
+		if err != nil {
+			return err
 		}
 		rowsAffected := command.RowsAffected()
 		if _, err := tx.Exec(batchCtx,
-			`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed)
-			 VALUES ($1, $2, $3, $4)`, int64(execution.ID), nextBatchNumber, keys, rowsAffected); err != nil {
+			`INSERT INTO _dbm.migration_batch_commits (execution_id, batch_number, keys, rows_processed, restore_rows)
+			 VALUES ($1, $2, $3, $4, $5::jsonb)`, int64(execution.ID), nextBatchNumber, keys, rowsAffected, restore); err != nil {
 			return fmt.Errorf("recording committed batch keys: %w", err)
 		}
 		if _, err := tx.Exec(batchCtx,
