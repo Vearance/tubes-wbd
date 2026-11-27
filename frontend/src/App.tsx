@@ -192,6 +192,7 @@ export default function App() {
                 <Route path="/admin/logs" element={<AdminLogsPage />} />
               </Route>
 
+              <Route path="/" element={<Home />} />
               <Route path="*" element={<Home />} />
             </Routes>
           </Suspense>

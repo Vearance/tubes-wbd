@@ -145,17 +145,14 @@ export function AppShell({
     <div className="min-h-dvh overflow-x-clip min-[901px]:grid min-[901px]:grid-cols-[240px_minmax(0,1fr)]">
       {/* ─── DESKTOP SIDEBAR (>= 901px) ─── */}
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-line/70 bg-white/85 backdrop-blur-md px-3.5 pt-5 pb-4 min-[901px]:flex">
-        <NavLink
-          className={brandClasses}
-          to={user.is_admin ? '/admin/users' : '/databases'}
-        >
+        <Link className={brandClasses} to="/">
           <img
             src="/bibi.png"
             alt="BScheme mascot"
             className="size-8 object-contain"
           />
           BScheme
-        </NavLink>
+        </Link>
 
         {isAdminRoute ? (
           <div className={cn(pickerClasses, 'my-4')}>
@@ -402,9 +399,9 @@ export function AppShell({
       {/* ─── MOBILE STICKY TOP APP BAR (< 901px) ─── */}
       <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-2 border-b border-line/80 bg-white/92 px-3.5 backdrop-blur-md min-[901px]:hidden shadow-2xs">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <NavLink
+          <Link
             className="inline-flex items-center gap-2 text-base font-black tracking-tight text-ink no-underline shrink-0"
-            to={user.is_admin ? '/admin/users' : '/databases'}
+            to="/"
           >
             <img
               src="/bibi.png"
@@ -412,7 +409,7 @@ export function AppShell({
               className="size-7 object-contain"
             />
             <span className="font-black">BScheme</span>
-          </NavLink>
+          </Link>
 
           {!isAdminRoute && activeDatabase && (
             <button
