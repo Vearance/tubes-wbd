@@ -11,6 +11,7 @@ import {
   ConfirmAction,
   EmptyState,
   ErrorNotice,
+  Modal,
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
@@ -113,7 +114,8 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
       <div className="mt-2.5 pt-2 border-t border-black/5 text-xs">
         {isApproved && (
           <span className="font-semibold text-success-fg">
-            Approved by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
+            Approved by @
+            {approval.decided_by_username ?? `user #${approval.decided_by}`}
             {approval.decided_at
               ? ` · ${new Date(approval.decided_at).toLocaleTimeString()}`
               : ''}
@@ -121,7 +123,8 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
         )}
         {isRejected && (
           <span className="font-semibold text-danger-fg">
-            Rejected by @{approval.decided_by_username ?? `user #${approval.decided_by}`}
+            Rejected by @
+            {approval.decided_by_username ?? `user #${approval.decided_by}`}
           </span>
         )}
         {!isApproved && !isRejected && (
@@ -139,18 +142,17 @@ function SealSlot({ approval }: { approval: MigrationApproval }) {
   )
 }
 
-function ExecutionAirlockCard({
+function ExecutionDetailModal({
   execution,
   canEdit,
-  initiallyExpanded,
+  onClose,
   onMutated,
 }: {
-  execution: MigrationExecution
+  execution: MigrationExecution | null
   canEdit: boolean
-  initiallyExpanded: boolean
+  onClose: () => void
   onMutated: (message: string) => Promise<void>
 }) {
-  const [showSql, setShowSql] = useState(initiallyExpanded)
   const [summary, setSummary] = useState<MigrationApprovalSummary | null>(null)
   const [summaryUnavailable, setSummaryUnavailable] = useState(false)
   const [summaryLoading, setSummaryLoading] = useState(false)
@@ -158,13 +160,19 @@ function ExecutionAirlockCard({
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState('')
 
+  const execId = execution?.id ?? null
+  const execStatus = execution?.status ?? null
+  const execUpdated = execution?.updated_at ?? null
+
   useEffect(() => {
+    if (execId == null) return
     let active = true
     queueMicrotask(async () => {
       setSummaryLoading(true)
       setSummaryUnavailable(false)
+      setActionError('')
       try {
-        const res = await api.executionApprovals(execution.id)
+        const res = await api.executionApprovals(execId)
         if (active) setSummary(res)
       } catch {
         if (active) setSummaryUnavailable(true)
@@ -175,9 +183,10 @@ function ExecutionAirlockCard({
     return () => {
       active = false
     }
-  }, [execution.id, execution.status, execution.updated_at])
+  }, [execId, execStatus, execUpdated])
 
   async function handleApprove() {
+    if (!execution) return
     setActionBusy(true)
     setActionError('')
     try {
@@ -199,6 +208,7 @@ function ExecutionAirlockCard({
   }
 
   async function handleReject() {
+    if (!execution) return
     if (!note.trim()) {
       setActionError(
         'Please enter a rejection reason so the author knows what to fix.',
@@ -224,6 +234,7 @@ function ExecutionAirlockCard({
   }
 
   async function handleEnqueue(resumingPartial = false) {
+    if (!execution) return
     setActionBusy(true)
     setActionError('')
     try {
@@ -243,6 +254,7 @@ function ExecutionAirlockCard({
   }
 
   async function handleCompensate() {
+    if (!execution) return
     setActionBusy(true)
     setActionError('')
     try {
@@ -259,108 +271,32 @@ function ExecutionAirlockCard({
     }
   }
 
-  const meta = statusMeta(execution.status, execution.type)
   const approvedCount =
     summary?.approvals.filter((a) => a.decision === 'approved').length ?? 0
   const totalCount = summary?.approvals.length ?? 0
 
   return (
-    <article
-      id={`execution-${execution.id}`}
-      className={cn(
-        'overflow-hidden rounded-2xl border bg-white shadow-2xs transition-colors',
-        initiallyExpanded
-          ? 'border-violet ring-2 ring-violet/20'
-          : execution.status === 'pending_review'
-            ? 'border-warning/40'
-            : execution.status === 'approved'
-              ? 'border-success/40'
-              : 'border-line',
-      )}
+    <Modal
+      open={Boolean(execution)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setSummary(null)
+          setNote('')
+          setActionError('')
+          onClose()
+        }
+      }}
+      title={execution ? execution.name : 'Execution Details'}
+      description={
+        execution
+          ? `Execution #${execution.id} · Draft #${execution.draft_id}`
+          : undefined
+      }
+      size="xl"
     >
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 min-w-0 break-words text-sm font-bold text-ink">
-              {execution.name}
-            </h3>
-            <Status tone={meta.tone}>{meta.label}</Status>
-          </div>
-          <p className="m-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-relaxed text-muted">
-            <span className="font-mono font-semibold text-violet-fg">
-              #{execution.id}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span
-              className={cn(
-                'font-semibold',
-                execution.type === 'rollback'
-                  ? 'text-warning-fg'
-                  : execution.type === 'forward'
-                    ? 'text-violet-fg'
-                    : 'text-ink',
-              )}
-            >
-              {execution.compensation ? 'Compensation' : typeLabel(execution.type)}
-            </span>
-            {totalCount > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="font-semibold text-ink tabular-nums">
-                  {approvedCount}/{totalCount} approval{totalCount === 1 ? '' : 's'}
-                </span>
-              </>
-            )}
-            <span aria-hidden="true">·</span>
-            <span>Draft #{execution.draft_id}</span>
-            <span aria-hidden="true">·</span>
-            <span>User #{execution.executed_by}</span>
-            <span aria-hidden="true">·</span>
-            <span>{new Date(execution.created_at).toLocaleString()}</span>
-          </p>
-        </div>
+      {execution && (
+        <div className="space-y-6">
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-3 sm:shrink-0 sm:border-0 sm:pt-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSql((prev) => !prev)}
-          >
-            <Icon name="code" className="size-3.5" />
-            {showSql ? 'Hide SQL' : 'Inspect SQL'}
-          </Button>
-        </div>
-      </div>
-
-      {showSql && (
-        <div className="border-t border-line bg-surface-subtle px-4.5 py-3.5 space-y-2.5">
-          <div>
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
-              Immutable Execution Snapshot SQL
-            </span>
-            <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
-              {execution.sql}
-            </pre>
-          </div>
-          {execution.down_sql && (
-            <div>
-              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
-                Paired Down SQL
-              </span>
-              <pre className="m-0 max-h-32 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
-                {execution.down_sql}
-              </pre>
-            </div>
-          )}
-          {execution.irreversible && execution.irreversible_reason && (
-            <p className="m-0 text-xs text-warning-fg font-medium">
-              Marked irreversible: {execution.irreversible_reason}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="border-t border-line p-4 sm:p-5 space-y-4">
           {actionError && (
             <ErrorNotice
               message={actionError}
@@ -369,9 +305,7 @@ function ExecutionAirlockCard({
           )}
 
           {summaryLoading && !summary && (
-            <p className="m-0 text-xs text-muted">
-              Loading group approvals…
-            </p>
+            <p className="m-0 text-xs text-muted">Loading group approvals…</p>
           )}
 
           {summaryUnavailable && (
@@ -481,7 +415,7 @@ function ExecutionAirlockCard({
                   description={`Places "${execution.name}" onto the worker execution queue.`}
                   confirmLabel="Release to Queue"
                   tone="primary"
-                  onConfirm={handleEnqueue}
+                  onConfirm={() => handleEnqueue()}
                   trigger={
                     <Button variant="dark" size="sm" loading={actionBusy}>
                       <Icon name="play" className="size-3.5" />
@@ -529,43 +463,51 @@ function ExecutionAirlockCard({
                   )}
                 </div>
               </div>
-              {canEdit && execution.status === 'partial' && execution.batch && (
-                <ConfirmAction
-                  title={`Resume partial execution #${execution.id}?`}
-                  description="Continues from the saved batch checkpoint; batches that already completed will not run again."
-                  confirmLabel={
-                    execution.compensation ? 'Resume Compensation' : 'Resume Execution'
-                  }
-                  tone="primary"
-                  onConfirm={() => handleEnqueue(true)}
-                  trigger={
-                    <Button variant="dark" size="sm" loading={actionBusy}>
-                      <Icon name="play" className="size-3.5" />
-                      {execution.compensation
+              <div className="flex flex-wrap gap-2">
+                {canEdit && execution.status === 'partial' && execution.batch && (
+                  <ConfirmAction
+                    title={`Resume partial execution #${execution.id}?`}
+                    description="Continues from the saved batch checkpoint; batches that already completed will not run again."
+                    confirmLabel={
+                      execution.compensation
                         ? 'Resume Compensation'
-                        : 'Resume Partial Execution'}
-                    </Button>
-                  }
-                />
-              )}
-              {canEdit &&
-                execution.status === 'partial' &&
-                execution.type === 'up' &&
-                execution.batch && (
-                <ConfirmAction
-                  title={`Compensate partial execution #${execution.id}?`}
-                  description="Creates a new rollback execution using Down SQL for committed batches only, in reverse order. It must receive the same group approvals before it can run."
-                  confirmLabel="Submit Compensation for Review"
-                  tone="primary"
-                  onConfirm={handleCompensate}
-                  trigger={
-                    <Button variant="outline" size="sm" loading={actionBusy}>
-                      <Icon name="undo" className="size-3.5" />
-                      Compensate Committed Batches
-                    </Button>
-                  }
-                />
-              )}
+                        : 'Resume Execution'
+                    }
+                    tone="primary"
+                    onConfirm={() => handleEnqueue(true)}
+                    trigger={
+                      <Button variant="dark" size="sm" loading={actionBusy}>
+                        <Icon name="play" className="size-3.5" />
+                        {execution.compensation
+                          ? 'Resume Compensation'
+                          : 'Resume Partial Execution'}
+                      </Button>
+                    }
+                  />
+                )}
+                {canEdit &&
+                  execution.status === 'partial' &&
+                  execution.type === 'up' &&
+                  execution.batch && (
+                    <ConfirmAction
+                      title={`Compensate partial execution #${execution.id}?`}
+                      description="Creates a new rollback execution using Down SQL for committed batches only, in reverse order. It must receive the same group approvals before it can run."
+                      confirmLabel="Submit Compensation for Review"
+                      tone="primary"
+                      onConfirm={handleCompensate}
+                      trigger={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          loading={actionBusy}
+                        >
+                          <Icon name="undo" className="size-3.5" />
+                          Compensate Committed Batches
+                        </Button>
+                      }
+                    />
+                  )}
+              </div>
               {execution.error_message && (
                 <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 font-mono text-xs text-danger-fg break-words">
                   {execution.error_code ? `[${execution.error_code}] ` : ''}
@@ -574,8 +516,35 @@ function ExecutionAirlockCard({
               )}
             </div>
           )}
+
+          <div className="space-y-5 border-t border-line pt-5">
+            <div className="space-y-2">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
+                Immutable Execution Snapshot SQL
+              </span>
+              <pre className="m-0 max-h-56 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-ink">
+                {execution.sql}
+              </pre>
+            </div>
+            {execution.down_sql && (
+              <div className="space-y-2">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-success-fg">
+                  Paired Down SQL
+                </span>
+                <pre className="m-0 max-h-44 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-muted">
+                  {execution.down_sql}
+                </pre>
+              </div>
+            )}
+            {execution.irreversible && execution.irreversible_reason && (
+              <div className="rounded-xl border border-warning/25 bg-warning-soft/40 p-4 text-xs font-medium text-warning-fg">
+                Marked irreversible: {execution.irreversible_reason}
+              </div>
+            )}
+          </div>
         </div>
-    </article>
+      )}
+    </Modal>
   )
 }
 
@@ -594,6 +563,24 @@ export function ConsensusAirlock({
   focusedExecutionId: number | null
   onMutated: (message: string) => Promise<void>
 }) {
+  const [selectedId, setSelectedId] = useState<number | null>(
+    focusedExecutionId,
+  )
+  const [prevFocusedId, setPrevFocusedId] = useState<number | null>(
+    focusedExecutionId,
+  )
+  if (prevFocusedId !== focusedExecutionId) {
+    setPrevFocusedId(focusedExecutionId)
+    if (focusedExecutionId != null) {
+      setSelectedId(focusedExecutionId)
+    }
+  }
+
+  const selectedExecution =
+    selectedId != null
+      ? executions.find((e) => e.id === selectedId) ?? null
+      : null
+
   const counts = {
     all: executions.length,
     pending_review: executions.filter(
@@ -653,11 +640,13 @@ export function ConsensusAirlock({
   ]
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-2xl border border-line/80 bg-white p-4 sm:p-4.5 shadow-2xs">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3.5 rounded-2xl border border-line/80 bg-white p-5 sm:px-6 sm:py-5 shadow-2xs">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <h2 className="m-0 text-base font-bold text-ink">Migration Execution</h2>
+            <h2 className="m-0 text-base font-bold text-ink">
+              Migration Execution
+            </h2>
             <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg whitespace-nowrap">
               {counts.pending_review > 0
                 ? `${counts.pending_review} awaiting sign-off`
@@ -685,27 +674,103 @@ export function ConsensusAirlock({
         </div>
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((exec) => (
-          <ExecutionAirlockCard
-            key={exec.id}
-            execution={exec}
-            canEdit={canEdit}
-            initiallyExpanded={focusedExecutionId === exec.id}
-            onMutated={onMutated}
-          />
-        ))}
-
-        {filtered.length === 0 && (
-          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
-            <EmptyState icon="shield" title="No executions in this stage">
-              {filter === 'all'
-                ? 'Submit a migration draft, rollback, or forward to start a Migration Execution.'
-                : 'No executions currently match this filter.'}
-            </EmptyState>
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
+          <EmptyState icon="shield" title="No executions in this stage">
+            {filter === 'all'
+              ? 'Submit a migration draft, rollback, or forward to start a Migration Execution.'
+              : 'No executions currently match this filter.'}
+          </EmptyState>
+        </div>
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-white shadow-2xs">
+          <div className="w-full overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]">
+            <table className="w-full min-w-[680px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-line bg-surface-subtle text-[11px] font-bold uppercase tracking-wider text-muted">
+                  <th className="px-5 py-3.5 whitespace-nowrap">Exec</th>
+                  <th className="px-5 py-3.5">Migration</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Type</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Submitted</th>
+                  <th className="px-5 py-3.5 text-right whitespace-nowrap">
+                    Details
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {filtered.map((exec) => {
+                  const meta = statusMeta(exec.status, exec.type)
+                  return (
+                    <tr
+                      key={exec.id}
+                      className={cn(
+                        'transition-colors hover:bg-canvas/60',
+                        focusedExecutionId === exec.id && 'bg-violet-soft/20',
+                      )}
+                    >
+                      <td className="px-5 py-4 whitespace-nowrap font-mono font-bold text-violet-fg">
+                        #{exec.id}
+                      </td>
+                      <td className="px-5 py-4 max-w-[280px]">
+                        <div className="truncate font-bold text-ink">
+                          {exec.name}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted">
+                          Draft #{exec.draft_id}
+                          {exec.version != null ? ` · v${exec.version}` : ''}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span
+                          className={cn(
+                            'font-semibold',
+                            exec.type === 'rollback'
+                              ? 'text-warning-fg'
+                              : exec.type === 'forward'
+                                ? 'text-violet-fg'
+                                : 'text-ink',
+                          )}
+                        >
+                          {exec.compensation
+                            ? 'Compensation'
+                            : typeLabel(exec.type)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <Status tone={meta.tone}>{meta.label}</Status>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-muted">
+                        <div>{new Date(exec.created_at).toLocaleString()}</div>
+                        <div className="mt-0.5 text-[11px]">
+                          User #{exec.executed_by}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedId(exec.id)}
+                        >
+                          <Icon name="eye" className="size-3.5" />
+                          View More
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        </section>
+      )}
+
+      <ExecutionDetailModal
+        execution={selectedExecution}
+        canEdit={canEdit}
+        onClose={() => setSelectedId(null)}
+        onMutated={onMutated}
+      />
     </div>
   )
 }

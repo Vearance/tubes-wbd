@@ -42,13 +42,13 @@ export function Modal({
               className,
             )}
           >
-            <div className="flex items-start justify-between gap-2.5 sm:gap-4 border-b border-line/80 px-4 py-3 sm:px-8 sm:py-6.5 bg-canvas/30">
+            <div className="flex items-start justify-between gap-3 sm:gap-4 border-b border-line/80 px-5 py-4 sm:px-8 sm:py-6 bg-canvas/35">
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="m-0 text-base sm:text-[23px] font-bold tracking-tight text-ink">
+                <Dialog.Title className="m-0 text-base sm:text-[22px] font-bold tracking-tight text-ink">
                   {title}
                 </Dialog.Title>
                 {description && (
-                  <Dialog.Description className="mt-1 sm:mt-1.5 text-xs sm:text-sm text-muted leading-relaxed">
+                  <Dialog.Description className="mt-1.5 text-xs sm:text-sm text-muted leading-relaxed">
                     {description}
                   </Dialog.Description>
                 )}
@@ -60,7 +60,7 @@ export function Modal({
                 <Icon name="close" className="size-4.5" />
               </Dialog.Close>
             </div>
-            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8 max-h-[82dvh] sm:max-h-[calc(100dvh-120px)] overflow-y-auto [scrollbar-width:thin]">
+            <div className="p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:p-8 max-h-[82dvh] sm:max-h-[calc(100dvh-120px)] overflow-y-auto [scrollbar-width:thin]">
               {children}
             </div>
           </Dialog.Popup>
