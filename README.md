@@ -202,6 +202,26 @@ The migration workflow/approval component must call the migration service's `App
 - Permission changes and approval checks for the same database are serialized, so a newly granted group always becomes a required approver.
 - Transient errors (`40001`, `40P01`) are retried with backoff.
 
+## large dataset and batch migration test
+
+[`scripts/seed-bulk.sql`](scripts/seed-bulk.sql) adds `training_sessions` to the Tracen seed: 1,000,000 training sessions for the 60 trainees, each linked to a matching G1 target race. [`scripts/bench-batch.sh`](scripts/bench-batch.sh) seeds a separate `benchdb`, then runs `UPDATE training_sessions SET report_status = 'published'` without batching (psql), as a normal migration, its rollback, and a per-batch migration on the same data.
+
+```bash
+docker compose up -d --build
+bash scripts/bench-batch.sh            # options: --rows N --batch-size N
+```
+
+Result (Docker 16 CPU / 7.5 GB RAM, PostgreSQL 17, 1,000,000 rows):
+
+| Scenario | Duration |
+| --- | --- |
+| `UPDATE` without batching (psql) | 9.21 s |
+| Normal migration | 11.45 s |
+| Rollback (down) | 10.73 s |
+| Per-batch migration (200 × 5,000 rows) | 43.47 s |
+
+The per-batch migration is slower in total because each batch is its own transaction with a checkpoint, but it locks only 5,000 rows at a time and resumes from the last committed batch after a failure.
+
 ## integration tests
 
 Integration tests use Testcontainers and require Docker:
@@ -219,6 +239,47 @@ bash scripts/coverage.sh --unit   # unit tests only
 ```
 
 The script prints statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. It runs Go coverage from `backend/` and excludes the generated `backend/internal/http/api.gen.go` from the report.
+
+## stress testing (k6)
+
+Stress testing menguji **BScheme API** (`bscheme-api`) dan **migration worker** secara bersamaan ketika beban dinaikkan bertahap di atas beban normal lalu diturunkan kembali untuk mengamati pemulihan sistem (*recovery*), baik pada **1 database yang sama** (`k6_same_db`) maupun **3 database berbeda** (`k6_diff_db_1..3`).
+
+### Menjalankan Pengujian
+
+```bash
+docker compose up --build -d --remove-orphans --scale worker=3
+bash loadtest/run-stress-test.sh        # Full run (240s, 4 tahap x 60s)
+bash loadtest/run-stress-test.sh --quick # Quick run (80s, 4 tahap x 20s)
+```
+
+### Penjelasan Singkat Script
+
+- **[`loadtest/run-stress-test.sh`](loadtest/run-stress-test.sh)**: membuat & mengisi 4 target database pada `test-db`, menyiapkan `40` sesi login terautentikasi (`k6_tester`), serta membuat dan men-approve `100` job *Same-DB* + `180` job *Diff-DB* (`SELECT pg_sleep(1.2)`) sebelum tes dimulai.
+- **[`loadtest/stress-test.js`](loadtest/stress-test.js)**: menjalankan 3 skenario paralel selama 4 tahap (`Normal` -> `High` -> `Peak Stress` -> `Recovery`):
+  1. `api_access`: akses endpoint API (`/databases`, `/schemas`, `/tables`, `/table-structure`, `/table-rows`, `/migrations/history`, `POST /query`).
+  2. `migrations_same_db` & `migrations_diff_db`: memanggil `POST /migrations/executions/{id}/enqueue` lalu melakukan *polling* `GET /migrations/executions/{id}` setiap `500ms` sampai status terminal (`success`/`failed`). Respons `202 Accepted` saat enqueue **tidak** dihitung sebagai keberhasilan eksekusi migration.
+- **Threshold k6**: `api_req_duration` / `http_req_duration{kind:api}` `p(95) < 500 ms`, `api_duration_normal` `p(95) < 150 ms`, `api_duration_recovery` `p(95) < 250 ms`, `api_error_rate` & `http_req_failed` `< 1%`, serta `migration_job_error_rate < 5%` (**semua PASS**, ringkasan di [`loadtest/results/summary.json`](loadtest/results/summary.json)).
+
+### Hasil Pengujian per Tingkat Beban
+
+| Tingkat Beban | Konfigurasi Beban | API Throughput | API `p50` / `p95` | Error (API / Job) | Job Acc / Selesai | Queue Wait `p50` / `p95` | Exec `p50` / `p95` | Job Throughput |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Normal** (`0–60s`) | `10` VU; `4/m` Same + `9/m` Diff | `165.0 req/s` | `4.5 ms` / `6.9 ms` | `0.00%` / `0.00%` | `11` / `11` | `356 ms` / `690 ms` | `1.23 s` / `1.23 s` | `11.0 jobs/min` |
+| **High** (`60–120s`) | `80` VU; `18/m` Same + `36/m` Diff | `1,248.8 req/s` | `5.6 ms` / `24.3 ms` | `0.00%` / `0.00%` | `51` / `51` | `550 ms` / `940 ms` | `1.24 s` / `1.26 s` | `51.0 jobs/min` |
+| **Peak Stress** (`120–180s`) | `220` VU; `48/m` Same + `90/m` Diff | `2,089.1 req/s` | `39.6 ms` / `119.3 ms` | `0.00%` / `0.00%` | `129` / `129` | `8.09 s` / `18.48 s` | `1.25 s` / `1.26 s` | `129.0 jobs/min` |
+| **Recovery** (`180–240s`) | `10` VU; `4/m` Same + `9/m` Diff | `407.3 req/s` | `7.5 ms` / `54.1 ms` | `0.00%` / `0.00%` | `22` / `22` | `16.16 s` / `19.33 s` *(min `19 ms`)* | `1.23 s` / `1.23 s` | `22.0 jobs/min` |
+| **Overall** (`240s`) | Total `238,083` HTTP (`234,614` API) | `977.6 req/s` | `21.6 ms` / `95.7 ms` | `0.00%` / `0.00%` | `213` / `213` | `2.79 s` / `18.77 s` | `1.25 s` / `1.26 s` | `53.25 jobs/min` |
+
+**Perbandingan Same DB vs Different DBs**:
+- **Same DB (`k6_same_db`)**: `73/73` sukses (`0.00%` error), `QWait p50 = 4.05 s`, `p95 = 22.75 s` (`max = 31.18 s`), throughput **`18.25 jobs/min`**.
+- **Diff DB (`k6_diff_db_1..3`)**: `140/140` sukses (`0.00%` error), `QWait p50 = 2.24 s`, `p95 = 18.53 s` (`max = 19.33 s`), throughput **`35.00 jobs/min`**.
+
+### Analisis per Tingkat Beban
+
+1. **Normal (`0–60s`)**: Pada beban normal (`10` VU, `165 req/s`, `11` job), API sangat responsif (`p50 = 4.5 ms`, `p95 = 6.9 ms`, `0%` error). Waktu tunggu queue (~`0.36–0.69s`) berasal dari interval polling `OutboxRelay` (`1s`), dengan durasi eksekusi konsisten `1.23 s`.
+2. **High (`60–120s`)**: Beban naik `7.6×` menjadi `1,248.8 req/s`. `p50` tetap `5.6 ms`, sedangkan `p95` naik ke `24.3 ms` karena mulai terjadi antrean singkat pada connection pool DB. Queue wait worker masih stabil (`p95 = 940 ms`) karena `51` job/menit masih di bawah kapasitas 3 worker.
+3. **Peak Stress (`120–180s`)**: Pada `220` VU (`2,089.1 req/s`), saturasi connection pool mendorong latensi API ke `p50 = 39.6 ms` dan `p95 = 119.3 ms` (tetap di bawah threshold `500 ms` dengan `0%` error). Di sisi worker (`129` job), constraint serial per database pada `k6_same_db` memicu `ErrExecutionBusy` + backoff `2s` sehingga antrean Same-DB menumpuk (`QWait p95 = 22.75 s`, `18.25 jobs/min`), sementara `k6_diff_db_1..3` dieksekusi paralel oleh 3 worker hingga `~2×` lebih cepat (`35.00 jobs/min`, `QWait p50 = 2.24 s`).
+4. **Recovery (`180–240s`)**: Setelah beban diturunkan ke `10` VU, latensi API langsung pulih (`p50 = 7.5 ms`, `p95 = 54.1 ms < 250 ms`, `0%` error). Job awal di tahap *recovery* masih menghabiskan sisa antrean dari *peak stress* (`QWait p50 = 16.16 s`), lalu antrean terkuras habis hingga job di akhir tahap kembali ke `min = 19 ms` dengan total `213 / 213` job selesai `100%` sukses.
 
 ## observability
 

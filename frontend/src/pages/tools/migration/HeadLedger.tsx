@@ -11,153 +11,136 @@ import {
   ConfirmAction,
   EmptyState,
   ErrorNotice,
+  Modal,
   Status,
 } from '../../../components/ui'
+import { cleanMigrationName, cn } from '../../../lib/utils'
+import { TablePagination } from './TablePagination'
 
-function HistoryEntryRow({
+function HistoryDetailModal({
   databaseId,
   entry,
   isHead,
+  onClose,
 }: {
   databaseId: number
-  entry: MigrationHistoryEntry
+  entry: MigrationHistoryEntry | null
   isHead: boolean
+  onClose: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [detail, setDetail] = useState<MigrationHistoryDetail | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [detailsByVersion, setDetailsByVersion] = useState<
+    Record<number, MigrationHistoryDetail>
+  >({})
+  const [loadingVersion, setLoadingVersion] = useState<number | null>(null)
   const [error, setError] = useState('')
 
-  async function toggleDetail() {
-    if (open) {
-      setOpen(false)
-      return
-    }
-    setOpen(true)
-    if (detail) return
-    setLoading(true)
-    setError('')
-    try {
-      const res = await api.historyEntry(databaseId, entry.version)
-      setDetail(res)
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Unable to load version details',
-      )
-    } finally {
-      setLoading(false)
-    }
+  const version = entry?.version ?? null
+  const detail = version != null ? detailsByVersion[version] ?? null : null
+  const isLoading = version != null && loadingVersion === version && !detail
+
+  if (version != null && !detail && loadingVersion !== version && !error) {
+    setLoadingVersion(version)
+    void api
+      .historyEntry(databaseId, version)
+      .then((res) => {
+        setDetailsByVersion((prev) => ({ ...prev, [version]: res }))
+      })
+      .catch((err) => {
+        setError(
+          err instanceof Error ? err.message : 'Unable to load version details',
+        )
+      })
+      .finally(() => {
+        setLoadingVersion((curr) => (curr === version ? null : curr))
+      })
   }
 
+  const isFailed = entry?.status === 'failed'
+
   return (
-    <article className="overflow-hidden rounded-2xl border border-line bg-white p-4.5 shadow-2xs">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-          <div className="min-w-16">
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
-              Version
-            </span>
-            <strong className="mt-0.5 block font-mono text-sm font-extrabold text-violet-fg">
+    <Modal
+      open={Boolean(entry)}
+      onOpenChange={(open) => {
+        if (!open) {
+          setError('')
+          onClose()
+        }
+      }}
+      title={
+        entry ? (
+          <span className="flex flex-wrap items-center gap-2.5">
+            <span
+              className={cn(
+                'inline-flex items-center rounded-lg px-2.5 py-0.5 font-mono text-xs font-extrabold',
+                isHead
+                  ? 'bg-violet text-white shadow-xs'
+                  : 'bg-violet-soft/80 text-violet-fg',
+              )}
+            >
               v{entry.version}
-            </strong>
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="m-0 truncate text-sm font-bold text-ink">
-                {entry.name}
-              </h3>
-              <Status tone={entry.status === 'failed' ? 'red' : 'green'}>
-                {entry.status.toUpperCase()}
-              </Status>
-              <Status tone="gray">Attempt {entry.attempt_number}</Status>
-              {isHead && (
-                <Status tone="violet" className="gap-1">
-                  <span className="size-1.5 rounded-full bg-violet animate-pulse" />
-                  HEAD · Active Schema
-                </Status>
-              )}
-            </div>
-            <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-              {entry.execution_type && (
-                <>
-                  <span
-                    className={
-                      entry.execution_type === 'rollback'
-                        ? 'font-bold uppercase text-warning-fg'
-                        : entry.execution_type === 'forward'
-                          ? 'font-bold uppercase text-violet-fg'
-                          : 'font-bold uppercase text-success-fg'
-                    }
-                  >
-                    {entry.execution_type}
-                  </span>
-                  <span>·</span>
-                </>
-              )}
-              <span>
-                Executed by user #{entry.executed_by} ·{' '}
-                {new Date(entry.executed_at).toLocaleString()}
-                {entry.execution_id ? ` · Execution #${entry.execution_id}` : ''}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
-          <span className="rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-xs text-muted tabular-nums">
-            {entry.duration_ms} ms
+            </span>
+            <span className="break-words">
+              {cleanMigrationName(entry.name)}
+            </span>
           </span>
-          <Button variant="outline" size="sm" onClick={toggleDetail}>
-            <Icon name="code" className="size-3.5" />
-            {open ? 'Hide SQL' : 'Inspect SQL'}
-          </Button>
-        </div>
-      </div>
+        ) : (
+          'Migration Details'
+        )
+      }
+      description={
+        entry?.execution_id ? `Execution #${entry.execution_id}` : undefined
+      }
+      size="lg"
+    >
+      {entry && (
+        <div className="space-y-6">
+          {isFailed && (
+            <div className="rounded-2xl border border-danger/25 bg-danger-soft/80 p-4 space-y-1">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-danger-fg">
+                Execution Error
+              </span>
+              <p className="m-0 font-mono text-xs leading-relaxed text-danger-fg break-words">
+                {entry.error_code ? `${entry.error_code}: ` : ''}
+                {entry.error_message || 'This migration attempt failed.'}
+              </p>
+            </div>
+          )}
 
-      {entry.status === 'failed' && (
-        <p className="mt-3 mb-0 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger">
-          {entry.error_code ? `${entry.error_code}: ` : ''}
-          {entry.error_message || 'This migration attempt failed.'}
-        </p>
-      )}
-
-      {open && (
-        <div className="mt-3 rounded-xl border border-line bg-surface-subtle p-4 space-y-3">
-          {loading && (
-            <span className="text-xs text-muted">Loading SQL snapshot…</span>
+          {isLoading && (
+            <p className="m-0 py-2 text-xs text-muted">Loading SQL snapshot…</p>
           )}
           {error && <ErrorNotice message={error} />}
+
           {detail && (
-            <>
-              <div>
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
                   Executed SQL
                 </span>
-                <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
+                <pre className="m-0 max-h-60 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-ink">
                   {detail.sql}
                 </pre>
               </div>
               {detail.down_sql ? (
-                <div>
-                  <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
+                <div className="space-y-2">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-success-fg">
                     Rollback Plan (Down SQL)
                   </span>
-                  <pre className="m-0 max-h-36 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
+                  <pre className="m-0 max-h-48 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-muted">
                     {detail.down_sql}
                   </pre>
                 </div>
               ) : (
-                <p className="m-0 text-xs font-medium text-warning-fg">
+                <div className="rounded-xl border border-warning/25 bg-warning-soft/40 p-4 text-xs font-medium text-warning-fg">
                   Irreversible:{' '}
                   {detail.irreversible_reason || 'No Down SQL provided.'}
-                </p>
+                </div>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
-    </article>
+    </Modal>
   )
 }
 
@@ -181,17 +164,38 @@ export function HeadLedger({
   onRollbackProposed: (executionId: number) => Promise<void>
   onForwardProposed: (executionId: number) => Promise<void>
 }) {
+  const [selectedEntry, setSelectedEntry] =
+    useState<MigrationHistoryEntry | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const latestActive = entries.find((e) => e.active !== false)
   const canProposeRollback = Boolean(latestActive)
   const canProposeForward = Boolean(forwardCandidate)
 
+  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedEntries = entries.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  )
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3.5 rounded-2xl border border-line/80 bg-white p-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6 sm:py-5 shadow-2xs">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="m-0 text-base font-bold text-ink">Live HEAD Ledger</h2>
-          <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-bold text-violet-fg">
-            {latestActive ? `v${latestActive.version} HEAD` : 'Empty schema'}
+          <h2 className="m-0 text-base font-bold text-ink">Migration History</h2>
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold whitespace-nowrap',
+              latestActive
+                ? 'bg-violet text-white shadow-xs'
+                : 'bg-violet-soft text-violet-fg',
+            )}
+          >
+            {latestActive && (
+              <span className="size-1.5 rounded-full bg-white animate-pulse" />
+            )}
+            {latestActive ? `v${latestActive.version} · Active HEAD` : 'Empty schema'}
           </span>
           <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted">
             <input
@@ -249,30 +253,155 @@ export function HeadLedger({
         )}
       </div>
 
-      <div className="space-y-3">
-        {entries.map((entry) => (
-          <HistoryEntryRow
-            key={entry.version}
-            databaseId={databaseId}
-            entry={entry}
-            isHead={latestActive?.version === entry.version}
-          />
-        ))}
+      {entries.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
+          {hideRollback ? (
+            <EmptyState icon="migration" title="No visible history entries">
+              Turn off Hide rollback to show the complete migration history.
+            </EmptyState>
+          ) : (
+            <EmptyState icon="migration" title="No migration history yet">
+              Migration attempts will appear here after they are run.
+            </EmptyState>
+          )}
+        </div>
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-white shadow-2xs">
+          <div className="w-full overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]">
+            <table className="w-full min-w-[680px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-line bg-surface-subtle text-[11px] font-bold uppercase tracking-wider text-muted">
+                  <th className="px-5 py-3.5 whitespace-nowrap">Version</th>
+                  <th className="px-5 py-3.5">Migration</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Type</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Duration</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Executed</th>
+                  <th className="px-5 py-3.5 text-right whitespace-nowrap">
+                    Details
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {paginatedEntries.map((entry) => {
+                  const isHead = latestActive?.version === entry.version
+                  const isFailed = entry.status === 'failed'
+                  const isRollback = entry.execution_type === 'rollback'
 
-        {entries.length === 0 && (
-          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
-            {hideRollback ? (
-              <EmptyState icon="migration" title="No visible history entries">
-                Turn off Hide rollback to show the complete migration history.
-              </EmptyState>
-            ) : (
-              <EmptyState icon="migration" title="No migration history yet">
-                Migration attempts will appear here after they are run.
-              </EmptyState>
-            )}
+                  return (
+                    <tr
+                      key={entry.version}
+                      className={cn(
+                        'transition-colors',
+                        isHead
+                          ? 'bg-violet-soft/45 hover:bg-violet-soft/60 ring-1 ring-inset ring-violet/25'
+                          : 'hover:bg-canvas/60',
+                      )}
+                    >
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-lg px-2.5 py-1 font-mono text-xs font-extrabold',
+                              isHead
+                                ? 'bg-violet text-white shadow-xs'
+                                : 'bg-violet-soft/80 text-violet-fg',
+                            )}
+                          >
+                            v{entry.version}
+                          </span>
+                          {isHead && (
+                            <Status tone="violet" className="gap-1.5 border-violet/35 bg-white/90 shadow-2xs">
+                              <span className="size-1.5 rounded-full bg-violet animate-pulse" />
+                              HEAD
+                            </Status>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 max-w-[280px]">
+                        <div
+                          className={cn(
+                            'truncate',
+                            isHead
+                              ? 'font-extrabold text-violet-fg'
+                              : 'font-bold text-ink',
+                          )}
+                        >
+                          {cleanMigrationName(entry.name)}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {entry.execution_type ? (
+                          <span
+                            className={cn(
+                              'font-bold uppercase',
+                              isRollback
+                                ? 'text-warning-fg'
+                                : entry.execution_type === 'forward'
+                                  ? 'text-violet-fg'
+                                  : isFailed
+                                    ? 'text-danger-fg'
+                                    : 'text-success-fg',
+                            )}
+                          >
+                            {entry.execution_type}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <Status tone={isFailed ? 'red' : 'green'}>
+                          {entry.status.toUpperCase()}
+                        </Status>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap font-mono text-muted tabular-nums">
+                        {entry.duration_ms} ms
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-muted">
+                        <div>{new Date(entry.executed_at).toLocaleString()}</div>
+                        <div className="mt-0.5 text-[11px]">
+                          User #{entry.executed_by}
+                          {entry.attempt_number > 1
+                            ? ` · Attempt ${entry.attempt_number}`
+                            : ''}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedEntry(entry)}
+                        >
+                          <Icon name="eye" className="size-3.5" />
+                          View More
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={entries.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        </section>
+      )}
+
+      <HistoryDetailModal
+        databaseId={databaseId}
+        entry={selectedEntry}
+        isHead={
+          Boolean(selectedEntry) &&
+          latestActive?.version === selectedEntry?.version
+        }
+        onClose={() => setSelectedEntry(null)}
+      />
     </div>
   )
 }

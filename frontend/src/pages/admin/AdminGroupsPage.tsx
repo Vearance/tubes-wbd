@@ -175,11 +175,13 @@ function GroupDetail({
   users,
   databases,
   onGroupUpdated,
+  onBack,
 }: {
   group: Group;
   users: AdminUser[];
   databases: ManagedDatabase[];
   onGroupUpdated: () => Promise<void>;
+  onBack: () => void;
 }) {
   const members = useResource(() => api.groupMembers(group.id), [group.id]);
   const permissions = useResource(
@@ -306,18 +308,16 @@ function GroupDetail({
 
   return (
     <>
-      <header className="flex flex-wrap min-h-[84px] items-center justify-between gap-3 border-b border-line p-5">
+      <header className="flex flex-wrap min-h-[68px] sm:min-h-[84px] items-center justify-between gap-3 border-b border-line p-3.5 sm:p-5">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            className="min-[901px]:hidden flex items-center gap-1 text-xs font-bold text-violet-fg bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+            onClick={onBack}
+            className="min-[1220px]:hidden grid size-8 shrink-0 place-items-center rounded-xl border border-line/80 bg-white text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink cursor-pointer"
+            aria-label="Back to groups list"
             title="Back to groups list"
           >
-            <Icon name="chevron-left" className="size-3.5" />
-            <span>List</span>
+            <Icon name="chevron-left" className="size-4" />
           </button>
           <div className="min-w-0">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -404,7 +404,6 @@ function GroupDetail({
           <PickerAction
             open={memberPicker}
             label="Add member"
-            className="max-[600px]:w-full"
             onClick={() => setMemberPicker(!memberPicker)}
           />
         </AssignmentHeading>
@@ -531,7 +530,6 @@ function GroupDetail({
           <PickerAction
             open={databasePicker}
             label="Add database"
-            className="max-[600px]:w-full"
             onClick={() => setDatabasePicker(!databasePicker)}
           />
         </AssignmentHeading>
@@ -657,11 +655,11 @@ export function AdminGroupsPage() {
   function selectGroup(group: Group) {
     setSelectedState(group);
     navigate(`/admin/groups/${group.id}`);
-    if (typeof window !== "undefined" && window.innerWidth <= 900) {
-      setTimeout(() => {
-        document.getElementById("group-detail-view")?.scrollIntoView({ behavior: "smooth" });
-      }, 50);
-    }
+  }
+
+  function clearSelection() {
+    setSelectedState(null);
+    navigate("/admin/groups");
   }
 
   async function createGroup(event: FormEvent) {
@@ -761,8 +759,8 @@ export function AdminGroupsPage() {
                 message={groups.error || users.error || databases.error || error}
               />
             )}
-      <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
-        <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>
+      <div className="grid min-w-0 grid-cols-1 gap-3 min-[1220px]:min-h-[calc(100dvh-110px)] min-[1220px]:grid-cols-[360px_minmax(560px,1fr)]">
+        <section className={cn(surfaceClass, "min-w-0 overflow-hidden", selected && "max-[1219px]:hidden")}>
           <header className="flex min-h-14 items-center border-b border-line px-4 py-2.5">
             <h2 className="m-0 text-sm font-bold text-ink">Access groups</h2>
             <span className="ml-auto text-xs text-muted">
@@ -816,7 +814,10 @@ export function AdminGroupsPage() {
             );
           })}
         </section>
-        <section id="group-detail-view" className={cn(surfaceClass, "relative min-w-0 overflow-auto")}>
+        <section
+          id="group-detail-view"
+          className={cn(surfaceClass, "relative min-w-0 overflow-auto", !selected && "max-[1219px]:hidden")}
+        >
           {selected ? (
             <GroupDetail
               key={selected.id}
@@ -824,6 +825,7 @@ export function AdminGroupsPage() {
               users={users.data ?? []}
               databases={databases.data ?? []}
               onGroupUpdated={handleGroupUpdated}
+              onBack={clearSelection}
             />
           ) : (
             <EmptyState

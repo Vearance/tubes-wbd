@@ -137,7 +137,7 @@ export function MigrationPage() {
         status={
           isLoading
             ? 'Loading migrations…'
-            : `${draftList.length} drafts · ${pendingReviewCount} pending review · ${historyList.length} history entries`
+            : `${draftList.length} drafts · ${pendingReviewCount} pending · ${historyList.length} history`
         }
         actions={
           <div className="flex w-full flex-wrap items-center gap-2.5 min-[901px]:w-auto">
@@ -215,11 +215,11 @@ export function MigrationPage() {
           },
           {
             value: 'airlock',
-            label: `Consensus Airlock (${executionList.length})`,
+            label: `Migration Execution (${executionList.length})`,
           },
           {
             value: 'ledger',
-            label: `Live HEAD Ledger (${historyList.length})`,
+            label: `Migration History (${historyList.length})`,
           },
         ]}
         value={activeTab}
@@ -254,7 +254,7 @@ export function MigrationPage() {
                 setAirlockFilter('pending_review')
                 setActiveTab('airlock')
                 await reloadAll(
-                  `Execution #${executionId} submitted to the Consensus Airlock for team leader review.`,
+                  `Execution #${executionId} submitted to Migration Execution for team leader review.`,
                 )
               }}
               onTrackExecution={trackDraftInAirlock}
@@ -304,7 +304,7 @@ export function MigrationPage() {
                 setAirlockFilter('pending_review')
                 setActiveTab('airlock')
                 await reloadAll(
-                  `Rollback execution #${executionId} submitted to Consensus Airlock for team leader sign-off.`,
+                  `Rollback execution #${executionId} submitted to Migration Execution for team leader sign-off.`,
                 )
               }}
               onForwardProposed={async (executionId) => {
@@ -312,7 +312,7 @@ export function MigrationPage() {
                 setAirlockFilter('pending_review')
                 setActiveTab('airlock')
                 await reloadAll(
-                  `Forward execution #${executionId} submitted to Consensus Airlock for team leader sign-off.`,
+                  `Forward execution #${executionId} submitted to Migration Execution for team leader sign-off.`,
                 )
               }}
             />

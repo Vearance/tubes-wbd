@@ -17,6 +17,7 @@ import {
   Status,
 } from '../../../components/ui'
 import { cn } from '../../../lib/utils'
+import { TablePagination } from './TablePagination'
 
 function draftStatusTone(status: MigrationDraft['status']) {
   if (status === 'applied' || status === 'approved') return 'green' as const
@@ -26,104 +27,95 @@ function draftStatusTone(status: MigrationDraft['status']) {
   return 'gray' as const
 }
 
-function DraftCard({
+function DraftDetailModal({
   draft,
   canEdit,
   databaseName,
+  onClose,
   onEdit,
   onSubmit,
   onTrack,
 }: {
-  draft: MigrationDraft
+  draft: MigrationDraft | null
   canEdit: boolean
   databaseName: string
+  onClose: () => void
   onEdit: (draft: MigrationDraft) => void
   onSubmit: (draft: MigrationDraft) => Promise<void>
   onTrack: (draftId: number) => void
 }) {
-  const [showSql, setShowSql] = useState(false)
+  if (!draft) return null
   const isEditable = draft.status === 'draft' || draft.status === 'failed'
   const inFlight =
     draft.status === 'pending_review' ||
     draft.status === 'approved' ||
     draft.status === 'queued' ||
     draft.status === 'running'
-  const hasDownSql = Boolean(draft.down_sql && !draft.irreversible)
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-line bg-white shadow-2xs transition-colors hover:border-line-strong">
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4.5">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="m-0 truncate text-sm font-bold text-ink">
-              {draft.name}
-            </h3>
-            <Status tone={draftStatusTone(draft.status)}>
-              {draft.status.replace('_', ' ')}
-            </Status>
+    <Modal
+      open={Boolean(draft)}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+      title={draft.name}
+      description={`Draft #${draft.id} · ${databaseName}`}
+      size="lg"
+    >
+      <div className="space-y-6">
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
+              Forward Schema Change (Up SQL)
+            </span>
+            <pre className="m-0 max-h-60 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-ink">
+              {draft.sql}
+            </pre>
           </div>
-          <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <span className="font-mono font-semibold text-violet-fg">
-              #{draft.id}
-            </span>
-            <span>·</span>
-            {hasDownSql ? (
-              <span className="inline-flex items-center gap-1 font-semibold text-success-fg">
-                <Icon name="undo" className="size-3" />
-                Reversible
+          {draft.down_sql && !draft.irreversible && (
+            <div className="space-y-2">
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-success-fg">
+                Paired Down SQL (Rollback)
               </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 font-semibold text-warning-fg">
-                <Icon name="alert" className="size-3" />
-                Irreversible
-              </span>
-            )}
-            {draft.applied_version != null && (
-              <>
-                <span>·</span>
-                <span className="font-mono font-semibold text-violet-fg">
-                  v{draft.applied_version}
-                </span>
-              </>
-            )}
-            <span>·</span>
-            <span>
-              Created by user #{draft.created_by} · Updated{' '}
-              {new Date(draft.updated_at).toLocaleString()}
-            </span>
-          </p>
+              <pre className="m-0 max-h-44 overflow-auto rounded-xl border border-line bg-surface-subtle p-4 font-mono text-xs leading-6 text-muted">
+                {draft.down_sql}
+              </pre>
+            </div>
+          )}
+          {draft.irreversible && draft.irreversible_reason && (
+            <div className="rounded-xl border border-warning/25 bg-warning-soft/40 p-4 text-xs font-medium text-warning-fg">
+              Marked irreversible: {draft.irreversible_reason}
+            </div>
+          )}
         </div>
 
-        <div className="flex max-w-full flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSql((prev) => !prev)}
-          >
-            <Icon name="code" className="size-3.5" />
-            {showSql ? 'Hide SQL' : 'Inspect SQL'}
-          </Button>
-
+        <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-line/80 pt-5">
           {canEdit && isEditable && (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onEdit(draft)}
+                onClick={() => {
+                  onClose()
+                  onEdit(draft)
+                }}
               >
                 <Icon name="edit" className="size-3.5" />
-                Edit
+                Edit Draft
               </Button>
               <ConfirmAction
-                title={`Submit "${draft.name}" to Consensus Airlock?`}
+                title={`Submit "${draft.name}" to Migration Execution?`}
                 description={`This snapshots Draft #${draft.id} into an immutable execution in Pending Review. Every group with access to "${databaseName}" must sign off via their Keyholder before an Editor can release it to the queue.`}
                 confirmLabel="Submit for Review"
                 tone="primary"
-                onConfirm={() => onSubmit(draft)}
+                onConfirm={async () => {
+                  await onSubmit(draft)
+                  onClose()
+                }}
                 trigger={
                   <Button variant="dark" size="sm">
                     <Icon name="send" className="size-3.5" />
-                    Submit to Airlock
+                    Submit to Migration Execution
                   </Button>
                 }
               />
@@ -132,45 +124,20 @@ function DraftCard({
 
           {inFlight && (
             <Button
-              variant="outline"
+              variant="dark"
               size="sm"
-              onClick={() => onTrack(draft.id)}
+              onClick={() => {
+                onClose()
+                onTrack(draft.id)
+              }}
             >
               <Icon name="shield" className="size-3.5" />
-              Track in Airlock
+              Track in Migration Execution
             </Button>
           )}
         </div>
       </div>
-
-      {showSql && (
-        <div className="border-t border-line bg-surface-subtle px-4.5 py-3.5 space-y-2.5">
-          <div>
-            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-muted">
-              Forward Schema Change (Up SQL)
-            </span>
-            <pre className="m-0 max-h-48 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-ink">
-              {draft.sql}
-            </pre>
-          </div>
-          {draft.down_sql && !draft.irreversible && (
-            <div>
-              <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-success-fg">
-                Paired Down SQL (Rollback)
-              </span>
-              <pre className="m-0 max-h-32 overflow-auto rounded-lg border border-line bg-white p-3 font-mono text-xs leading-relaxed text-muted">
-                {draft.down_sql}
-              </pre>
-            </div>
-          )}
-          {draft.irreversible && draft.irreversible_reason && (
-            <p className="m-0 text-xs text-warning-fg font-medium">
-              Marked irreversible: {draft.irreversible_reason}
-            </p>
-          )}
-        </div>
-      )}
-    </article>
+    </Modal>
   )
 }
 
@@ -212,6 +179,18 @@ export function DraftWorkbench({
   const reduceMotion = useReducedMotion()
 
   const [editingDraft, setEditingDraft] = useState<MigrationDraft | null>(null)
+  const [selectedDraft, setSelectedDraft] = useState<MigrationDraft | null>(
+    null,
+  )
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  const totalPages = Math.max(1, Math.ceil(drafts.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedDrafts = drafts.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  )
   const [name, setName] = useState(initialSeed?.name ?? '')
   const [sql, setSql] = useState(initialSeed?.sql ?? '')
   const [downSql, setDownSql] = useState(initialSeed?.downSql ?? '')
@@ -373,8 +352,8 @@ export function DraftWorkbench({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-5 sm:px-6 sm:py-5 shadow-2xs">
         <div className="flex items-center gap-3">
           <h2 className="m-0 text-base font-bold text-ink">Schema Workbench</h2>
           <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg">
@@ -666,43 +645,120 @@ export function DraftWorkbench({
         </form>
       </Modal>
 
-      <div className="space-y-3">
-        {drafts.map((draft) => (
-          <DraftCard
-            key={draft.id}
-            draft={draft}
-            canEdit={canEdit}
-            databaseName={databaseName}
-            onEdit={startEditingDraft}
-            onSubmit={submitDraftToAirlock}
-            onTrack={onTrackExecution}
-          />
-        ))}
-
-        {drafts.length === 0 && (
-          <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
-            <EmptyState
-              icon="migration"
-              title="No migration drafts yet"
-              action={
-                canEdit ? (
-                  <Button
-                    variant="dark"
-                    size="sm"
-                    onClick={openNewComposer}
-                  >
-                    <Icon name="plus" className="size-3.5" />
-                    Compose first draft
-                  </Button>
-                ) : undefined
-              }
-            >
-              Drafts let Editors stage DDL changes, verify them with EXPLAIN,
-              and define Down SQL before submitting for team leader approval.
-            </EmptyState>
+      {drafts.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
+          <EmptyState
+            icon="migration"
+            title="No migration drafts yet"
+            action={
+              canEdit ? (
+                <Button variant="dark" size="sm" onClick={openNewComposer}>
+                  <Icon name="plus" className="size-3.5" />
+                  Compose first draft
+                </Button>
+              ) : undefined
+            }
+          >
+            Drafts let Editors stage DDL changes, verify them with EXPLAIN,
+            and define Down SQL before submitting for team leader approval.
+          </EmptyState>
+        </div>
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-white shadow-2xs">
+          <div className="w-full overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]">
+            <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-line bg-surface-subtle text-[11px] font-bold uppercase tracking-wider text-muted">
+                  <th className="px-5 py-3.5 whitespace-nowrap">Draft</th>
+                  <th className="px-5 py-3.5">Name</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Rollback</th>
+                  <th className="px-5 py-3.5 whitespace-nowrap">Updated</th>
+                  <th className="px-5 py-3.5 text-right whitespace-nowrap">
+                    Details
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {paginatedDrafts.map((draft) => {
+                  const hasDownSql = Boolean(
+                    draft.down_sql && !draft.irreversible,
+                  )
+                  return (
+                    <tr
+                      key={draft.id}
+                      className="transition-colors hover:bg-canvas/60"
+                    >
+                      <td className="px-5 py-4 whitespace-nowrap font-mono font-bold text-violet-fg">
+                        #{draft.id}
+                      </td>
+                      <td className="px-5 py-4 max-w-[280px]">
+                        <div className="truncate font-bold text-ink">
+                          {draft.name}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted">
+                          User #{draft.created_by}
+                          {draft.applied_version != null
+                            ? ` · v${draft.applied_version}`
+                            : ''}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <Status tone={draftStatusTone(draft.status)}>
+                          {draft.status.replace('_', ' ')}
+                        </Status>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {hasDownSql ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-success-fg">
+                            <Icon name="undo" className="size-3" />
+                            Reversible
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 font-semibold text-warning-fg">
+                            <Icon name="alert" className="size-3" />
+                            Irreversible
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap text-muted">
+                        {new Date(draft.updated_at).toLocaleString()}
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedDraft(draft)}
+                        >
+                          <Icon name="eye" className="size-3.5" />
+                          View More
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            totalItems={drafts.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        </section>
+      )}
+
+      <DraftDetailModal
+        draft={selectedDraft}
+        canEdit={canEdit}
+        databaseName={databaseName}
+        onClose={() => setSelectedDraft(null)}
+        onEdit={startEditingDraft}
+        onSubmit={submitDraftToAirlock}
+        onTrack={onTrackExecution}
+      />
     </div>
   )
 }

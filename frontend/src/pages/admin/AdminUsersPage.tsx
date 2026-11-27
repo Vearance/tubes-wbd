@@ -47,11 +47,13 @@ function UserAccessDetail({
   groups,
   databases,
   onToggle,
+  onBack,
 }: {
   user: AdminUser;
   groups: Group[];
   databases: ManagedDatabase[];
   onToggle: () => Promise<void>;
+  onBack: () => void;
 }) {
   const access = useResource(async () => {
     if (user.is_admin) return [];
@@ -125,17 +127,15 @@ function UserAccessDetail({
 
   return (
     <>
-      <header className="flex flex-wrap min-h-[84px] items-center gap-3.5 border-b border-line p-5">
+      <header className="flex flex-wrap min-h-[68px] sm:min-h-[84px] items-center gap-3 sm:gap-3.5 border-b border-line p-3.5 sm:p-5">
         <button
           type="button"
-          onClick={() => {
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          className="min-[901px]:hidden flex items-center gap-1 text-xs font-bold text-violet-fg bg-violet-soft px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer"
+          onClick={onBack}
+          className="min-[1220px]:hidden grid size-8 shrink-0 place-items-center rounded-xl border border-line/80 bg-white text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink cursor-pointer"
+          aria-label="Back to users list"
           title="Back to users list"
         >
-          <Icon name="chevron-left" className="size-3.5" />
-          <span>List</span>
+          <Icon name="chevron-left" className="size-4" />
         </button>
         <span className={cn(avatarClass, "size-11 text-sm")}>
           {user.username.slice(0, 2).toUpperCase()}
@@ -166,7 +166,7 @@ function UserAccessDetail({
               <PickerAction
                 open={groupPicker}
                 label="Add group"
-                className="min-w-[132px] max-[600px]:w-full max-[600px]:min-w-0"
+                className="sm:min-w-[132px]"
                 onClick={() => setGroupPicker(!groupPicker)}
               />
             </AssignmentHeading>
@@ -329,7 +329,7 @@ function UserAccessDetail({
           {user.disabled ? (
             <Button
               variant="dark"
-              className="min-w-[132px] max-[600px]:w-full max-[600px]:min-w-0"
+              className="sm:min-w-[132px]"
               onClick={toggleAccount}
             >
               Enable account
@@ -339,7 +339,7 @@ function UserAccessDetail({
               trigger="Disable account"
               triggerClassName={cn(
                 buttonClass,
-                "min-w-[132px] max-[600px]:w-full max-[600px]:min-w-0",
+                "sm:min-w-[132px]",
               )}
               title={`Disable ${user.username}?`}
               description="This user will be signed out until the account is enabled again."
@@ -376,25 +376,26 @@ export function AdminUsersPage() {
     (groups.loading && !groups.data) ||
     (databases.loading && !databases.data);
 
+  const regularUsers = users.data?.filter((user) => !user.is_admin) ?? [];
+
   const selected =
     (userId
-      ? users.data?.find((user) => String(user.id) === userId)
+      ? regularUsers.find((user) => String(user.id) === userId)
       : null) ?? selectedState;
 
   function selectUser(user: AdminUser) {
     setSelectedState(user);
     navigate(`/admin/users/${user.id}`);
-    if (typeof window !== "undefined" && window.innerWidth <= 900) {
-      setTimeout(() => {
-        document.getElementById("user-detail-view")?.scrollIntoView({ behavior: "smooth" });
-      }, 50);
-    }
   }
 
-  const shown =
-    users.data?.filter((user) =>
-      user.username.toLowerCase().includes(search.toLowerCase()),
-    ) ?? [];
+  function clearSelection() {
+    setSelectedState(null);
+    navigate("/admin/users");
+  }
+
+  const shown = regularUsers.filter((user) =>
+    user.username.toLowerCase().includes(search.toLowerCase()),
+  );
 
   async function toggle(user: AdminUser) {
     const updated = await api.updateUser(user.id, !user.disabled);
@@ -428,7 +429,7 @@ export function AdminUsersPage() {
         path="Administration"
         title="Users"
         status={
-          isLoading ? "Loading users…" : `${users.data?.length ?? 0} users`
+          isLoading ? "Loading users…" : `${regularUsers.length} users`
         }
         actions={
           <Button variant="dark" onClick={() => setShowCreate(true)}>
@@ -510,8 +511,8 @@ export function AdminUsersPage() {
               />
             )}
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 min-[901px]:min-h-[calc(100dvh-110px)] min-[901px]:grid-cols-[360px_minmax(560px,1fr)]">
-        <section className={cn(surfaceClass, "min-w-0 overflow-hidden")}>
+      <div className="grid min-w-0 grid-cols-1 gap-3 min-[1220px]:min-h-[calc(100dvh-110px)] min-[1220px]:grid-cols-[360px_minmax(560px,1fr)]">
+        <section className={cn(surfaceClass, "min-w-0 overflow-hidden", selected && "max-[1219px]:hidden")}>
           <header className="flex min-h-16 items-center border-b border-line px-3 py-2.5">
             <Search
               value={search}
@@ -575,7 +576,10 @@ export function AdminUsersPage() {
             </div>
           )}
         </section>
-        <section id="user-detail-view" className={cn(surfaceClass, "relative min-w-0")}>
+        <section
+          id="user-detail-view"
+          className={cn(surfaceClass, "relative min-w-0", !selected && "max-[1219px]:hidden")}
+        >
           {selected ? (
             <UserAccessDetail
               key={selected.id}
@@ -583,6 +587,7 @@ export function AdminUsersPage() {
               groups={groups.data ?? []}
               databases={databases.data ?? []}
               onToggle={() => toggle(selected)}
+              onBack={clearSelection}
             />
           ) : (
             <EmptyState

@@ -46,8 +46,8 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-dvh grid-cols-[minmax(520px,1.05fr)_minmax(520px,.95fr)] bg-white max-[900px]:grid-cols-[minmax(0,1fr)]">
-      <section className="relative flex min-h-dvh flex-col overflow-hidden bg-[#f8eef7] px-16 py-12 before:absolute before:right-[-130px] before:bottom-[-120px] before:size-[500px] before:rounded-full before:bg-[#e7d8fb] before:content-[''] after:absolute after:right-[250px] after:bottom-[-150px] after:size-[280px] after:rounded-full after:bg-[#ffd6e8] after:content-[''] max-[900px]:hidden">
+    <main className="grid min-h-dvh grid-cols-[minmax(520px,1.05fr)_minmax(520px,.95fr)] bg-white max-[1039px]:grid-cols-[minmax(0,1fr)]">
+      <section className="relative flex min-h-dvh flex-col overflow-hidden bg-[#f8eef7] px-16 py-12 before:absolute before:right-[-130px] before:bottom-[-120px] before:size-[500px] before:rounded-full before:bg-[#e7d8fb] before:content-[''] after:absolute after:right-[250px] after:bottom-[-150px] after:size-[280px] after:rounded-full after:bg-[#ffd6e8] after:content-[''] max-[1039px]:hidden">
         <a className={brandClasses} href="/login">
           <img
             src="/bibi.png"
@@ -81,12 +81,12 @@ export function LoginPage() {
         </div>
       </section>
 
-      <section className="grid place-items-center p-12 max-[900px]:min-h-dvh max-[900px]:p-6 max-[600px]:p-5">
+      <section className="grid place-items-center p-12 max-[1039px]:min-h-dvh max-[1039px]:p-6 max-[600px]:p-5">
         <form
           className="w-[min(100%,410px)] max-[600px]:w-full"
           onSubmit={submit}
         >
-          <div className="mb-6 flex items-center gap-2.5 min-[901px]:hidden">
+          <div className="mb-6 flex items-center gap-2.5 min-[1040px]:hidden">
             <img
               src="/bibi.png"
               alt="BScheme mascot"
