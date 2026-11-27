@@ -4,10 +4,13 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -117,6 +120,136 @@ func TestIntegrationDraftLifecycle(t *testing.T) {
 	_, err = svc.SubmitDraftForReview(ctx, 42, d.ID)
 	require.ErrorIs(t, err, ErrDraftNotExecutable, "an applied draft must not run twice")
 	require.Equal(t, []int64{1}, historyVersions(t, env.target))
+}
+
+func TestIntegrationUnknownCommitOutcomeIsReconciledBeforeFailure(t *testing.T) {
+	tests := []struct {
+		name          string
+		commit        bool
+		wantStatus    ExecutionStatus
+		wantTable     bool
+		wantRunStatus RunStatus
+	}{
+		{
+			name:          "commit succeeded but response was lost",
+			commit:        true,
+			wantStatus:    ExecutionStatusSuccess,
+			wantTable:     true,
+			wantRunStatus: RunStatusSuccess,
+		},
+		{
+			name:          "transaction did not commit",
+			wantStatus:    ExecutionStatusFailed,
+			wantRunStatus: RunStatusFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newDraftEnv(t, "")
+			svc := env.service(t, stubAuthorizer{})
+			leaderID := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
+			ctx := context.Background()
+
+			draft, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{
+				Name: "ambiguous commit",
+				SQL:  "CREATE TABLE ambiguous_commit (id bigint PRIMARY KEY)",
+			})
+			require.NoError(t, err)
+			execution, err := svc.SubmitDraftForReview(ctx, 42, draft.ID)
+			require.NoError(t, err)
+			approveAndQueue(t, svc, leaderID, execution.ID)
+
+			svc.commitTargetTx = func(ctx context.Context, tx pgx.Tx) error {
+				if tt.commit {
+					require.NoError(t, tx.Commit(ctx))
+				} else {
+					require.NoError(t, tx.Rollback(ctx))
+				}
+				return errors.New("simulated lost COMMIT response")
+			}
+			worker, err := NewExecutionWorker(svc, env.repo)
+			require.NoError(t, err)
+			require.NoError(t, worker.RunExecution(ctx, execution.ID))
+
+			finished, err := svc.Execution(ctx, 42, execution.ID)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantStatus, finished.Status)
+			require.Nil(t, finished.ActiveDatabaseID, "resolved execution must release its platform lock")
+			require.Equal(t, tt.wantTable, tableExists(t, env.target, "ambiguous_commit"))
+			if !tt.commit {
+				require.NoError(t, recordFailedHistoryAttempt(ctx, env.target, finished, errors.New("duplicate recovery attempt"), 0))
+			}
+
+			history, err := svc.History(ctx, 42, env.dbID, 1, 10)
+			require.NoError(t, err)
+			require.Len(t, history.Entries, 1)
+			require.Equal(t, tt.wantRunStatus, history.Entries[0].Status)
+		})
+	}
+}
+
+func TestIntegrationUnknownCommitRemainsRunningUntilReconciled(t *testing.T) {
+	env := newDraftEnv(t, "")
+	svc := env.service(t, stubAuthorizer{})
+	leaderID := env.addApproverGroup(t, "Student Council", "rudolf", access.PermissionViewEdit)
+	ctx := context.Background()
+
+	draft, err := svc.CreateDraft(ctx, 42, env.dbID, Migration{
+		Name: "unresolved commit",
+		SQL:  "CREATE TABLE unresolved_commit (id bigint PRIMARY KEY)",
+	})
+	require.NoError(t, err)
+	execution, err := svc.SubmitDraftForReview(ctx, 42, draft.ID)
+	require.NoError(t, err)
+	approveAndQueue(t, svc, leaderID, execution.ID)
+
+	var lockConn *pgxpool.Conn
+	t.Cleanup(func() {
+		if lockConn != nil {
+			_, _ = lockConn.Exec(context.Background(), "SELECT pg_advisory_unlock(hashtext($1))", lockName)
+			lockConn.Release()
+		}
+	})
+	svc.commitTargetTx = func(ctx context.Context, tx pgx.Tx) error {
+		require.NoError(t, tx.Rollback(ctx))
+		var err error
+		lockConn, err = env.target.Acquire(ctx)
+		require.NoError(t, err)
+		_, err = lockConn.Exec(ctx, "SELECT pg_advisory_lock(hashtext($1))", lockName)
+		require.NoError(t, err)
+		return errors.New("simulated unresolved COMMIT response")
+	}
+	worker, err := NewExecutionWorker(svc, env.repo)
+	require.NoError(t, err)
+	require.Error(t, worker.RunExecution(ctx, execution.ID))
+
+	unresolved, err := env.repo.GetExecution(ctx, execution.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusRunning, unresolved.Status)
+	require.NotNil(t, unresolved.ActiveDatabaseID, "an unresolved target outcome must retain the platform lock")
+	require.False(t, tableExists(t, env.target, "unresolved_commit"))
+	unresolvedHistory, err := svc.History(ctx, 42, env.dbID, 1, 10)
+	require.NoError(t, err)
+	require.Empty(t, unresolvedHistory.Entries, "do not record failure before reconciliation establishes the outcome")
+
+	_, err = lockConn.Exec(ctx, "SELECT pg_advisory_unlock(hashtext($1))", lockName)
+	require.NoError(t, err)
+	lockConn.Release()
+	lockConn = nil
+
+	startedAt := time.Now().Add(-time.Hour)
+	unresolved.StartedAt = &startedAt
+	require.NoError(t, worker.recoverStaleExecution(ctx, unresolved))
+	resolved, err := env.repo.GetExecution(ctx, execution.ID)
+	require.NoError(t, err)
+	require.Equal(t, ExecutionStatusQueued, resolved.Status)
+	require.Nil(t, resolved.ActiveDatabaseID)
+
+	history, err := svc.History(ctx, 42, env.dbID, 1, 10)
+	require.NoError(t, err)
+	require.Len(t, history.Entries, 1)
+	require.Equal(t, RunStatusFailed, history.Entries[0].Status)
 }
 
 func TestIntegrationFailedDraftCanBeFixedAndRetried(t *testing.T) {

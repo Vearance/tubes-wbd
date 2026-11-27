@@ -98,6 +98,16 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 }
 
 func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Execution, opts Options) (*HistoryEntry, error) {
+	return applyExecutionWithCommit(ctx, pool, execution, opts, nil)
+}
+
+func applyExecutionWithCommit(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	execution *Execution,
+	opts Options,
+	commitTargetTx func(context.Context, pgx.Tx) error,
+) (*HistoryEntry, error) {
 	if telemetry.DatabaseFromContext(ctx) == "" {
 		ctx = telemetry.WithDatabase(ctx, telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID))
 	}
@@ -250,12 +260,12 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 		return fail(executionError(err))
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		attemptErr := executionError(err)
-		if recordErr := recordFailedHistoryAttempt(ctx, pool, execution, attemptErr, time.Since(attemptStartedAt)); recordErr != nil {
-			return nil, errors.Join(attemptErr, recordErr)
-		}
-		return nil, attemptErr
+	commit := commitTargetTx
+	if commit == nil {
+		commit = func(ctx context.Context, tx pgx.Tx) error { return tx.Commit(ctx) }
+	}
+	if err := commit(ctx, tx); err != nil {
+		return nil, targetCommitError{cause: executionError(err)}
 	}
 	entry.ExecutionID = execution.ID
 	entry.Type = execution.Type
@@ -360,15 +370,15 @@ func recordFailedHistoryAttempt(ctx context.Context, pool *pgxpool.Pool, executi
 		return fmt.Errorf("locking failed migration history: %w", err)
 	}
 	if execution.ID > 0 {
-		var successExists bool
+		var attemptExists bool
 		if err := tx.QueryRow(writeCtx,
 			`SELECT EXISTS (
 				SELECT 1 FROM _dbm.migration_history
-				WHERE execution_id = $1 AND attempt_number = $2 AND status = $3
-			)`, int64(execution.ID), historyAttemptNumber(execution), RunStatusSuccess).Scan(&successExists); err != nil {
-			return fmt.Errorf("checking successful migration history before recording failure: %w", err)
+				WHERE execution_id = $1 AND attempt_number = $2
+			)`, int64(execution.ID), historyAttemptNumber(execution)).Scan(&attemptExists); err != nil {
+			return fmt.Errorf("checking migration history before recording failure: %w", err)
 		}
-		if successExists {
+		if attemptExists {
 			return nil
 		}
 	}

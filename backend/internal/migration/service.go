@@ -67,11 +67,12 @@ func (o Options) withDefaults() Options {
 }
 
 type MigrationService struct {
-	authz     Authorizer
-	pools     PoolProvider
-	repo      Repository
-	opts      Options
-	snapshots TargetConfigSnapshotter
+	authz          Authorizer
+	pools          PoolProvider
+	repo           Repository
+	opts           Options
+	snapshots      TargetConfigSnapshotter
+	commitTargetTx func(context.Context, pgx.Tx) error
 }
 
 func NewMigrationService(authz Authorizer, pools PoolProvider, repo Repository, opts Options, snapshots ...TargetConfigSnapshotter) (*MigrationService, error) {
@@ -134,7 +135,7 @@ func (s *MigrationService) runExecution(ctx context.Context, execution *Executio
 		}
 		_ = tx.Rollback(ctx)
 	}
-	return applyExecution(ctx, pool, execution, s.opts)
+	return applyExecutionWithCommit(ctx, pool, execution, s.opts, s.commitTargetTx)
 }
 
 func (s *MigrationService) executionPool(ctx context.Context, execution *Execution) (*pgxpool.Pool, bool, error) {
