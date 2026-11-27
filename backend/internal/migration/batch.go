@@ -261,12 +261,8 @@ func (s *MigrationService) runOneBatch(
 				keys = nil
 			} else if err != nil {
 				return fmt.Errorf("selecting batch keys for rollback: %w", err)
-			} else if originalRestore == nil {
-				invalid := ErrInvalidRollback
-				if execution.Compensation {
-					invalid = ErrInvalidCompensation
-				}
-				return fmt.Errorf("%w: batch %d was committed without pre-batch row values and cannot be restored safely", invalid, originalBatch)
+			} else if execution.Compensation && originalRestore == nil {
+				return fmt.Errorf("%w: batch %d was committed without pre-batch row values, so its compensation cannot be verified; create a new corrective migration instead", ErrInvalidCompensation, originalBatch)
 			} else {
 				nextCursor = int64(originalBatch)
 			}
@@ -339,9 +335,9 @@ func (s *MigrationService) runOneBatch(
 		if err != nil {
 			return fmt.Errorf("executing batch SQL: %w", internalStateError(err))
 		}
-		if originalRestore != nil {
-			if err := restoreBatchRows(batchCtx, tx, execution.Batch, originalBatch, *originalRestore); err != nil {
-				return internalStateError(err)
+		if execution.Compensation && originalRestore != nil {
+			if err := verifyBatchCompensated(batchCtx, tx, execution.Batch, originalBatch, *originalRestore); err != nil {
+				return err
 			}
 		}
 		if err := requireInternalStateUnchanged(batchCtx, tx, internalBefore); err != nil {
