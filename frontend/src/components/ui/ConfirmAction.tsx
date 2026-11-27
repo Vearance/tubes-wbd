@@ -63,15 +63,15 @@ export function ConfirmAction({
 
       <AlertDialog.Portal>
         <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs" />
-        <AlertDialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-auto p-4 sm:p-6">
-          <AlertDialog.Popup className="w-[min(100%,480px)] rounded-2xl border border-line/80 bg-white p-5 sm:p-8 shadow-2xl">
-            <AlertDialog.Title className="m-0 text-balance text-xl font-bold tracking-tight text-ink sm:text-[22px]">
+        <AlertDialog.Viewport className="fixed inset-0 z-50 grid items-end sm:place-items-center overflow-auto p-0 sm:p-6">
+          <AlertDialog.Popup className="w-full sm:w-[min(100%,480px)] rounded-t-2xl sm:rounded-2xl border-t sm:border border-line/80 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8 shadow-2xl">
+            <AlertDialog.Title className="m-0 text-balance text-base font-bold tracking-tight text-ink sm:text-[22px]">
               {title}
             </AlertDialog.Title>
-            <AlertDialog.Description className="mt-3 mb-0 text-pretty text-sm leading-relaxed text-muted">
+            <AlertDialog.Description className="mt-2 sm:mt-3 mb-0 text-pretty text-xs sm:text-sm leading-relaxed text-muted">
               {description}
             </AlertDialog.Description>
-            <div className="mt-7 flex justify-end gap-3 max-[600px]:flex-col-reverse max-[600px]:items-stretch">
+            <div className="mt-5 sm:mt-7 flex justify-end gap-2.5 sm:gap-3">
               <AlertDialog.Close
                 className={cn(baseButtonClasses, buttonVariants.default, buttonSizes.md)}
                 disabled={busy}

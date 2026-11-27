@@ -13,6 +13,7 @@ import {
   ErrorNotice,
   Status,
 } from '../../../components/ui'
+import { cn } from '../../../lib/utils'
 
 function HistoryEntryRow({
   databaseId,
@@ -50,80 +51,86 @@ function HistoryEntryRow({
   }
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-line bg-white p-4.5 shadow-2xs">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-          <div className="min-w-16">
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
-              Version
-            </span>
-            <strong className="mt-0.5 block font-mono text-sm font-extrabold text-violet-fg">
-              v{entry.version}
-            </strong>
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="m-0 truncate text-sm font-bold text-ink">
-                {entry.name}
-              </h3>
-              <Status tone={entry.status === 'failed' ? 'red' : 'green'}>
-                {entry.status.toUpperCase()}
-              </Status>
-              <Status tone="gray">Attempt {entry.attempt_number}</Status>
-              {isHead && (
-                <Status tone="violet" className="gap-1">
-                  <span className="size-1.5 rounded-full bg-violet animate-pulse" />
-                  HEAD · Active Schema
-                </Status>
-              )}
-            </div>
-            <p className="mt-1.5 mb-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-              {entry.execution_type && (
-                <>
-                  <span
-                    className={
-                      entry.execution_type === 'rollback'
-                        ? 'font-bold uppercase text-warning-fg'
-                        : entry.execution_type === 'forward'
-                          ? 'font-bold uppercase text-violet-fg'
-                          : 'font-bold uppercase text-success-fg'
-                    }
-                  >
-                    {entry.execution_type}
-                  </span>
-                  <span>·</span>
-                </>
-              )}
-              <span>
-                Executed by user #{entry.executed_by} ·{' '}
-                {new Date(entry.executed_at).toLocaleString()}
-                {entry.execution_id ? ` · Execution #${entry.execution_id}` : ''}
-              </span>
-            </p>
-          </div>
+    <article className="overflow-hidden rounded-2xl border border-line bg-white shadow-2xs">
+      <div className="flex items-center justify-between gap-2.5 px-4 py-3 sm:gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span className="shrink-0 rounded-lg bg-violet-soft/70 px-2 py-0.5 font-mono text-xs font-extrabold text-violet-fg">
+            v{entry.version}
+          </span>
+          <h3 className="m-0 min-w-0 flex-1 truncate text-xs font-bold text-ink sm:text-sm">
+            {entry.name}
+          </h3>
         </div>
 
-        <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
-          <span className="rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-xs text-muted tabular-nums">
-            {entry.duration_ms} ms
-          </span>
-          <Button variant="outline" size="sm" onClick={toggleDetail}>
-            <Icon name="code" className="size-3.5" />
-            {open ? 'Hide SQL' : 'Inspect SQL'}
-          </Button>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {isHead && (
+            <Status tone="violet" className="gap-1">
+              <span className="size-1.5 rounded-full bg-violet animate-pulse" />
+              <span className="hidden sm:inline">HEAD · Active Schema</span>
+              <span className="sm:hidden">HEAD</span>
+            </Status>
+          )}
+          <Status tone={entry.status === 'failed' ? 'red' : 'green'}>
+            {entry.status.toUpperCase()}
+          </Status>
+          <button
+            type="button"
+            onClick={() => void toggleDetail()}
+            aria-expanded={open}
+            aria-label={open ? 'Hide details' : 'Show details'}
+            className="grid size-8 shrink-0 place-items-center rounded-xl border border-line/80 bg-white text-muted shadow-2xs transition-colors hover:border-line-strong hover:text-ink cursor-pointer"
+          >
+            <Icon
+              name="chevron-down"
+              className={cn(
+                'size-4 transition-transform duration-150',
+                open && 'rotate-180',
+              )}
+            />
+          </button>
         </div>
       </div>
 
-      {entry.status === 'failed' && (
-        <p className="mt-3 mb-0 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger">
-          {entry.error_code ? `${entry.error_code}: ` : ''}
-          {entry.error_message || 'This migration attempt failed.'}
-        </p>
-      )}
-
       {open && (
-        <div className="mt-3 rounded-xl border border-line bg-surface-subtle p-4 space-y-3">
+        <div className="border-t border-line bg-surface-subtle/50 px-4 py-3.5 space-y-3">
+          <div className="space-y-1.5">
+            <p className="m-0 break-words text-sm font-bold text-ink">
+              {entry.name}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {entry.execution_type && (
+                <span
+                  className={cn(
+                    'text-xs font-bold uppercase',
+                    entry.execution_type === 'rollback'
+                      ? 'text-warning-fg'
+                      : entry.execution_type === 'forward'
+                        ? 'text-violet-fg'
+                        : 'text-success-fg',
+                  )}
+                >
+                  {entry.execution_type}
+                </span>
+              )}
+              <Status tone="gray">Attempt {entry.attempt_number}</Status>
+              <span className="rounded-md border border-line bg-canvas px-2 py-0.5 font-mono text-[11px] text-muted tabular-nums">
+                {entry.duration_ms} ms
+              </span>
+            </div>
+            <p className="m-0 text-xs text-muted">
+              Executed by user #{entry.executed_by} ·{' '}
+              {new Date(entry.executed_at).toLocaleString()}
+              {entry.execution_id ? ` · Execution #${entry.execution_id}` : ''}
+            </p>
+          </div>
+
+          {entry.status === 'failed' && (
+            <p className="m-0 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger break-words">
+              {entry.error_code ? `${entry.error_code}: ` : ''}
+              {entry.error_message || 'This migration attempt failed.'}
+            </p>
+          )}
+
           {loading && (
             <span className="text-xs text-muted">Loading SQL snapshot…</span>
           )}

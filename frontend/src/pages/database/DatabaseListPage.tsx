@@ -131,7 +131,7 @@ export function DatabaseListPage() {
                   </div>
                   <Link
                     to={`/databases/${exec.database_id}/migrations?tab=airlock&executionId=${exec.id}`}
-                    className="inline-flex min-h-8 items-center justify-center gap-1 rounded-xl bg-ink px-3.5 text-xs font-bold text-white no-underline hover:bg-ink-strong transition-colors shrink-0 shadow-xs max-[600px]:w-full"
+                    className="inline-flex min-h-8 items-center justify-center gap-1 rounded-xl bg-ink px-3.5 text-xs font-bold text-white no-underline hover:bg-ink-strong transition-colors shrink-0 shadow-xs"
                   >
                     Review
                     <Icon name="chevron" className="size-3.5" />

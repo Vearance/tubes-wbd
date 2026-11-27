@@ -34,17 +34,17 @@ export function Modal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-200" />
-        <Dialog.Viewport className="fixed inset-0 z-50 grid place-items-center overflow-y-auto p-3 sm:p-6">
+        <Dialog.Viewport className="fixed inset-0 z-50 grid items-end sm:place-items-center overflow-y-auto p-0 sm:p-6">
           <Dialog.Popup
             className={cn(
-              'relative rounded-2xl border border-line/80 bg-white shadow-2xl overflow-hidden w-full max-w-[calc(100vw-24px)] sm:max-w-none',
+              'relative rounded-t-2xl sm:rounded-2xl border-t sm:border border-line/80 bg-white shadow-2xl overflow-hidden w-full max-w-full sm:max-w-none',
               sizeClasses[size],
               className,
             )}
           >
-            <div className="flex items-start justify-between gap-3 sm:gap-4 border-b border-line/80 px-5 py-4 sm:px-8 sm:py-6.5 bg-canvas/30">
+            <div className="flex items-start justify-between gap-2.5 sm:gap-4 border-b border-line/80 px-4 py-3 sm:px-8 sm:py-6.5 bg-canvas/30">
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="m-0 text-lg sm:text-[23px] font-bold tracking-tight text-ink">
+                <Dialog.Title className="m-0 text-base sm:text-[23px] font-bold tracking-tight text-ink">
                   {title}
                 </Dialog.Title>
                 {description && (
@@ -54,13 +54,13 @@ export function Modal({
                 )}
               </div>
               <Dialog.Close
-                className="grid size-10 sm:size-9 shrink-0 place-items-center rounded-xl border border-transparent bg-transparent text-muted hover:border-line hover:bg-canvas hover:text-ink transition-all cursor-pointer"
+                className="grid size-8 sm:size-9 shrink-0 place-items-center rounded-xl border border-transparent bg-transparent text-muted hover:border-line hover:bg-canvas hover:text-ink transition-all cursor-pointer"
                 aria-label="Close dialog"
               >
                 <Icon name="close" className="size-4.5" />
               </Dialog.Close>
             </div>
-            <div className="p-5 sm:p-8 max-h-[calc(100dvh-120px)] overflow-y-auto [scrollbar-width:thin]">
+            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-8 max-h-[82dvh] sm:max-h-[calc(100dvh-120px)] overflow-y-auto [scrollbar-width:thin]">
               {children}
             </div>
           </Dialog.Popup>
