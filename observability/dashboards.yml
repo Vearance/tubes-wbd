@@ -9,5 +9,5 @@ providers:
     editable: true
     updateIntervalSeconds: 15
     options:
-      path: /var/lib/grafana/dashboards
+      path: /otel-lgtm/dashboards
       foldersFromFilesStructure: false

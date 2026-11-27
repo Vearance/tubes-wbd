@@ -32,6 +32,7 @@ type Manager struct {
 	opts               Options
 	mu                 sync.Mutex
 	pools              map[DatabaseID]*pgxpool.Pool
+	transientPools     []*pgxpool.Pool
 	gen                map[DatabaseID]uint64
 	closed             bool
 	closedWaitCount    int64
@@ -135,6 +136,9 @@ func (m *Manager) PoolWithConfig(ctx context.Context, cfg ConnConfig) (*pgxpool.
 
 	m.mu.Lock()
 	closed = m.closed
+	if !closed {
+		m.transientPools = append(m.transientPools, pool)
+	}
 	m.mu.Unlock()
 	if closed {
 		pool.Close()
@@ -176,6 +180,7 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	m.closed = true
 	pools := m.pools
+	transientPools := m.transientPools
 	for _, pool := range pools {
 		if pool != nil {
 			st := pool.Stat()
@@ -183,10 +188,21 @@ func (m *Manager) Close() {
 			m.closedWaitDuration += st.EmptyAcquireWaitTime()
 		}
 	}
+	for _, pool := range transientPools {
+		if pool != nil {
+			st := pool.Stat()
+			m.closedWaitCount += st.EmptyAcquireCount()
+			m.closedWaitDuration += st.EmptyAcquireWaitTime()
+		}
+	}
 	m.pools = make(map[DatabaseID]*pgxpool.Pool)
+	m.transientPools = nil
 	m.mu.Unlock()
 
 	for _, pool := range pools {
+		pool.Close()
+	}
+	for _, pool := range transientPools {
 		pool.Close()
 	}
 }
@@ -213,6 +229,28 @@ func (m *Manager) Stats() PoolStats {
 		stats.WaitCount += st.EmptyAcquireCount()
 		stats.WaitDuration += st.EmptyAcquireWaitTime()
 	}
+	remaining := m.transientPools[:0]
+	for _, pool := range m.transientPools {
+		if pool == nil {
+			continue
+		}
+		st := pool.Stat()
+		if st.TotalConns() > 0 || st.AcquiredConns() > 0 {
+			stats.ActiveConns += int64(st.AcquiredConns())
+			stats.IdleConns += int64(st.IdleConns())
+			stats.TotalConns += int64(st.TotalConns())
+			stats.MaxConns += int64(st.MaxConns())
+			stats.WaitCount += st.EmptyAcquireCount()
+			stats.WaitDuration += st.EmptyAcquireWaitTime()
+			remaining = append(remaining, pool)
+		} else {
+			m.closedWaitCount += st.EmptyAcquireCount()
+			m.closedWaitDuration += st.EmptyAcquireWaitTime()
+			stats.WaitCount += st.EmptyAcquireCount()
+			stats.WaitDuration += st.EmptyAcquireWaitTime()
+		}
+	}
+	m.transientPools = remaining
 	return stats
 }
 

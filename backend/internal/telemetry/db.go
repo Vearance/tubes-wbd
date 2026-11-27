@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,47 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 )
+
+var (
+	platformInFlight   atomic.Int64
+	platformPeakActive atomic.Int64
+	targetInFlight     atomic.Int64
+	targetPeakActive   atomic.Int64
+)
+
+func resetDBPeakActive() {
+	platformInFlight.Store(0)
+	platformPeakActive.Store(0)
+	targetInFlight.Store(0)
+	targetPeakActive.Store(0)
+}
+
+func recordQueryActiveStart(inFlight, peak *atomic.Int64) {
+	cur := inFlight.Add(1)
+	for {
+		prev := peak.Load()
+		if cur <= prev || peak.CompareAndSwap(prev, cur) {
+			return
+		}
+	}
+}
+
+func recordQueryActiveEnd(inFlight *atomic.Int64) {
+	for {
+		cur := inFlight.Load()
+		if cur <= 0 || inFlight.CompareAndSwap(cur, cur-1) {
+			return
+		}
+	}
+}
+
+func consumePeakActive(current int64, inFlight, peak *atomic.Int64) int64 {
+	p := peak.Swap(inFlight.Load())
+	if current > p {
+		return current
+	}
+	return p
+}
 
 // TargetPoolStats aggregates connection pool statistics across managed target databases.
 type TargetPoolStats struct {
@@ -31,6 +73,8 @@ type TargetPoolStats struct {
 // RegisterDBPoolStats registers observable gauges and counters for both Platform DB
 // (database/sql) and Target DB (pgxpool) connection pools using a single callback registration.
 func (p *Provider) RegisterDBPoolStats(sqlDB *sql.DB, targetFn func() TargetPoolStats) error {
+	resetDBPeakActive()
+
 	poolConns, err := p.meter.Int64ObservableGauge(
 		"bscheme_db_pool_connections",
 		metric.WithDescription("Database connection pool count by role and state"),
@@ -68,7 +112,7 @@ func (p *Provider) RegisterDBPoolStats(sqlDB *sql.DB, targetFn func() TargetPool
 		if sqlDB != nil {
 			st := sqlDB.Stats()
 			role := attribute.String("db_role", "platform")
-			obs.ObserveInt64(poolConns, int64(st.InUse), metric.WithAttributes(role, attribute.String("state", "active")))
+			obs.ObserveInt64(poolConns, consumePeakActive(int64(st.InUse), &platformInFlight, &platformPeakActive), metric.WithAttributes(role, attribute.String("state", "active")))
 			obs.ObserveInt64(poolConns, int64(st.Idle), metric.WithAttributes(role, attribute.String("state", "idle")))
 			obs.ObserveInt64(poolConns, int64(st.OpenConnections), metric.WithAttributes(role, attribute.String("state", "open")))
 			obs.ObserveInt64(poolConns, int64(st.MaxOpenConnections), metric.WithAttributes(role, attribute.String("state", "max_open")))
@@ -78,7 +122,7 @@ func (p *Provider) RegisterDBPoolStats(sqlDB *sql.DB, targetFn func() TargetPool
 		if targetFn != nil {
 			ts := targetFn()
 			role := attribute.String("db_role", "target")
-			obs.ObserveInt64(poolConns, ts.ActiveConns, metric.WithAttributes(role, attribute.String("state", "active")))
+			obs.ObserveInt64(poolConns, consumePeakActive(ts.ActiveConns, &targetInFlight, &targetPeakActive), metric.WithAttributes(role, attribute.String("state", "active")))
 			obs.ObserveInt64(poolConns, ts.IdleConns, metric.WithAttributes(role, attribute.String("state", "idle")))
 			obs.ObserveInt64(poolConns, ts.TotalConns, metric.WithAttributes(role, attribute.String("state", "total")))
 			obs.ObserveInt64(poolConns, ts.MaxConns, metric.WithAttributes(role, attribute.String("state", "max_conns")))
@@ -256,6 +300,8 @@ func (p *gormTelemetryPlugin) before(operation string) func(*gorm.DB) {
 			return
 		}
 
+		recordQueryActiveStart(&platformInFlight, &platformPeakActive)
+
 		attrs := []attribute.KeyValue{
 			attribute.String("db.system.name", "postgresql"),
 			attribute.String("db.role", "platform"),
@@ -305,6 +351,9 @@ func (p *gormTelemetryPlugin) after() func(*gorm.DB) {
 			return
 		}
 		defer func() {
+			if !SkipDBTelemetry(state.parentCtx) {
+				recordQueryActiveEnd(&platformInFlight)
+			}
 			if state.span != nil {
 				state.span.End()
 			}
@@ -411,6 +460,8 @@ func (t *pgxQueryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data 
 		})
 	}
 
+	recordQueryActiveStart(&targetInFlight, &targetPeakActive)
+
 	dbLabel := TargetDatabaseLabel(t.databaseID)
 	spanName := "db.target." + op
 	if txAction != "" {
@@ -468,6 +519,9 @@ func (t *pgxQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pg
 		return
 	}
 	defer func() {
+		if !SkipDBTelemetry(ctx) {
+			recordQueryActiveEnd(&targetInFlight)
+		}
 		if state.span != nil {
 			state.span.End()
 		}
