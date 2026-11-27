@@ -18,7 +18,8 @@ import (
 )
 
 const lockName = "dbm.migration"
-const ensureHistorySQL = `
+
+var ensureHistorySQL = `
 CREATE SCHEMA IF NOT EXISTS _dbm;
 CREATE TABLE IF NOT EXISTS _dbm.migration_history (
 	version             bigint PRIMARY KEY,
@@ -45,7 +46,7 @@ ALTER TABLE _dbm.migration_history ADD COLUMN IF NOT EXISTS error_message text N
 ALTER TABLE _dbm.migration_history DROP CONSTRAINT IF EXISTS migration_history_execution_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS migration_history_execution_attempt_key
 	ON _dbm.migration_history (execution_id, attempt_number)
-	WHERE execution_id IS NOT NULL;`
+	WHERE execution_id IS NOT NULL;` + ensureInternalGuardFunctionSQL + ensureInternalGuardsSQL("migration_history")
 
 func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) error {
 	tx, err := pool.Begin(ctx)
@@ -62,6 +63,7 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 		exists          bool
 		hasNewFields    bool
 		hasLegacyUnique bool
+		guarded         bool
 	)
 	if err := tx.QueryRow(ctx, `SELECT
 		to_regclass('_dbm.migration_history') IS NOT NULL,
@@ -72,10 +74,16 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 			SELECT 1 FROM pg_constraint
 			WHERE conrelid = to_regclass('_dbm.migration_history')
 			AND conname = 'migration_history_execution_id_key'
-		)`).Scan(&exists, &hasNewFields, &hasLegacyUnique); err != nil {
+		),
+		coalesce((SELECT prosrc = $1 FROM pg_proc
+			WHERE oid = to_regprocedure('_dbm.reject_internal_rewrite()')), false)
+		AND (SELECT count(*) = 2 FROM pg_trigger
+			WHERE tgrelid = to_regclass('_dbm.migration_history')
+			AND tgname IN ('migration_history_append_only', 'migration_history_no_truncate')
+			AND tgenabled = 'A')`, internalGuardFunctionBody).Scan(&exists, &hasNewFields, &hasLegacyUnique, &guarded); err != nil {
 		return fmt.Errorf("checking migration history schema: %w", err)
 	}
-	if !exists && !create || exists && hasNewFields && !hasLegacyUnique {
+	if !exists && !create || exists && hasNewFields && !hasLegacyUnique && guarded {
 		return tx.Commit(ctx)
 	}
 	if _, err := tx.Exec(ctx, ensureHistorySQL); err != nil {
@@ -158,6 +166,11 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 		return fail(executionError(err))
 	}
 
+	internalBefore, err := internalStateFingerprint(ctx, tx)
+	if err != nil {
+		return fail(executionError(err))
+	}
+
 	start := time.Now()
 	slog.InfoContext(ctx, "migration SQL attempt started",
 		"event", "migration.sql.started",
@@ -194,6 +207,9 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 	)
 	if tx.Conn().PgConn().TxStatus() != 'T' {
 		return fail(ErrTransactionControl)
+	}
+	if err := requireInternalStateUnchanged(ctx, tx, internalBefore); err != nil {
+		return fail(err)
 	}
 
 	if err := updateExecutionPosition(ctx, tx, execution); err != nil {
@@ -384,6 +400,8 @@ func migrationFailureDetails(err error) (string, string) {
 		return "invalid_forward", err.Error()
 	case errors.Is(err, ErrTransactionControl):
 		return "transaction_control", err.Error()
+	case errors.Is(err, ErrInternalStateModified):
+		return "internal_state_modified", err.Error()
 	case errors.Is(err, ErrInvalidInput):
 		return "invalid_input", err.Error()
 	default:
@@ -487,12 +505,16 @@ func updateExecutionPosition(ctx context.Context, tx pgx.Tx, execution *Executio
 func executionError(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
+		if pgErr.Code == internalStateSQLState {
+			return internalStateError(pgErr)
+		}
 		return &ExecutionError{
 			Code:     pgErr.Code,
 			Message:  pgErr.Message,
 			Detail:   pgErr.Detail,
 			Hint:     pgErr.Hint,
 			Position: pgErr.Position,
+			cause:    pgErr,
 		}
 	}
 	if errors.Is(err, pgx.ErrTxClosed) {
