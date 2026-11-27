@@ -8,9 +8,41 @@ import (
 	"time"
 
 	"tubes-wbd/internal/access"
+	"tubes-wbd/internal/database/targetdb"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestIntegrationBatchMigrationIsNotBoundByPoolStatementTimeout(t *testing.T) {
+	env := newDraftEnv(t, `
+CREATE TABLE batch_items (id bigint PRIMARY KEY, value integer NOT NULL);
+INSERT INTO batch_items (id, value) SELECT id, 0 FROM generate_series(1, 4) AS id;
+`)
+	leaderID := env.addApproverGroup(t, "Batch Timeout Approvers", "timeout-leader", access.PermissionViewEdit)
+	manager := targetdb.NewManager(env.targets, targetdb.Options{StatementTimeout: 200 * time.Millisecond})
+	t.Cleanup(manager.Close)
+	svc, err := NewMigrationService(stubAuthorizer{}, manager, env.repo, Options{StatementTimeout: 10 * time.Second})
+	require.NoError(t, err)
+
+	draft, err := svc.CreateDraft(context.Background(), 42, env.dbID, Migration{
+		Name:    "batch slower than the pool limit",
+		SQL:     "UPDATE batch_items SET value = value + 1 WHERE id = ANY($1::bigint[]) AND pg_sleep(0.1) IS NOT NULL",
+		DownSQL: "UPDATE batch_items SET value = value - 1 WHERE id = ANY($1::bigint[])",
+		Batch: &BatchDefinition{
+			Schema: "public", Table: "batch_items", KeyColumn: "id",
+			ScopeSQL: "pg_sleep(0.1) IS NOT NULL", BatchSize: 4,
+		},
+	})
+	require.NoError(t, err)
+
+	execution := runDraftThroughWorker(t, env, svc, leaderID, 42, draft.ID)
+	require.Equal(t, ExecutionStatusSuccess, execution.Status, execution.ErrorMessage)
+	require.EqualValues(t, 4, execution.RowsProcessed)
+
+	var total int
+	require.NoError(t, env.target.QueryRow(context.Background(), "SELECT sum(value) FROM batch_items").Scan(&total))
+	require.Equal(t, 4, total)
+}
 
 func TestIntegrationStaleBatchRecoveryReconcilesTargetCheckpoint(t *testing.T) {
 	env := newDraftEnv(t, `
