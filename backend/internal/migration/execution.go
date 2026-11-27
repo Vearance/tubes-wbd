@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-	"tubes-wbd/internal/database/targetdb"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"tubes-wbd/internal/database/targetdb"
+	"tubes-wbd/internal/telemetry"
 )
 
 var ErrExecutionNotFound = errors.New("migration: execution not found")
@@ -75,9 +80,23 @@ func (s *MigrationService) SubmitDraftForReview(ctx context.Context, userID, dra
 		EncryptedTargetConfig: configSnapshot,
 		ExecutedBy:            userID,
 	}
-	if err := executions.SubmitExecution(ctx, execution); err != nil {
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(d.ManagedDatabaseID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	submitCtx := telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
+	if err := executions.SubmitExecution(submitCtx, execution); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(submitCtx, "migration execution submitted for review",
+		"event", "migration.execution.submitted",
+		"database", dbLabel,
+		"execution_id", execution.ID,
+		"draft_id", execution.DraftID,
+		"execution_type", string(execution.Type),
+		"execution_status", string(execution.Status),
+		"status", "ok",
+	)
 	return execution, nil
 }
 
@@ -161,9 +180,23 @@ func (s *MigrationService) createActionExecution(ctx context.Context, userID, db
 	if target.Batch != nil {
 		execution.Batch = target.Batch
 	}
-	if err := repo.CreateExecution(ctx, execution); err != nil {
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(dbID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	createCtx := telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
+	if err := repo.CreateExecution(createCtx, execution); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(createCtx, "migration execution submitted for review",
+		"event", "migration.execution.submitted",
+		"database", dbLabel,
+		"execution_id", execution.ID,
+		"draft_id", execution.DraftID,
+		"execution_type", string(execution.Type),
+		"execution_status", string(execution.Status),
+		"status", "ok",
+	)
 	return execution, nil
 }
 
@@ -209,9 +242,24 @@ func (s *MigrationService) SubmitCompensationForReview(ctx context.Context, user
 		Compensation:          true,
 		EncryptedTargetConfig: append([]byte(nil), target.EncryptedTargetConfig...),
 	}
-	if err := repo.CreateCompensationExecution(ctx, compensation); err != nil {
+	actor := telemetry.ActorUser(userID)
+	dbLabel := telemetry.TargetDatabaseLabel(target.ManagedDatabaseID)
+	telemetry.SetRequestDatabase(ctx, dbLabel)
+	compCtx := telemetry.WithActor(telemetry.WithDatabase(ctx, dbLabel), actor)
+
+	if err := repo.CreateCompensationExecution(compCtx, compensation); err != nil {
 		return nil, err
 	}
+	slog.InfoContext(compCtx, "migration compensation submitted for review",
+		"event", "migration.execution.submitted",
+		"database", dbLabel,
+		"execution_id", compensation.ID,
+		"draft_id", compensation.DraftID,
+		"execution_type", string(compensation.Type),
+		"execution_status", string(compensation.Status),
+		"compensation", true,
+		"status", "ok",
+	)
 	return compensation, nil
 }
 
@@ -242,7 +290,7 @@ func (s *MigrationService) Executions(ctx context.Context, userID, dbID uint) ([
 }
 
 func (r *GormRepository) SubmitExecution(ctx context.Context, e *Execution) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return telemetry.RunGORMTransaction(ctx, r.db, "migration.submit_execution", func(tx *gorm.DB) error {
 		var draft Draft
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&draft, e.DraftID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -268,7 +316,7 @@ func (r *GormRepository) SubmitExecution(ctx context.Context, e *Execution) erro
 }
 
 func (r *GormRepository) CreateExecution(ctx context.Context, e *Execution) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return telemetry.RunGORMTransaction(ctx, r.db, "migration.create_execution", func(tx *gorm.DB) error {
 		if err := tx.Create(e).Error; err != nil {
 			return fmt.Errorf("creating migration execution: %w", err)
 		}
@@ -281,7 +329,7 @@ func (r *GormRepository) CreateCompensationExecution(ctx context.Context, execut
 		return ErrInvalidCompensation
 	}
 	now := time.Now()
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return telemetry.RunGORMTransaction(ctx, r.db, "migration.create_compensation_execution", func(tx *gorm.DB) error {
 		var target Execution
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&target, *execution.TargetExecutionID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -331,7 +379,7 @@ func (r *GormRepository) GetExecution(ctx context.Context, id uint) (*Execution,
 func (r *GormRepository) EnqueueApprovedExecution(ctx context.Context, id uint) error {
 	now := time.Now()
 	outdated := false
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := telemetry.RunGORMTransaction(ctx, r.db, "migration.enqueue_execution", func(tx *gorm.DB) error {
 		var execution Execution
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&execution, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -379,9 +427,21 @@ func (r *GormRepository) EnqueueApprovedExecution(ctx context.Context, id uint) 
 				return ErrDraftNotExecutable
 			}
 		}
-		if err := tx.Create(&ExecutionOutbox{ExecutionID: id, AvailableAt: now}).Error; err != nil {
+		if err := tx.Create(&ExecutionOutbox{
+			ExecutionID:  id,
+			TraceContext: telemetry.InjectTraceContext(ctx),
+			AvailableAt:  now,
+		}).Error; err != nil {
 			return fmt.Errorf("creating migration execution outbox record: %w", err)
 		}
+		slog.InfoContext(ctx, "migration execution queued",
+			"event", "migration.execution.queued",
+			"database", telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID),
+			"execution_id", id,
+			"draft_id", execution.DraftID,
+			"execution_type", string(execution.Type),
+			"status", string(ExecutionStatusQueued),
+		)
 		return nil
 	})
 	if err != nil {
@@ -395,7 +455,7 @@ func (r *GormRepository) EnqueueApprovedExecution(ctx context.Context, id uint) 
 
 func (r *GormRepository) ClaimExecution(ctx context.Context, id uint) (*Execution, error) {
 	var execution Execution
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := telemetry.RunGORMTransaction(ctx, r.db, "migration.claim_execution", func(tx *gorm.DB) error {
 		result := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND status = ?", id, ExecutionStatusQueued).
 			Where("available_at IS NULL OR available_at <= ?", time.Now()).
@@ -533,7 +593,7 @@ func (r *GormRepository) FinishExecution(ctx context.Context, id uint, status Ex
 		return fmt.Errorf("migration: invalid terminal execution status %q", status)
 	}
 	now := time.Now()
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return telemetry.RunGORMTransaction(ctx, r.db, "migration.finish_execution", func(tx *gorm.DB) error {
 		var execution Execution
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&execution, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -600,7 +660,7 @@ func (r *GormRepository) FinishExecution(ctx context.Context, id uint, status Ex
 
 func (r *GormRepository) RetryExecution(ctx context.Context, id uint, delay time.Duration, message string) error {
 	availableAt := time.Now().Add(delay)
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return telemetry.RunGORMTransaction(ctx, r.db, "migration.retry_execution", func(tx *gorm.DB) error {
 		var execution Execution
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&execution, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -642,7 +702,11 @@ func (r *GormRepository) RetryExecution(ctx context.Context, id uint, delay time
 				return ErrDraftNotExecutable
 			}
 		}
-		if err := tx.Create(&ExecutionOutbox{ExecutionID: id, AvailableAt: availableAt}).Error; err != nil {
+		if err := tx.Create(&ExecutionOutbox{
+			ExecutionID:  id,
+			TraceContext: telemetry.InjectTraceContext(ctx),
+			AvailableAt:  availableAt,
+		}).Error; err != nil {
 			return fmt.Errorf("creating retry outbox record: %w", err)
 		}
 		return nil
@@ -695,14 +759,54 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 	if err != nil || execution == nil {
 		return err
 	}
-	slog.Info("migration execution started",
-		"execution_id", execution.ID,
-		"database_id", execution.ManagedDatabaseID,
-		"execution_type", execution.Type,
-		"attempt", execution.Attempt,
+
+	var queueWait time.Duration
+	if execution.AvailableAt != nil {
+		queueWait = time.Since(*execution.AvailableAt)
+	} else if execution.QueuedAt != nil {
+		queueWait = time.Since(*execution.QueuedAt)
+	}
+	if queueWait < 0 {
+		queueWait = 0
+	}
+	metrics := telemetry.Metrics()
+	metrics.RecordMigrationQueueWait(ctx, string(execution.Type), queueWait)
+
+	actor := telemetry.ActorUser(execution.ExecutedBy)
+	dbLabel := telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID)
+	meta := telemetry.MigrationLogMeta{
+		ExecutionID:   execution.ID,
+		DraftID:       execution.DraftID,
+		ExecutionType: string(execution.Type),
+		Attempt:       execution.Attempt,
+	}
+
+	spanCtx, span := telemetry.Tracer("tubes-wbd/migration").Start(ctx, "migration.execution.run",
+		trace.WithAttributes(
+			attribute.Int64("migration.execution_id", int64(execution.ID)),
+			attribute.Int64("migration.draft_id", int64(execution.DraftID)),
+			attribute.Int64("migration.database_id", int64(execution.ManagedDatabaseID)),
+			attribute.String("migration.type", string(execution.Type)),
+			attribute.Int("migration.attempt", execution.Attempt),
+			attribute.Bool("migration.batched", execution.Batch != nil),
+			attribute.String("actor", actor),
+			attribute.Int64("migration.queue_wait_ms", queueWait.Milliseconds()),
+		),
 	)
-	workCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), w.service.opts.StatementTimeout+10*time.Second)
+	execStart := time.Now()
+	defer span.End()
+
+	spanCtx = telemetry.WithActor(telemetry.WithDatabase(telemetry.WithMigrationMeta(spanCtx, meta), dbLabel), actor)
+
+	workCtx, cancel := context.WithTimeout(context.WithoutCancel(spanCtx), w.service.opts.StatementTimeout+10*time.Second)
 	defer cancel()
+
+	slog.InfoContext(workCtx, "migration execution started",
+		"event", "migration.execution.started",
+		"execution_type", string(execution.Type),
+		"status", "started",
+		"queue_wait_ms", queueWait.Milliseconds(),
+	)
 	if err := w.service.authz.RequireEdit(workCtx, execution.ExecutedBy, execution.ManagedDatabaseID); err != nil {
 		if execution.Batch != nil {
 			completed, reconcileErr := w.reconcileBatchExecution(workCtx, execution)
@@ -715,8 +819,23 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 		}
 		status := executionFailureStatus(execution)
 		if finishErr := w.repo.FinishExecution(workCtx, execution.ID, status, nil, "permission_revoked", err.Error()); finishErr != nil {
+			span.RecordError(finishErr)
+			span.SetStatus(codes.Error, telemetry.SanitizeError(finishErr))
 			return errors.Join(err, finishErr)
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "permission_revoked")
+		duration := time.Since(execStart)
+		metrics.RecordMigrationExecution(workCtx, string(execution.Type), string(status), duration)
+		slog.WarnContext(workCtx, "migration execution rejected by authorization",
+			"event", "migration.execution.failed",
+			"execution_type", string(execution.Type),
+			"execution_status", string(status),
+			"status", "error",
+			"error_code", "permission_revoked",
+			"duration_ms", telemetry.RoundMillis(duration),
+			"error", err,
+		)
 		return nil
 	}
 	entry, runErr := w.service.runExecution(workCtx, execution)
@@ -740,15 +859,22 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 		}
 		if retryableExecutionError(runErr) && execution.Attempt < maxExecutionAttempts {
 			delay := time.Second << (execution.Attempt - 1)
-			slog.Warn("migration execution attempt failed; retry scheduled",
-				"execution_id", execution.ID,
-				"database_id", execution.ManagedDatabaseID,
-				"execution_type", execution.Type,
-				"attempt", execution.Attempt,
-				"retry_in", delay,
+			retryAttrs := []any{
+				"event", "migration.execution.retry_scheduled",
+				"execution_type", string(execution.Type),
+				"status", "retrying",
+				"retry_in_ms", delay.Milliseconds(),
+				"duration_ms", telemetry.RoundMillis(time.Since(execStart)),
 				"error", runErr,
-			)
+			}
+			if sqlstate := telemetry.SQLState(runErr); sqlstate != "" {
+				retryAttrs = append(retryAttrs, "sqlstate", sqlstate)
+			}
+			slog.WarnContext(workCtx, "migration execution attempt failed; retry scheduled", retryAttrs...)
+			metrics.RecordMigrationRetry(workCtx, string(execution.Type), "retryable_error")
+			span.RecordError(runErr)
 			if err := w.repo.RetryExecution(workCtx, execution.ID, delay, runErr.Error()); err != nil {
+				span.SetStatus(codes.Error, telemetry.SanitizeError(err))
 				return errors.Join(runErr, err)
 			}
 			return nil
@@ -760,28 +886,42 @@ func (w *ExecutionWorker) RunExecution(ctx context.Context, executionID uint) er
 		}
 		terminalStatus := executionFailureStatus(execution)
 		if finishErr := w.repo.FinishExecution(workCtx, execution.ID, terminalStatus, nil, code, message); finishErr != nil {
+			span.RecordError(finishErr)
+			span.SetStatus(codes.Error, telemetry.SanitizeError(finishErr))
 			return errors.Join(runErr, finishErr)
 		}
-		slog.Error("migration execution failed",
-			"execution_id", execution.ID,
-			"database_id", execution.ManagedDatabaseID,
-			"execution_type", execution.Type,
-			"attempt", execution.Attempt,
+		span.RecordError(runErr)
+		span.SetStatus(codes.Error, code)
+		duration := time.Since(execStart)
+		metrics.RecordMigrationExecution(workCtx, string(execution.Type), string(terminalStatus), duration)
+		errAttrs := []any{
+			"event", "migration.execution.failed",
+			"execution_type", string(execution.Type),
+			"execution_status", string(terminalStatus),
+			"status", "error",
 			"error_code", code,
+			"duration_ms", telemetry.RoundMillis(duration),
 			"error", runErr,
-		)
+		}
+		if sqlstate := telemetry.SQLState(runErr); sqlstate != "" {
+			errAttrs = append(errAttrs, "sqlstate", sqlstate)
+		}
+		slog.ErrorContext(workCtx, "migration execution failed", errAttrs...)
 		return nil
 	}
 	if err := w.repo.FinishExecution(workCtx, execution.ID, ExecutionStatusSuccess, &entry.Version, "", ""); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, telemetry.SanitizeError(err))
 		return err
 	}
-	slog.Info("migration execution succeeded",
-		"execution_id", execution.ID,
-		"database_id", execution.ManagedDatabaseID,
-		"execution_type", execution.Type,
-		"attempt", execution.Attempt,
+	metrics.RecordMigrationExecution(workCtx, string(execution.Type), string(ExecutionStatusSuccess), entry.Duration)
+	slog.InfoContext(workCtx, "migration execution succeeded",
+		"event", "migration.execution.completed",
+		"execution_type", string(execution.Type),
+		"execution_status", string(ExecutionStatusSuccess),
+		"status", "ok",
 		"version", entry.Version,
-		"duration", entry.Duration,
+		"duration_ms", telemetry.RoundMillis(entry.Duration),
 	)
 	return nil
 }
@@ -790,12 +930,32 @@ const maxExecutionAttempts = 3
 
 func (w *ExecutionWorker) RecoverStale(ctx context.Context) error {
 	cutoff := time.Now().Add(-w.service.opts.StatementTimeout - 10*time.Second)
-	executions, err := w.repo.ListStaleExecutions(ctx, cutoff)
+	executions, err := w.repo.ListStaleExecutions(telemetry.WithSkipDBTelemetry(ctx), cutoff)
 	if err != nil {
 		return err
 	}
+	if len(executions) == 0 {
+		return nil
+	}
+
+	recCtx, span := telemetry.Tracer("tubes-wbd/migration").Start(ctx, "migration.worker.recover_stale",
+		trace.WithAttributes(attribute.Int("migration.stale_count", len(executions))),
+	)
+	recCtx = telemetry.WithActor(recCtx, "system:worker")
+	defer span.End()
+
 	for i := range executions {
-		if err := w.recoverStaleExecution(ctx, &executions[i]); err != nil {
+		execution := &executions[i]
+		dbLabel := telemetry.TargetDatabaseLabel(execution.ManagedDatabaseID)
+		execCtx := telemetry.WithDatabase(telemetry.WithMigrationMeta(recCtx, telemetry.MigrationLogMeta{
+			ExecutionID:   execution.ID,
+			DraftID:       execution.DraftID,
+			ExecutionType: string(execution.Type),
+			Attempt:       execution.Attempt,
+		}), dbLabel)
+		if err := w.recoverStaleExecution(execCtx, execution); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, telemetry.SanitizeError(err))
 			return err
 		}
 	}
@@ -842,9 +1002,32 @@ func (w *ExecutionWorker) recoverStaleExecution(ctx context.Context, execution *
 	_ = tx.Rollback(ctx)
 	if execution.Attempt >= maxExecutionAttempts {
 		terminalStatus := executionFailureStatus(execution)
-		return w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", "worker stopped before completing the execution")
+		var elapsed time.Duration
+		if execution.StartedAt != nil {
+			elapsed = time.Since(*execution.StartedAt)
+		}
+		if err := w.repo.FinishExecution(ctx, execution.ID, terminalStatus, nil, "worker_interrupted", "worker stopped before completing the execution"); err != nil {
+			return err
+		}
+		telemetry.Metrics().RecordMigrationExecution(ctx, string(execution.Type), string(terminalStatus), elapsed)
+		slog.ErrorContext(ctx, "stale migration execution failed after max attempts",
+			"event", "migration.stale.failed",
+			"execution_type", string(execution.Type),
+			"execution_status", string(terminalStatus),
+			"status", "error",
+			"duration_ms", telemetry.RoundMillis(elapsed),
+		)
+		return nil
 	}
-	return w.repo.RetryExecution(ctx, execution.ID, 0, "worker restarted before execution completed")
+	if err := w.repo.RetryExecution(ctx, execution.ID, 0, "worker restarted before execution completed"); err != nil {
+		return err
+	}
+	telemetry.Metrics().RecordMigrationRetry(ctx, string(execution.Type), "stale_recovery")
+	slog.WarnContext(ctx, "recovering stale migration execution",
+		"event", "migration.stale.recovered",
+		"status", "retrying",
+	)
+	return nil
 }
 
 func (w *ExecutionWorker) reconcileBatchExecution(ctx context.Context, execution *Execution) (bool, error) {

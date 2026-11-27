@@ -3,6 +3,9 @@ package access
 import (
 	"context"
 	"fmt"
+	"log/slog"
+
+	"tubes-wbd/internal/telemetry"
 )
 
 func (s *GroupService) SetDatabasePermission(
@@ -51,6 +54,16 @@ func (s *GroupService) SetDatabasePermission(
 		return nil, err
 	}
 
+	targetDB := telemetry.TargetDatabaseLabel(managedDatabaseID)
+	telemetry.SetRequestDatabase(ctx, targetDB)
+	slog.InfoContext(ctx, "database permission updated",
+		"event", "permission.updated",
+		"database", "platform",
+		"target_database", targetDB,
+		"group_id", groupID,
+		"permission", level,
+		"status", "ok",
+	)
 	return permission, nil
 }
 
@@ -59,7 +72,19 @@ func (s *GroupService) RemoveDatabasePermission(
 	groupID uint,
 	managedDatabaseID uint,
 ) error {
-	return s.groups.DeleteDatabasePermission(ctx, groupID, managedDatabaseID)
+	if err := s.groups.DeleteDatabasePermission(ctx, groupID, managedDatabaseID); err != nil {
+		return err
+	}
+	targetDB := telemetry.TargetDatabaseLabel(managedDatabaseID)
+	telemetry.SetRequestDatabase(ctx, targetDB)
+	slog.InfoContext(ctx, "database permission removed",
+		"event", "permission.removed",
+		"database", "platform",
+		"target_database", targetDB,
+		"group_id", groupID,
+		"status", "ok",
+	)
+	return nil
 }
 
 func (s *GroupService) ListDatabasePermissions(

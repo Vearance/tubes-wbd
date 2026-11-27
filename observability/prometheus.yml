@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: bscheme-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["internal:8080"]
+        labels:
+          service: bscheme-api
+
+  - job_name: bscheme-worker
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9091
+        refresh_interval: 5s
+    relabel_configs:
+      - target_label: service
+        replacement: bscheme-worker

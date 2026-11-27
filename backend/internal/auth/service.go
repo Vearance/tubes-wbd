@@ -5,8 +5,14 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
+	"tubes-wbd/internal/telemetry"
 )
 
 // default fallback
@@ -110,13 +116,68 @@ func (s *AuthService) Login(
 	ctx context.Context,
 	username string,
 	password string,
-) (LoginResult, error) {
+) (res LoginResult, err error) {
+	start := time.Now()
+	spanCtx, span := telemetry.Tracer("tubes-wbd/auth").Start(ctx, "auth.login")
+	defer func() {
+		outcome := "success"
+		if err != nil {
+			switch {
+			case errors.Is(err, ErrInvalidCredentials):
+				outcome = "invalid_credentials"
+			case errors.Is(err, ErrUserDisabled):
+				outcome = "user_disabled"
+			default:
+				outcome = "error"
+				span.RecordError(err)
+				span.SetStatus(codes.Error, telemetry.SanitizeError(err))
+			}
+		}
+		actor := "anonymous"
+		if err == nil && res.User != nil {
+			actor = telemetry.ActorUser(res.User.ID)
+			telemetry.SetRequestActor(spanCtx, actor)
+		}
+		durationMs := telemetry.RoundMillis(time.Since(start))
+		span.SetAttributes(attribute.String("auth.outcome", outcome))
+
+		switch outcome {
+		case "success":
+			slog.InfoContext(spanCtx, "user logged in",
+				"event", "auth.login",
+				"actor", actor,
+				"database", "platform",
+				"status", "ok",
+				"duration_ms", durationMs,
+			)
+		case "error":
+			slog.ErrorContext(spanCtx, "login error",
+				"event", "auth.login",
+				"actor", actor,
+				"database", "platform",
+				"status", "error",
+				"duration_ms", durationMs,
+				"error", err,
+			)
+		default:
+			slog.WarnContext(spanCtx, "login rejected",
+				"event", "auth.login",
+				"actor", actor,
+				"database", "platform",
+				"status", "rejected",
+				"reason", outcome,
+				"duration_ms", durationMs,
+			)
+		}
+		span.End()
+	}()
+
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
 		return LoginResult{}, ErrInvalidCredentials
 	}
 
-	user, err := s.users.FindByUsername(ctx, username)
+	user, err := s.users.FindByUsername(spanCtx, username)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return LoginResult{}, ErrInvalidCredentials
@@ -154,7 +215,7 @@ func (s *AuthService) Login(
 		ExpiresAt:      now.Add(s.config.AbsoluteLifetime),
 		CSRFTokenHash:  hashToken(csrfToken),
 	}
-	if err := s.sessions.Create(ctx, session); err != nil {
+	if err := s.sessions.Create(spanCtx, session); err != nil {
 		return LoginResult{}, fmt.Errorf("creating login session: %w", err)
 	}
 
@@ -273,25 +334,48 @@ func (s *AuthService) ValidateSession(
 }
 
 func (s *AuthService) Logout(ctx context.Context, token string) error {
+	spanCtx, span := telemetry.Tracer("tubes-wbd/auth").Start(ctx, "auth.logout")
+	defer span.End()
+
 	if token == "" {
 		return nil
 	}
 
-	lookup, err := s.sessions.FindByTokenHash(ctx, hashToken(token))
+	lookup, err := s.sessions.FindByTokenHash(spanCtx, hashToken(token))
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) {
 			return nil
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, telemetry.SanitizeError(err))
 		return fmt.Errorf("finding session for logout: %w", err)
 	}
 	if lookup == nil || lookup.Session == nil {
 		return nil
 	}
 
-	if err := s.sessions.Revoke(ctx, lookup.Session.ID, s.now()); err != nil {
+	actor := telemetry.ActorUser(lookup.Session.UserID)
+	telemetry.SetRequestActor(spanCtx, actor)
+
+	if err := s.sessions.Revoke(spanCtx, lookup.Session.ID, s.now()); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, telemetry.SanitizeError(err))
+		slog.ErrorContext(spanCtx, "user logout failed",
+			"event", "auth.logout",
+			"actor", actor,
+			"database", "platform",
+			"status", "error",
+			"error", err,
+		)
 		return fmt.Errorf("revoking session: %w", err)
 	}
 
+	slog.InfoContext(spanCtx, "user logged out",
+		"event", "auth.logout",
+		"actor", actor,
+		"database", "platform",
+		"status", "ok",
+	)
 	return nil
 }
 

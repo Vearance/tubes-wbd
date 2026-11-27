@@ -215,6 +215,39 @@ bash scripts/coverage.sh --unit   # unit tests only
 
 The script prints statement coverage per package and writes `coverage.txt` (per package and per function) and `coverage.html` (source view with covered and uncovered lines) to the repository root. It runs Go coverage from `backend/` and excludes the generated `backend/internal/http/api.gen.go` from the report.
 
+## observability
+
+Centralized logs (Loki `:3100`), distributed traces across API -> Outbox -> RabbitMQ -> Worker -> PostgreSQL (Tempo `:3200` via OpenTelemetry Collector), Prometheus metrics (`:9090`, scraping `bscheme-api` `:8080/metrics` and every scaled `bscheme-worker` replica on `:9091/metrics` via `dns_sd_configs`), and an auto-provisioned Grafana dashboard (`:3000`, default `admin` / `admin`) run inside a single `lgtm` container (`grafana/otel-lgtm`) in the Compose stack:
+
+```bash
+docker compose up --build -d --scale worker=3
+bash scripts/test-observability.sh   # generate API, migration & DB pool traffic and verify LGTM ingestion
+```
+
+### Queue & Migration Metrics (Prometheus -> Grafana)
+
+| Requirement | Prometheus Metric(s) & Labels | Source | Grafana Panel (`bscheme-migrations`) |
+| --- | --- | --- | --- |
+| Job menunggu / berjalan / selesai / gagal | `bscheme_migration_jobs{status="queued\|running\|pending_review\|approved\|success\|failed\|partial\|rejected"}` (gauge), `bscheme_migration_executions_total{type,status}` (counter) | `bscheme-api`, `bscheme-worker` | **Migration Jobs per Status** |
+| Waktu tunggu queue & lock | `bscheme_migration_queue_wait_duration_seconds_{bucket,sum,count}{type}`, `bscheme_migration_lock_wait_duration_seconds_{bucket,sum,count}{type,lock_scope}` (`advisory`, `history_table`) | `bscheme-worker` | **Queue & Lock Wait Duration (p50 / p95)** |
+| Durasi migration | `bscheme_migration_execution_duration_seconds_{bucket,sum,count}{type,status}` (histogram) | `bscheme-worker` | **Migration Execution Duration (p50 / p95)** |
+| Batch, row diproses & retry | `bscheme_migration_batches_processed_total{type}`, `bscheme_migration_batch_rows_processed_total{type}`, `bscheme_migration_retries_total{type,reason}` | `bscheme-worker` | **Batches, Rows Processed & Retries** |
+
+### Database Connection Pool Metrics (Prometheus -> Grafana)
+
+| Requirement | Prometheus Metric(s) & Labels | Source | Grafana Panel (`bscheme-migrations`) |
+| --- | --- | --- | --- |
+| Koneksi aktif / idle (Platform & Target DB) | `bscheme_db_pool_connections{db_role="platform\|target",state="active\|idle"}` | `bscheme-api`, `bscheme-worker` | **DB Connection Pool — Active vs Idle Connections** |
+| Waktu tunggu & jumlah tunggu koneksi | `bscheme_db_pool_wait_duration_seconds_total{db_role}`, `bscheme_db_pool_wait_count_total{db_role}` | `bscheme-api`, `bscheme-worker` | **DB Connection Pool — Connection Wait Time**, **DB Connection Pool — Connection Wait Count** |
+
+### Grafana Provisioning & Dashboard Files
+
+- **Prometheus scrape config** (mounted to `/otel-lgtm/prometheus.yaml`, with `dns_sd_configs` for scaled `worker` replicas): [`observability/prometheus.yml`](observability/prometheus.yml)
+- **Dashboard auto-provisioning** (`BScheme` folder in Grafana): [`observability/dashboards.yml`](observability/dashboards.yml)
+- **Queue, Migrations & DB Pool Dashboard** (`http://localhost:3000/d/bscheme-migrations`): [`observability/bscheme-migrations.json`](observability/bscheme-migrations.json)
+- **Smoke Test Script**: [`scripts/test-observability.sh`](scripts/test-observability.sh)
+
+See [`observability/README.md`](observability/README.md) for architecture details, label cardinality guardrails, screenshots, and verified log/trace correlation and `/metrics` output examples.
 
 ## contributors
 

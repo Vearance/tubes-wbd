@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type DatabaseID = uint
@@ -61,11 +63,12 @@ func (c ConnConfig) GoString() string {
 }
 
 type Options struct {
-	MaxConns int32
-	ConnectTimeout time.Duration
-	StatementTimeout time.Duration
-	MaxConnIdleTime time.Duration
+	MaxConns          int32
+	ConnectTimeout    time.Duration
+	StatementTimeout  time.Duration
+	MaxConnIdleTime   time.Duration
 	HealthCheckPeriod time.Duration
+	QueryTracer       func(DatabaseID) pgx.QueryTracer
 }
 
 func DefaultOptions() Options {

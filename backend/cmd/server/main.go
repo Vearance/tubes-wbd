@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"tubes-wbd/internal/access"
 	"tubes-wbd/internal/auth"
@@ -19,6 +21,7 @@ import (
 	"tubes-wbd/internal/http/middleware"
 	"tubes-wbd/internal/manageddb"
 	"tubes-wbd/internal/migration"
+	"tubes-wbd/internal/telemetry"
 	"tubes-wbd/internal/users"
 	"tubes-wbd/internal/viewer"
 )
@@ -44,6 +47,19 @@ func run() error {
 	)
 	defer stop()
 
+	tel, err := telemetry.Init(ctx, cfg.Telemetry)
+	if err != nil {
+		return fmt.Errorf("initializing telemetry: %w", err)
+	}
+	slog.SetDefault(slog.New(tel.LogHandler()))
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := tel.Shutdown(shutdownCtx); err != nil {
+			slog.Error("shutting down telemetry", "error", err)
+		}
+	}()
+
 	db, err := platformdb.Open(ctx, cfg.PlatformDB)
 	if err != nil {
 		return fmt.Errorf("opening platform database: %w", err)
@@ -53,6 +69,9 @@ func run() error {
 			slog.Error("closing platform database", "error", err)
 		}
 	}()
+	if err := telemetry.RegisterGORMPlugin(db); err != nil {
+		return fmt.Errorf("registering database telemetry plugin: %w", err)
+	}
 
 	// migrate schema
 	if err := users.AutoMigrate(db); err != nil {
@@ -125,10 +144,77 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("creating target database config source: %w", err)
 	}
-	targetManager := targetdb.NewManager(configSource, targetdb.Options{})
+	targetManager := targetdb.NewManager(configSource, targetdb.Options{
+		QueryTracer: telemetry.NewPGXTracer,
+	})
 	// Deferred after the platform DB close, so it runs first; and run returns
 	// only after server.Shutdown, so no request still holds a connection.
 	defer targetManager.Close()
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("getting platform sql.DB for pool metrics: %w", err)
+	}
+	if err := tel.RegisterDBPoolStats(sqlDB, func() telemetry.TargetPoolStats {
+		s := targetManager.Stats()
+		return telemetry.TargetPoolStats{
+			ActiveConns:  s.ActiveConns,
+			IdleConns:    s.IdleConns,
+			WaitCount:    s.WaitCount,
+			WaitDuration: s.WaitDuration,
+		}
+	}); err != nil {
+		return fmt.Errorf("registering database pool metrics: %w", err)
+	}
+
+	const statusCacheTTL = 5 * time.Second
+	var (
+		statusMu     sync.Mutex
+		cachedAt     time.Time
+		cachedCounts map[string]int64
+	)
+	if err := tel.RegisterMigrationStatusCollector(func(collectCtx context.Context) (map[string]int64, error) {
+		statusMu.Lock()
+		defer statusMu.Unlock()
+
+		if cachedCounts != nil && time.Since(cachedAt) < statusCacheTTL {
+			copyCounts := make(map[string]int64, len(cachedCounts))
+			for k, v := range cachedCounts {
+				copyCounts[k] = v
+			}
+			return copyCounts, nil
+		}
+
+		queryCtx, cancel := context.WithTimeout(telemetry.WithSkipDBTelemetry(collectCtx), 2*time.Second)
+		defer cancel()
+
+		type statusRow struct {
+			Status string
+			Count  int64
+		}
+		var rows []statusRow
+		if err := db.WithContext(queryCtx).
+			Table("migration_executions").
+			Select("status, COUNT(*) AS count").
+			Group("status").
+			Scan(&rows).Error; err != nil {
+			return nil, fmt.Errorf("querying migration execution status counts: %w", err)
+		}
+		counts := make(map[string]int64, len(rows))
+		for _, row := range rows {
+			counts[row.Status] = row.Count
+		}
+
+		cachedCounts = counts
+		cachedAt = time.Now()
+		copyCounts := make(map[string]int64, len(counts))
+		for k, v := range counts {
+			copyCounts[k] = v
+		}
+		return copyCounts, nil
+	}); err != nil {
+		return fmt.Errorf("registering migration status metrics: %w", err)
+	}
 
 	managedDatabaseService, err := manageddb.NewManagedDBService(managedRepository, cipher, targetManager)
 	if err != nil {
@@ -165,14 +251,18 @@ func run() error {
 		Auth:            authService,
 		AdminAuthorizer: authorizationService,
 		CookieOptions:   cookieOptions,
+		Middlewares: []func(http.Handler) http.Handler{
+			telemetry.HTTPMiddleware(cfg.Telemetry.ServiceName),
+		},
 	})
+	mux.Handle("/metrics", tel.MetricsHandler())
 	// The React frontend runs separately and calls these JSON API routes.
 
 	// Placeholder for '/'.
 	mux.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if _, err := io.WriteString(w, "Hello, world!\n"); err != nil {
-			slog.Error("writing root response", "error", err)
+			slog.ErrorContext(r.Context(), "writing root response", "error", err)
 		}
 	})
 
@@ -193,7 +283,7 @@ func run() error {
 		serverErrors <- server.ListenAndServe()
 	}()
 
-	slog.Info("server listening", "port", cfg.Port)
+	slog.InfoContext(ctx, "server listening", "port", cfg.Port, "service", cfg.Telemetry.ServiceName)
 
 	// Wait for a server error or a shutdown signal.
 	select {
@@ -202,7 +292,7 @@ func run() error {
 			return fmt.Errorf("serving HTTP: %w", err)
 		}
 	case <-ctx.Done():
-		slog.Info("shutdown signal received")
+		slog.InfoContext(ctx, "shutdown signal received")
 	}
 
 	// Stop accepting requests and wait for active requests to finish.

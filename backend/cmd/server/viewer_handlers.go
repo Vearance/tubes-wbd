@@ -14,7 +14,7 @@ func (s apiServer) ListDatabaseSchemas(w http.ResponseWriter, r *http.Request, d
 
 	schemas, err := s.viewer.ListSchemas(r.Context(), userID, dbID)
 	if err != nil {
-		writeServiceError(w, err, "listing schemas")
+		writeServiceError(r.Context(), w, err, "listing schemas")
 		return
 	}
 	writeJSON(w, http.StatusOK, schemas)
@@ -33,7 +33,7 @@ func (s apiServer) ListDatabaseTables(
 
 	tables, err := s.viewer.ListTables(r.Context(), userID, dbID, params.Schema)
 	if err != nil {
-		writeServiceError(w, err, "listing tables")
+		writeServiceError(r.Context(), w, err, "listing tables")
 		return
 	}
 
@@ -57,7 +57,7 @@ func (s apiServer) GetDatabaseTableStructure(
 
 	detail, err := s.viewer.DescribeTable(r.Context(), userID, dbID, params.Schema, params.Table)
 	if err != nil {
-		writeServiceError(w, err, "describing table")
+		writeServiceError(r.Context(), w, err, "describing table")
 		return
 	}
 
@@ -107,7 +107,7 @@ func (s apiServer) GetDatabaseTableRows(
 	page, err := s.viewer.TableData(r.Context(), userID, dbID,
 		params.Schema, params.Table, intValue(params.Page), intValue(params.PageSize))
 	if err != nil {
-		writeServiceError(w, err, "reading table rows")
+		writeServiceError(r.Context(), w, err, "reading table rows")
 		return
 	}
 
@@ -145,7 +145,7 @@ func (s apiServer) ExecuteDatabaseQuery(
 		intValue(request.PageSize),
 	)
 	if err != nil {
-		writeServiceError(w, err, "executing query")
+		writeServiceError(r.Context(), w, err, "executing query")
 		return
 	}
 

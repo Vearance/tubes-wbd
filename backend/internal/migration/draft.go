@@ -125,11 +125,12 @@ type ExecutionAttempt struct {
 func (ExecutionAttempt) TableName() string { return "migration_execution_attempts" }
 
 type ExecutionOutbox struct {
-	ID          uint       `gorm:"primaryKey"`
-	ExecutionID uint       `gorm:"not null;index"`
-	AvailableAt time.Time  `gorm:"not null;index"`
-	PublishedAt *time.Time `gorm:"index"`
-	CreatedAt   time.Time  `gorm:"not null"`
+	ID           uint       `gorm:"primaryKey"`
+	ExecutionID  uint       `gorm:"not null;index"`
+	TraceContext string     `gorm:"type:text;not null;default:''"`
+	AvailableAt  time.Time  `gorm:"not null;index"`
+	PublishedAt  *time.Time `gorm:"index"`
+	CreatedAt    time.Time  `gorm:"not null"`
 }
 
 func (ExecutionOutbox) TableName() string { return "migration_execution_outbox" }

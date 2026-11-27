@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type Config struct {
@@ -25,7 +26,7 @@ func Open(ctx context.Context, cfg Config) (*gorm.DB, error) {
 	}
 
 	cfg = cfg.withDefaults()
-	db, err := gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN), gormConfig())
 	if err != nil {
 		return nil, fmt.Errorf("opening platform database: %w", err)
 	}
@@ -48,6 +49,10 @@ func Open(ctx context.Context, cfg Config) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+func gormConfig() *gorm.Config {
+	return &gorm.Config{Logger: logger.Discard}
 }
 
 func Close(db *gorm.DB) error {
