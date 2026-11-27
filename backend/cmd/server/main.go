@@ -216,6 +216,58 @@ func run() error {
 		return fmt.Errorf("registering migration status metrics: %w", err)
 	}
 
+	var (
+		progressMu     sync.Mutex
+		progressAt     time.Time
+		cachedProgress map[string]telemetry.MigrationProgressTotals
+	)
+	if err := tel.RegisterMigrationProgressCollector(func(collectCtx context.Context) (map[string]telemetry.MigrationProgressTotals, error) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
+
+		if cachedProgress != nil && time.Since(progressAt) < statusCacheTTL {
+			copyTotals := make(map[string]telemetry.MigrationProgressTotals, len(cachedProgress))
+			for k, v := range cachedProgress {
+				copyTotals[k] = v
+			}
+			return copyTotals, nil
+		}
+
+		queryCtx, cancel := context.WithTimeout(telemetry.WithSkipDBTelemetry(collectCtx), 2*time.Second)
+		defer cancel()
+
+		type progressRow struct {
+			Type    string
+			Batches int64
+			Rows    int64
+		}
+		var rows []progressRow
+		if err := db.WithContext(queryCtx).
+			Table("migration_executions").
+			Select("type, COALESCE(SUM(batch_count), 0) AS batches, COALESCE(SUM(rows_processed), 0) AS rows").
+			Group("type").
+			Scan(&rows).Error; err != nil {
+			return nil, fmt.Errorf("querying migration progress totals: %w", err)
+		}
+		totals := make(map[string]telemetry.MigrationProgressTotals, len(rows))
+		for _, row := range rows {
+			totals[row.Type] = telemetry.MigrationProgressTotals{
+				Batches: row.Batches,
+				Rows:    row.Rows,
+			}
+		}
+
+		cachedProgress = totals
+		progressAt = time.Now()
+		copyTotals := make(map[string]telemetry.MigrationProgressTotals, len(totals))
+		for k, v := range totals {
+			copyTotals[k] = v
+		}
+		return copyTotals, nil
+	}); err != nil {
+		return fmt.Errorf("registering migration progress metrics: %w", err)
+	}
+
 	managedDatabaseService, err := manageddb.NewManagedDBService(managedRepository, cipher, targetManager)
 	if err != nil {
 		return fmt.Errorf("creating managed database service: %w", err)

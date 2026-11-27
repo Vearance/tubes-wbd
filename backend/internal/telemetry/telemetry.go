@@ -252,6 +252,51 @@ func (p *Provider) RegisterMigrationStatusCollector(fn func(context.Context) (ma
 	return err
 }
 
+// MigrationProgressTotals holds database-backed cumulative batch and row counts per execution type.
+type MigrationProgressTotals struct {
+	Batches int64
+	Rows    int64
+}
+
+// RegisterMigrationProgressCollector registers observable gauges backed by persisted
+// migration_executions batch_count and rows_processed totals so counts reflect real
+// database history across worker restarts.
+func (p *Provider) RegisterMigrationProgressCollector(fn func(context.Context) (map[string]MigrationProgressTotals, error)) error {
+	if fn == nil {
+		return errors.New("migration progress collector callback is nil")
+	}
+	batchesGauge, err := p.meter.Int64ObservableGauge(
+		"bscheme_migration_batches_committed",
+		metric.WithDescription("Total committed migration batches persisted in platform database by execution type"),
+	)
+	if err != nil {
+		return fmt.Errorf("creating bscheme_migration_batches_committed gauge: %w", err)
+	}
+	rowsGauge, err := p.meter.Int64ObservableGauge(
+		"bscheme_migration_rows_committed",
+		metric.WithDescription("Total committed migration rows processed persisted in platform database by execution type"),
+	)
+	if err != nil {
+		return fmt.Errorf("creating bscheme_migration_rows_committed gauge: %w", err)
+	}
+
+	_, err = p.meter.RegisterCallback(func(ctx context.Context, obs metric.Observer) error {
+		totals, err := fn(ctx)
+		if err != nil {
+			slog.WarnContext(ctx, "collecting migration progress gauges", "error", err)
+			return nil
+		}
+		for _, execType := range []string{"up", "rollback", "forward"} {
+			entry := totals[execType]
+			attr := metric.WithAttributes(attribute.String("type", execType))
+			obs.ObserveInt64(batchesGauge, entry.Batches, attr)
+			obs.ObserveInt64(rowsGauge, entry.Rows, attr)
+		}
+		return nil
+	}, batchesGauge, rowsGauge)
+	return err
+}
+
 // Shutdown flushes and closes trace, log, and metric providers.
 func (p *Provider) Shutdown(ctx context.Context) error {
 	if p == nil {

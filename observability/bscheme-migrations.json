@@ -75,28 +75,28 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.50, sum by (le) (bscheme_migration_queue_wait_duration_seconds_bucket))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(bscheme_migration_queue_wait_duration_seconds_bucket[5m])))",
           "interval": "5s",
           "legendFormat": "queue wait p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (bscheme_migration_queue_wait_duration_seconds_bucket))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(bscheme_migration_queue_wait_duration_seconds_bucket[5m])))",
           "interval": "5s",
           "legendFormat": "queue wait p95",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.50, sum by (le, lock_scope) (bscheme_migration_lock_wait_duration_seconds_bucket))",
+          "expr": "histogram_quantile(0.50, sum by (le, lock_scope) (rate(bscheme_migration_lock_wait_duration_seconds_bucket[5m])))",
           "interval": "5s",
           "legendFormat": "lock wait p50 ({{lock_scope}})",
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le, lock_scope) (bscheme_migration_lock_wait_duration_seconds_bucket))",
+          "expr": "histogram_quantile(0.95, sum by (le, lock_scope) (rate(bscheme_migration_lock_wait_duration_seconds_bucket[5m])))",
           "interval": "5s",
           "legendFormat": "lock wait p95 ({{lock_scope}})",
           "refId": "D"
@@ -125,14 +125,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.50, sum by (le) (bscheme_migration_execution_duration_seconds_bucket))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(bscheme_migration_execution_duration_seconds_bucket[5m])))",
           "interval": "5s",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (bscheme_migration_execution_duration_seconds_bucket))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(bscheme_migration_execution_duration_seconds_bucket[5m])))",
           "interval": "5s",
           "legendFormat": "p95",
           "refId": "B"
@@ -170,14 +170,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (type) (bscheme_migration_batches_processed_total)",
+          "expr": "max by (type) (bscheme_migration_batches_committed)",
           "interval": "5s",
           "legendFormat": "batches ({{type}})",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (type) (bscheme_migration_batch_rows_processed_total)",
+          "expr": "max by (type) (bscheme_migration_rows_committed)",
           "interval": "5s",
           "legendFormat": "rows ({{type}})",
           "refId": "B"
@@ -229,7 +229,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Cumulative time spent waiting for a database connection from the pool.",
+      "description": "Time spent waiting for a database connection from the pool over the last 1m.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -244,12 +244,12 @@
         "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "title": "DB Connection Pool — Connection Wait Time",
+      "title": "DB Connection Pool — Connection Wait Time (1m)",
       "type": "timeseries",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job, db_role) (bscheme_db_pool_wait_duration_seconds_total)",
+          "expr": "sum by (job, db_role) (increase(bscheme_db_pool_wait_duration_seconds_total[1m]))",
           "interval": "5s",
           "legendFormat": "{{job}} ({{db_role}})",
           "refId": "A"
@@ -258,7 +258,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Cumulative count of requests that waited for a database connection from the pool.",
+      "description": "Requests that waited for a database connection from the pool over the last 1m.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -274,12 +274,12 @@
         "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "title": "DB Connection Pool — Connection Wait Count",
+      "title": "DB Connection Pool — Connection Wait Count (1m)",
       "type": "timeseries",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job, db_role) (bscheme_db_pool_wait_count_total)",
+          "expr": "sum by (job, db_role) (increase(bscheme_db_pool_wait_count_total[1m]))",
           "interval": "5s",
           "legendFormat": "{{job}} ({{db_role}})",
           "refId": "A"
