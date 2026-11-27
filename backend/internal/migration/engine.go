@@ -23,6 +23,7 @@ var ensureHistorySQL = `
 CREATE SCHEMA IF NOT EXISTS _dbm;
 CREATE TABLE IF NOT EXISTS _dbm.migration_history (
 	version             bigint PRIMARY KEY,
+	migration_id        bigint,
 	execution_id        bigint,
 	attempt_number      integer NOT NULL DEFAULT 1,
 	status              text NOT NULL DEFAULT 'success',
@@ -43,6 +44,7 @@ ALTER TABLE _dbm.migration_history ADD COLUMN IF NOT EXISTS attempt_number integ
 ALTER TABLE _dbm.migration_history ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'success';
 ALTER TABLE _dbm.migration_history ADD COLUMN IF NOT EXISTS error_code text NOT NULL DEFAULT '';
 ALTER TABLE _dbm.migration_history ADD COLUMN IF NOT EXISTS error_message text NOT NULL DEFAULT '';
+ALTER TABLE _dbm.migration_history ADD COLUMN IF NOT EXISTS migration_id bigint;
 ALTER TABLE _dbm.migration_history DROP CONSTRAINT IF EXISTS migration_history_execution_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS migration_history_execution_attempt_key
 	ON _dbm.migration_history (execution_id, attempt_number)
@@ -67,9 +69,9 @@ func ensureHistorySchema(ctx context.Context, pool *pgxpool.Pool, create bool) e
 	)
 	if err := tx.QueryRow(ctx, `SELECT
 		to_regclass('_dbm.migration_history') IS NOT NULL,
-		(SELECT count(*) = 4 FROM information_schema.columns
+		(SELECT count(*) = 5 FROM information_schema.columns
 		 WHERE table_schema = '_dbm' AND table_name = 'migration_history'
-		 AND column_name IN ('attempt_number', 'status', 'error_code', 'error_message')),
+		 AND column_name IN ('attempt_number', 'status', 'error_code', 'error_message', 'migration_id')),
 		EXISTS (
 			SELECT 1 FROM pg_constraint
 			WHERE conrelid = to_regclass('_dbm.migration_history')
@@ -222,6 +224,7 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 		Version:       version,
 		AttemptNumber: attemptNumber,
 		Status:        RunStatusSuccess,
+		MigrationID:   historyMigrationID(execution),
 		Name:          execution.Name,
 		SQL:           execution.SQL,
 		ExecutedBy:    execution.ExecutedBy,
@@ -237,11 +240,11 @@ func applyExecution(ctx context.Context, pool *pgxpool.Pool, execution *Executio
 	}
 	if err := tx.QueryRow(ctx,
 		`INSERT INTO _dbm.migration_history
-			(version, execution_id, attempt_number, status, execution_type, target_execution_id,
+			(version, migration_id, execution_id, attempt_number, status, execution_type, target_execution_id,
 			 active, name, sql, down_sql, irreversible_reason, executed_by, duration_ms)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING executed_at`,
-		version, executionID, attemptNumber, RunStatusSuccess, execution.Type, targetExecutionID,
+		version, historyMigrationIDArg(execution), executionID, attemptNumber, RunStatusSuccess, execution.Type, targetExecutionID,
 		execution.Type != ExecutionTypeRollback, execution.Name, execution.SQL, execution.DownSQL,
 		execution.IrreversibleReason, int64(execution.ExecutedBy), duration.Milliseconds()).Scan(&entry.ExecutedAt); err != nil {
 		return fail(executionError(err))
@@ -321,6 +324,21 @@ func acquireTargetLock(
 	return nil
 }
 
+func historyMigrationID(execution *Execution) *uint {
+	if execution.DraftID == 0 {
+		return nil
+	}
+	id := execution.DraftID
+	return &id
+}
+
+func historyMigrationIDArg(execution *Execution) any {
+	if execution.DraftID == 0 {
+		return nil
+	}
+	return int64(execution.DraftID)
+}
+
 func historyAttemptNumber(execution *Execution) int {
 	if execution.Attempt > 0 {
 		return execution.Attempt
@@ -371,11 +389,11 @@ func recordFailedHistoryAttempt(ctx context.Context, pool *pgxpool.Pool, executi
 	code, message := migrationFailureDetails(attemptErr)
 	if _, err := tx.Exec(writeCtx,
 		`INSERT INTO _dbm.migration_history
-			(version, execution_id, attempt_number, status, error_code, error_message,
+			(version, migration_id, execution_id, attempt_number, status, error_code, error_message,
 			 execution_type, target_execution_id, active, name, sql, down_sql,
 			 irreversible_reason, executed_by, duration_ms)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10, $11, $12, $13, $14)`,
-		version, executionID, historyAttemptNumber(execution), RunStatusFailed, code, message,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10, $11, $12, $13, $14, $15)`,
+		version, historyMigrationIDArg(execution), executionID, historyAttemptNumber(execution), RunStatusFailed, code, message,
 		execution.Type, targetExecutionID, execution.Name, execution.SQL, execution.DownSQL,
 		execution.IrreversibleReason, int64(execution.ExecutedBy), duration.Milliseconds()); err != nil {
 		return fmt.Errorf("recording failed migration history: %w", err)

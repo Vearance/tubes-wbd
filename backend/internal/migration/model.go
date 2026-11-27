@@ -21,6 +21,7 @@ type BatchDefinition struct {
 
 type HistoryEntry struct {
 	Version            int64
+	MigrationID        *uint
 	ExecutionID        uint
 	AttemptNumber      int
 	Status             RunStatus
@@ -40,6 +41,7 @@ type HistoryEntry struct {
 
 type HistorySummary struct {
 	Version           int64
+	MigrationID       *uint
 	ExecutionID       *uint
 	AttemptNumber     int
 	Status            RunStatus

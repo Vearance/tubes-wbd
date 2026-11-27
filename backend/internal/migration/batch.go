@@ -540,19 +540,19 @@ func finishBatchHistory(ctx context.Context, conn *pgxpool.Conn, execution *Exec
 			targetID = int64(*execution.TargetExecutionID)
 		}
 		entry = &HistoryEntry{
-			Version: version, ExecutionID: execution.ID, AttemptNumber: historyAttemptNumber(execution),
-			Status: RunStatusSuccess, Type: execution.Type, TargetExecutionID: execution.TargetExecutionID,
+			Version: version, MigrationID: historyMigrationID(execution), ExecutionID: execution.ID,
+			AttemptNumber: historyAttemptNumber(execution), Status: RunStatusSuccess, Type: execution.Type, TargetExecutionID: execution.TargetExecutionID,
 			Active: execution.Type != ExecutionTypeRollback, Name: execution.Name, SQL: execution.SQL,
 			DownSQL: execution.DownSQL, IrreversibleReason: execution.IrreversibleReason,
 			ExecutedBy: execution.ExecutedBy, Duration: duration,
 		}
 		return tx.QueryRow(ctx,
 			`INSERT INTO _dbm.migration_history
-				(version, execution_id, attempt_number, status, execution_type, target_execution_id,
+				(version, migration_id, execution_id, attempt_number, status, execution_type, target_execution_id,
 				 active, name, sql, down_sql, irreversible_reason, executed_by, duration_ms)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			 RETURNING executed_at`,
-			version, executionID, historyAttemptNumber(execution), RunStatusSuccess, execution.Type, targetID,
+			version, historyMigrationIDArg(execution), executionID, historyAttemptNumber(execution), RunStatusSuccess, execution.Type, targetID,
 			entry.Active, execution.Name, execution.SQL, execution.DownSQL, execution.IrreversibleReason,
 			int64(execution.ExecutedBy), duration.Milliseconds()).Scan(&entry.ExecutedAt)
 	})

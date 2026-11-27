@@ -102,7 +102,7 @@ SELECT
 
 const historyContentFingerprintSQL = `
 SELECT md5(coalesce(string_agg(concat_ws(',',
-	t.version, coalesce(t.execution_id::text, '-'), t.attempt_number, t.status, md5(t.error_code), md5(t.error_message),
+	t.version, coalesce(t.migration_id::text, '-'), coalesce(t.execution_id::text, '-'), t.attempt_number, t.status, md5(t.error_code), md5(t.error_message),
 	t.execution_type, coalesce(t.target_execution_id::text, '-'), t.active, md5(t.name), md5(t.sql), md5(t.down_sql),
 	md5(t.irreversible_reason), t.executed_by, extract(epoch FROM t.executed_at), t.duration_ms
 ), E'\n' ORDER BY t.version, t.attempt_number), ''))
