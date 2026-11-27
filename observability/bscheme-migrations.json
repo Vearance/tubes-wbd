@@ -220,7 +220,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "bscheme_db_pool_connections{db_role=~\"platform|target\",state=~\"active|idle\"}",
+          "expr": "sum by (job, db_role, state) (bscheme_db_pool_connections{db_role=~\"platform|target\",state=~\"active|idle\"})",
           "interval": "5s",
           "legendFormat": "{{job}} ({{db_role}}) — {{state}}",
           "refId": "A"

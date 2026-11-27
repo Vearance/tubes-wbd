@@ -191,7 +191,9 @@ ok "Grafana dashboard provisioned: ${dash_title}"
 
 # Verify Prometheus scraped both targets and recorded metrics
 prom_val() { curl -fsS -G --data-urlencode "query=$1" "${PROM_URL}/api/v1/query" | jq -r '.data.result[0].value[1] // "0"'; }
-[[ "$(prom_val 'sum(up{job=~"bscheme-api|bscheme-worker"})')" == "2" ]] || fail "Prometheus targets not both up"
+api_up="$(prom_val 'sum(up{job="bscheme-api"})')"
+wrk_up="$(prom_val 'sum(up{job="bscheme-worker"})')"
+[[ "${api_up:-0}" -ge 1 && "${wrk_up:-0}" -ge 1 ]] || fail "Prometheus targets not up (api=${api_up:-0}, worker=${wrk_up:-0})"
 batches="$(prom_val 'sum(bscheme_migration_batches_processed_total)')"
 rows="$(prom_val 'sum(bscheme_migration_batch_rows_processed_total)')"
 waits="$(prom_val 'sum(bscheme_db_pool_wait_count_total{db_role="target"})')"
