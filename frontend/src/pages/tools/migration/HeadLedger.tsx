@@ -196,7 +196,7 @@ export function HeadLedger({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="m-0 text-base font-bold text-ink">Live HEAD Ledger</h2>
+          <h2 className="m-0 text-base font-bold text-ink">Migration History</h2>
           <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-bold text-violet-fg">
             {latestActive ? `v${latestActive.version} HEAD` : 'Empty schema'}
           </span>

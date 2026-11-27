@@ -115,7 +115,7 @@ function DraftCard({
                 Edit
               </Button>
               <ConfirmAction
-                title={`Submit "${draft.name}" to Consensus Airlock?`}
+                title={`Submit "${draft.name}" to Migration Execution?`}
                 description={`This snapshots Draft #${draft.id} into an immutable execution in Pending Review. Every group with access to "${databaseName}" must sign off via their Keyholder before an Editor can release it to the queue.`}
                 confirmLabel="Submit for Review"
                 tone="primary"
@@ -123,7 +123,7 @@ function DraftCard({
                 trigger={
                   <Button variant="dark" size="sm">
                     <Icon name="send" className="size-3.5" />
-                    Submit to Airlock
+                    Submit to Migration Execution
                   </Button>
                 }
               />
@@ -137,7 +137,7 @@ function DraftCard({
               onClick={() => onTrack(draft.id)}
             >
               <Icon name="shield" className="size-3.5" />
-              Track in Airlock
+              Track in Migration Execution
             </Button>
           )}
         </div>

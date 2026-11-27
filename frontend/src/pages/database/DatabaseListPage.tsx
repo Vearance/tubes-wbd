@@ -101,7 +101,7 @@ export function DatabaseListPage() {
                 <Icon name="shield" className="size-4" />
               </span>
               <h2 className="m-0 truncate text-xs font-bold uppercase tracking-wider text-ink">
-                Airlock · Pending Your Sign-off
+                Migration Execution · Pending Your Sign-off
               </h2>
             </div>
             <Status tone="amber">{pendingApprovals.length}</Status>

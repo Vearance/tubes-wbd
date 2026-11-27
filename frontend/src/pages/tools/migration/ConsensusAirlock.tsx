@@ -446,7 +446,7 @@ function ExecutionAirlockCard({
                     className="flex-1 sm:flex-initial border-danger/40 text-danger-fg hover:bg-danger-soft"
                   >
                     <Icon name="close" className="size-3.5" />
-                    Trip Airlock (Reject)
+                    Reject Execution
                   </Button>
                   <Button
                     variant="dark"
@@ -656,7 +656,7 @@ export function ConsensusAirlock({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-white p-4.5 shadow-2xs">
         <div className="flex items-center gap-3">
-          <h2 className="m-0 text-base font-bold text-ink">Consensus Airlock</h2>
+          <h2 className="m-0 text-base font-bold text-ink">Migration Execution</h2>
           <span className="rounded-full bg-violet-soft border border-violet/20 px-2.5 py-0.5 text-xs font-bold text-violet-fg">
             {counts.pending_review > 0
               ? `${counts.pending_review} awaiting sign-off`
@@ -698,7 +698,7 @@ export function ConsensusAirlock({
           <div className="rounded-2xl border border-line bg-white py-12 shadow-2xs">
             <EmptyState icon="shield" title="No executions in this stage">
               {filter === 'all'
-                ? 'Submit a migration draft, rollback, or forward to open a Consensus Airlock.'
+                ? 'Submit a migration draft, rollback, or forward to start a Migration Execution.'
                 : 'No executions currently match this filter.'}
             </EmptyState>
           </div>
